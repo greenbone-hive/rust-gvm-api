@@ -13,8 +13,9 @@ use axum::{
 };
 use gvm_gateway_app::GatewayService;
 use gvm_gateway_domain::{
-    CreateNoteInput, CreateOverrideInput, GatewayError, ModifyNoteInput, ModifyOverrideInput,
-    SupportingResourceQuery,
+    CreateFilterInput, CreateHostInput, CreateNoteInput, CreateOverrideInput, CreateTagInput,
+    GatewayError, ModifyFilterInput, ModifyHostInput, ModifyNoteInput, ModifyOverrideInput,
+    ModifyTagInput, SupportingResourceQuery,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -24,8 +25,8 @@ use crate::{
     dto::{parse_uuid, PaginationResponse, ResourceCreatedResponse, ResourceRefResponse},
     error::RestError,
     handler::{
-        create_resource, delete_resource, get_resource, list_resource, update_resource,
-        ValidateInto,
+        create_resource, created_resource, delete_resource, gateway_error, get_resource,
+        list_resource, update_resource, ValidateInto,
     },
     open_enum::open_string_enum,
     openapi::{created_json, ok_json, problem_response, ResourceIdPathDoc},
@@ -232,6 +233,52 @@ impl From<gvm_gateway_domain::HostPage> for HostListResponse {
     }
 }
 
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]
+#[schemars(rename = "CreateHost")]
+pub(crate) struct CreateHostRequest {
+    /// Host name or IP address.
+    #[schemars(required)]
+    value: Option<String>,
+    comment: Option<String>,
+}
+
+impl CreateHostRequest {
+    fn validate(self) -> Result<CreateHostInput, GatewayError> {
+        let value = self
+            .value
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| GatewayError::InvalidInput("value is required".to_string()))?;
+        Ok(CreateHostInput {
+            value,
+            comment: self.comment,
+        })
+    }
+}
+
+impl ValidateInto<CreateHostInput> for CreateHostRequest {
+    fn validate_into(self) -> Result<CreateHostInput, GatewayError> {
+        self.validate()
+    }
+}
+
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]
+#[schemars(rename = "UpdateHost")]
+pub(crate) struct ModifyHostRequest {
+    // The gvmd `modify_asset` command does not update a host asset's
+    // name/IP value, so this endpoint only edits the comment. The `value`
+    // field is intentionally not accepted rather than silently ignored.
+    comment: Option<String>,
+}
+
+impl ValidateInto<ModifyHostInput> for ModifyHostRequest {
+    fn validate_into(self) -> Result<ModifyHostInput, GatewayError> {
+        Ok(ModifyHostInput {
+            value: None,
+            comment: self.comment,
+        })
+    }
+}
+
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 #[schemars(rename = "TlsCertificateAsset")]
 pub(crate) struct TlsCertificateAssetResponse {
@@ -417,6 +464,128 @@ impl From<gvm_gateway_domain::TagPage> for TagListResponse {
             data: page.data.into_iter().map(TagResponse::from).collect(),
             pagination: PaginationResponse::from(page.pagination),
         }
+    }
+}
+
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]
+#[schemars(rename = "CreateFilter")]
+pub(crate) struct CreateFilterRequest {
+    #[schemars(required)]
+    name: Option<String>,
+    comment: Option<String>,
+    term: Option<String>,
+    #[serde(rename = "type")]
+    filter_type: Option<String>,
+}
+
+impl CreateFilterRequest {
+    fn validate(self) -> Result<CreateFilterInput, GatewayError> {
+        let name = self
+            .name
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| GatewayError::InvalidInput("name is required".to_string()))?;
+        Ok(CreateFilterInput {
+            name,
+            comment: self.comment,
+            term: self.term,
+            filter_type: self.filter_type,
+        })
+    }
+}
+
+impl ValidateInto<CreateFilterInput> for CreateFilterRequest {
+    fn validate_into(self) -> Result<CreateFilterInput, GatewayError> {
+        self.validate()
+    }
+}
+
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]
+#[schemars(rename = "UpdateFilter")]
+pub(crate) struct ModifyFilterRequest {
+    comment: Option<String>,
+    term: Option<String>,
+    #[serde(rename = "type")]
+    filter_type: Option<String>,
+}
+
+impl ValidateInto<ModifyFilterInput> for ModifyFilterRequest {
+    fn validate_into(self) -> Result<ModifyFilterInput, GatewayError> {
+        Ok(ModifyFilterInput {
+            comment: self.comment,
+            term: self.term,
+            filter_type: self.filter_type,
+        })
+    }
+}
+
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]
+#[schemars(rename = "CreateTag")]
+pub(crate) struct CreateTagRequest {
+    #[schemars(required)]
+    name: Option<String>,
+    comment: Option<String>,
+    value: Option<String>,
+    #[serde(rename = "resourceType")]
+    resource_type: Option<String>,
+    #[serde(rename = "resourceId")]
+    #[schemars(with = "Option<Uuid>")]
+    resource_id: Option<String>,
+    active: Option<bool>,
+}
+
+impl CreateTagRequest {
+    fn validate(self) -> Result<CreateTagInput, GatewayError> {
+        let name = self
+            .name
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| GatewayError::InvalidInput("name is required".to_string()))?;
+        validate_optional_uuid("resourceId", self.resource_id.as_deref())?;
+        Ok(CreateTagInput {
+            name,
+            comment: self.comment,
+            value: self.value,
+            resource_type: self.resource_type,
+            resource_id: self.resource_id,
+            active: self.active,
+        })
+    }
+}
+
+impl ValidateInto<CreateTagInput> for CreateTagRequest {
+    fn validate_into(self) -> Result<CreateTagInput, GatewayError> {
+        self.validate()
+    }
+}
+
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]
+#[schemars(rename = "UpdateTag")]
+pub(crate) struct ModifyTagRequest {
+    comment: Option<String>,
+    value: Option<String>,
+    #[serde(rename = "resourceType")]
+    resource_type: Option<String>,
+    #[serde(rename = "resourceId")]
+    #[schemars(with = "Option<Uuid>")]
+    resource_id: Option<String>,
+    active: Option<bool>,
+}
+
+impl ModifyTagRequest {
+    fn validate(self) -> Result<ModifyTagInput, GatewayError> {
+        validate_optional_uuid("resourceId", self.resource_id.as_deref())?;
+        Ok(ModifyTagInput {
+            comment: self.comment,
+            value: self.value,
+            resource_type: self.resource_type,
+            resource_id: self.resource_id,
+            active: self.active,
+        })
+    }
+}
+
+impl ValidateInto<ModifyTagInput> for ModifyTagRequest {
+    fn validate_into(self) -> Result<ModifyTagInput, GatewayError> {
+        self.validate()
     }
 }
 
@@ -960,6 +1129,69 @@ pub async fn get_host(
     }
 }
 
+/// Creates a host asset.
+pub async fn create_host(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    uri: OriginalUri,
+    body: Bytes,
+) -> Response {
+    create_resource::<CreateHostInput, CreateHostRequest, _, _>(
+        service,
+        headers,
+        uri,
+        body,
+        |service, session, input| async move { service.create_host(&session, input).await },
+    )
+    .await
+}
+
+/// Updates a host asset.
+pub async fn update_host(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    uri: OriginalUri,
+    body: Bytes,
+) -> Response {
+    update_resource::<ModifyHostInput, ModifyHostRequest, _, _, _, _>(
+        service,
+        headers,
+        id,
+        uri,
+        body,
+        |service, session, id, input| async move { service.modify_host(&session, &id, input).await },
+        HostResponse::from,
+    )
+    .await
+}
+
+/// Deletes a host asset.
+///
+/// The gvmd host-asset delete command does not support the `ultimate`
+/// (permanent) flag, so this endpoint performs a single delete without an
+/// `ultimate` query parameter rather than advertising a flag the backend
+/// ignores.
+pub async fn delete_host(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    uri: OriginalUri,
+) -> Response {
+    let instance = uri.path().to_string();
+    if let Err(error) = validate_uuid("id", &id) {
+        return gateway_error(error, instance);
+    }
+    let session = match bearer_token(&headers) {
+        Ok(session) => session,
+        Err(error) => return gateway_error(error, instance),
+    };
+    match service.delete_host(&session, &id, false).await {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(error) => gateway_error(error, instance),
+    }
+}
+
 /// Lists TLS certificate assets visible to the authenticated session.
 pub async fn list_tls_certificates(
     State(service): State<GatewayService>,
@@ -1109,6 +1341,85 @@ pub async fn get_filter(
     }
 }
 
+/// Creates a saved filter.
+pub async fn create_filter(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    uri: OriginalUri,
+    body: Bytes,
+) -> Response {
+    create_resource::<CreateFilterInput, CreateFilterRequest, _, _>(
+        service,
+        headers,
+        uri,
+        body,
+        |service, session, input| async move { service.create_filter(&session, input).await },
+    )
+    .await
+}
+
+/// Updates a saved filter.
+pub async fn update_filter(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    uri: OriginalUri,
+    body: Bytes,
+) -> Response {
+    update_resource::<ModifyFilterInput, ModifyFilterRequest, _, _, _, _>(
+        service,
+        headers,
+        id,
+        uri,
+        body,
+        |service, session, id, input| async move {
+            service.modify_filter(&session, &id, input).await
+        },
+        FilterResponse::from,
+    )
+    .await
+}
+
+/// Deletes a saved filter. Set `ultimate=true` to request permanent backend deletion.
+pub async fn delete_filter(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    uri: OriginalUri,
+) -> Response {
+    delete_resource(
+        service,
+        headers,
+        id,
+        uri,
+        |service, session, id, ultimate| async move {
+            service.delete_filter(&session, &id, ultimate).await
+        },
+    )
+    .await
+}
+
+/// Clones a saved filter.
+pub async fn clone_filter(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    uri: OriginalUri,
+) -> Response {
+    let instance = uri.path().to_string();
+    if let Err(error) = validate_uuid("id", &id) {
+        return gateway_error(error, instance);
+    }
+    let session = match bearer_token(&headers) {
+        Ok(session) => session,
+        Err(error) => return gateway_error(error, instance),
+    };
+    match service.clone_filter(&session, &id).await {
+        Ok(new_id) => created_resource("/api/v1/filters", &new_id),
+        Err(error) => gateway_error(error, instance),
+    }
+}
+
 /// Lists tags visible to the authenticated session.
 pub async fn list_tags(
     State(service): State<GatewayService>,
@@ -1150,6 +1461,83 @@ pub async fn get_tag(
     match service.get_tag(&session, &id).await {
         Ok(item) => (StatusCode::OK, Json(TagResponse::from(item))).into_response(),
         Err(error) => RestError::from_gateway_error(error, instance).into_response(),
+    }
+}
+
+/// Creates a tag.
+pub async fn create_tag(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    uri: OriginalUri,
+    body: Bytes,
+) -> Response {
+    create_resource::<CreateTagInput, CreateTagRequest, _, _>(
+        service,
+        headers,
+        uri,
+        body,
+        |service, session, input| async move { service.create_tag(&session, input).await },
+    )
+    .await
+}
+
+/// Updates a tag.
+pub async fn update_tag(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    uri: OriginalUri,
+    body: Bytes,
+) -> Response {
+    update_resource::<ModifyTagInput, ModifyTagRequest, _, _, _, _>(
+        service,
+        headers,
+        id,
+        uri,
+        body,
+        |service, session, id, input| async move { service.modify_tag(&session, &id, input).await },
+        TagResponse::from,
+    )
+    .await
+}
+
+/// Deletes a tag. Set `ultimate=true` to request permanent backend deletion.
+pub async fn delete_tag(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    uri: OriginalUri,
+) -> Response {
+    delete_resource(
+        service,
+        headers,
+        id,
+        uri,
+        |service, session, id, ultimate| async move {
+            service.delete_tag(&session, &id, ultimate).await
+        },
+    )
+    .await
+}
+
+/// Clones a tag.
+pub async fn clone_tag(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    uri: OriginalUri,
+) -> Response {
+    let instance = uri.path().to_string();
+    if let Err(error) = validate_uuid("id", &id) {
+        return gateway_error(error, instance);
+    }
+    let session = match bearer_token(&headers) {
+        Ok(session) => session,
+        Err(error) => return gateway_error(error, instance),
+    };
+    match service.clone_tag(&session, &id).await {
+        Ok(new_id) => created_resource("/api/v1/tags", &new_id),
+        Err(error) => gateway_error(error, instance),
     }
 }
 
@@ -1504,6 +1892,51 @@ pub(crate) fn get_host_docs(op: TransformOperation<'_>) -> TransformOperation<'_
     problem_response::<404>(op, "Resource not found")
 }
 
+pub(crate) fn create_host_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    let op = op
+        .id("createHost")
+        .tag("Hosts")
+        .summary("Create a host")
+        .description("Creates a host asset identified by a name or IP address.")
+        .security_requirement("bearerAuth")
+        .input::<Json<CreateHostRequest>>()
+        .response_with::<201, Json<ResourceCreatedResponse>, _>(created_json("Host created"));
+    let op = problem_response::<400>(op, "Invalid request");
+    problem_response::<401>(op, "Authentication required or session expired")
+}
+
+pub(crate) fn update_host_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    let op = op
+        .id("modifyHost")
+        .tag("Hosts")
+        .summary("Modify a host")
+        .description(
+            "Updates a host asset's comment. The gvmd `modify_asset` command does not change a host asset's name/IP value, so only the comment can be edited here.",
+        )
+        .security_requirement("bearerAuth")
+        .input::<(Path<ResourceIdPathDoc>, Json<ModifyHostRequest>)>()
+        .response_with::<200, Json<HostResponse>, _>(ok_json("Host updated"));
+    let op = problem_response::<400>(op, "Invalid request");
+    let op = problem_response::<401>(op, "Authentication required or session expired");
+    problem_response::<404>(op, "Resource not found")
+}
+
+pub(crate) fn delete_host_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    let op = op
+        .id("deleteHost")
+        .tag("Hosts")
+        .summary("Delete a host")
+        .description(
+            "Deletes a host asset. The gvmd host-asset delete command does not support the `ultimate` (permanent) flag, so this endpoint always performs a single delete.",
+        )
+        .security_requirement("bearerAuth")
+        .input::<Path<ResourceIdPathDoc>>()
+        .response_with::<204, (), _>(|response| response.description("Host deleted"));
+    let op = problem_response::<400>(op, "Invalid request");
+    let op = problem_response::<401>(op, "Authentication required or session expired");
+    problem_response::<404>(op, "Resource not found")
+}
+
 pub(crate) fn list_tls_certificates_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
     let op = op
         .id("getTlsCertificates")
@@ -1593,6 +2026,61 @@ pub(crate) fn get_filter_docs(op: TransformOperation<'_>) -> TransformOperation<
     problem_response::<404>(op, "Resource not found")
 }
 
+pub(crate) fn create_filter_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    let op = op
+        .id("createFilter")
+        .tag("Filters")
+        .summary("Create a filter")
+        .description("Creates a saved filter with an optional term, comment, and resource type.")
+        .security_requirement("bearerAuth")
+        .input::<Json<CreateFilterRequest>>()
+        .response_with::<201, Json<ResourceCreatedResponse>, _>(created_json("Filter created"));
+    let op = problem_response::<400>(op, "Invalid request");
+    problem_response::<401>(op, "Authentication required or session expired")
+}
+
+pub(crate) fn update_filter_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    let op = op
+        .id("modifyFilter")
+        .tag("Filters")
+        .summary("Modify a filter")
+        .description("Updates a saved filter's term, comment, or resource type.")
+        .security_requirement("bearerAuth")
+        .input::<(Path<ResourceIdPathDoc>, Json<ModifyFilterRequest>)>()
+        .response_with::<200, Json<FilterResponse>, _>(ok_json("Filter updated"));
+    let op = problem_response::<400>(op, "Invalid request");
+    let op = problem_response::<401>(op, "Authentication required or session expired");
+    problem_response::<404>(op, "Resource not found")
+}
+
+pub(crate) fn delete_filter_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    let op = op
+        .id("deleteFilter")
+        .tag("Filters")
+        .summary("Delete a filter")
+        .description("Deletes a saved filter. Pass `ultimate=true` to request permanent backend deletion instead of the default non-ultimate delete.")
+        .security_requirement("bearerAuth")
+        .input::<(Path<ResourceIdPathDoc>, Query<DeleteResourceQueryParams>)>()
+        .response_with::<204, (), _>(|response| response.description("Filter deleted"));
+    let op = problem_response::<400>(op, "Invalid request");
+    let op = problem_response::<401>(op, "Authentication required or session expired");
+    problem_response::<404>(op, "Resource not found")
+}
+
+pub(crate) fn clone_filter_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    let op = op
+        .id("cloneFilter")
+        .tag("Filters")
+        .summary("Clone a filter")
+        .description("Creates a copy of an existing saved filter.")
+        .security_requirement("bearerAuth")
+        .input::<Path<ResourceIdPathDoc>>()
+        .response_with::<201, Json<ResourceCreatedResponse>, _>(created_json("Filter cloned"));
+    let op = problem_response::<400>(op, "Invalid request");
+    let op = problem_response::<401>(op, "Authentication required or session expired");
+    problem_response::<404>(op, "Resource not found")
+}
+
 pub(crate) fn list_tags_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
     let op = op
         .id("getTags")
@@ -1615,6 +2103,61 @@ pub(crate) fn get_tag_docs(op: TransformOperation<'_>) -> TransformOperation<'_>
         .security_requirement("bearerAuth")
         .input::<Path<ResourceIdPathDoc>>()
         .response_with::<200, Json<TagResponse>, _>(ok_json("Tag details"));
+    let op = problem_response::<400>(op, "Invalid request");
+    let op = problem_response::<401>(op, "Authentication required or session expired");
+    problem_response::<404>(op, "Resource not found")
+}
+
+pub(crate) fn create_tag_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    let op = op
+        .id("createTag")
+        .tag("Tags")
+        .summary("Create a tag")
+        .description("Creates a tag, optionally attaching it to a related resource by type and id.")
+        .security_requirement("bearerAuth")
+        .input::<Json<CreateTagRequest>>()
+        .response_with::<201, Json<ResourceCreatedResponse>, _>(created_json("Tag created"));
+    let op = problem_response::<400>(op, "Invalid request");
+    problem_response::<401>(op, "Authentication required or session expired")
+}
+
+pub(crate) fn update_tag_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    let op = op
+        .id("modifyTag")
+        .tag("Tags")
+        .summary("Modify a tag")
+        .description("Updates a tag's value, comment, resource attachment, or active state.")
+        .security_requirement("bearerAuth")
+        .input::<(Path<ResourceIdPathDoc>, Json<ModifyTagRequest>)>()
+        .response_with::<200, Json<TagResponse>, _>(ok_json("Tag updated"));
+    let op = problem_response::<400>(op, "Invalid request");
+    let op = problem_response::<401>(op, "Authentication required or session expired");
+    problem_response::<404>(op, "Resource not found")
+}
+
+pub(crate) fn delete_tag_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    let op = op
+        .id("deleteTag")
+        .tag("Tags")
+        .summary("Delete a tag")
+        .description("Deletes a tag. Pass `ultimate=true` to request permanent backend deletion instead of the default non-ultimate delete.")
+        .security_requirement("bearerAuth")
+        .input::<(Path<ResourceIdPathDoc>, Query<DeleteResourceQueryParams>)>()
+        .response_with::<204, (), _>(|response| response.description("Tag deleted"));
+    let op = problem_response::<400>(op, "Invalid request");
+    let op = problem_response::<401>(op, "Authentication required or session expired");
+    problem_response::<404>(op, "Resource not found")
+}
+
+pub(crate) fn clone_tag_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    let op = op
+        .id("cloneTag")
+        .tag("Tags")
+        .summary("Clone a tag")
+        .description("Creates a copy of an existing tag.")
+        .security_requirement("bearerAuth")
+        .input::<Path<ResourceIdPathDoc>>()
+        .response_with::<201, Json<ResourceCreatedResponse>, _>(created_json("Tag cloned"));
     let op = problem_response::<400>(op, "Invalid request");
     let op = problem_response::<401>(op, "Authentication required or session expired");
     problem_response::<404>(op, "Resource not found")

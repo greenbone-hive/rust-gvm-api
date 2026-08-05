@@ -149,6 +149,57 @@ impl SupportingResourcePort for GvmdAdapter {
             .ok_or_else(|| GatewayError::NotFound(format!("tls certificate {id} not found")))
     }
 
+    async fn create_host(
+        &self,
+        session_token: &str,
+        input: CreateHostInput,
+    ) -> Result<String, GatewayError> {
+        let client = self.session_client(session_token)?;
+        let response = client
+            .lock()
+            .await?
+            .call(create_host(host_opts_from_create_input(input)))
+            .await
+            .map_err(map_gvm_error)?;
+        let parsed = CreateHostResponse::from_response(&response).map_err(map_parse_error)?;
+        Ok(parsed.id.to_string())
+    }
+
+    async fn modify_host(
+        &self,
+        session_token: &str,
+        id: &str,
+        input: ModifyHostInput,
+    ) -> Result<Host, GatewayError> {
+        let client = self.session_client(session_token)?;
+        let host_id = parse_entity_id(id)?;
+        let response = client
+            .lock()
+            .await?
+            .call(modify_host(&host_id, host_opts_from_modify_input(input)))
+            .await
+            .map_err(map_gvm_error)?;
+        ActionResponse::from_response(&response).map_err(map_parse_error)?;
+        self.get_host(session_token, id).await
+    }
+
+    async fn delete_host(
+        &self,
+        session_token: &str,
+        id: &str,
+        ultimate: bool,
+    ) -> Result<(), GatewayError> {
+        let client = self.session_client(session_token)?;
+        let response = client
+            .lock()
+            .await?
+            .call(delete_host(&parse_entity_id(id)?, ultimate))
+            .await
+            .map_err(map_gvm_error)?;
+        ActionResponse::from_response(&response).map_err(map_parse_error)?;
+        Ok(())
+    }
+
     async fn list_report_formats(
         &self,
         session_token: &str,
@@ -285,6 +336,74 @@ impl SupportingResourcePort for GvmdAdapter {
             .ok_or_else(|| GatewayError::NotFound(format!("filter {id} not found")))
     }
 
+    async fn create_filter(
+        &self,
+        session_token: &str,
+        input: CreateFilterInput,
+    ) -> Result<String, GatewayError> {
+        let client = self.session_client(session_token)?;
+        let name = input.name.clone();
+        let opts = filter_opts_from_create_input(input)?;
+        let response = client
+            .lock()
+            .await?
+            .call(create_filter(&name, opts))
+            .await
+            .map_err(map_gvm_error)?;
+        let parsed = CreateFilterResponse::from_response(&response).map_err(map_parse_error)?;
+        Ok(parsed.id.to_string())
+    }
+
+    async fn modify_filter(
+        &self,
+        session_token: &str,
+        id: &str,
+        input: ModifyFilterInput,
+    ) -> Result<Filter, GatewayError> {
+        let client = self.session_client(session_token)?;
+        let filter_id = parse_entity_id(id)?;
+        let response = client
+            .lock()
+            .await?
+            .call(modify_filter(
+                &filter_id,
+                filter_opts_from_modify_input(input)?,
+            ))
+            .await
+            .map_err(map_gvm_error)?;
+        ActionResponse::from_response(&response).map_err(map_parse_error)?;
+        self.get_filter(session_token, id).await
+    }
+
+    async fn delete_filter(
+        &self,
+        session_token: &str,
+        id: &str,
+        ultimate: bool,
+    ) -> Result<(), GatewayError> {
+        let client = self.session_client(session_token)?;
+        let response = client
+            .lock()
+            .await?
+            .call(delete_filter(&parse_entity_id(id)?, ultimate))
+            .await
+            .map_err(map_gvm_error)?;
+        ActionResponse::from_response(&response).map_err(map_parse_error)?;
+        Ok(())
+    }
+
+    async fn clone_filter(&self, session_token: &str, id: &str) -> Result<String, GatewayError> {
+        let client = self.session_client(session_token)?;
+        let response = client
+            .lock()
+            .await?
+            .call(clone_filter(&parse_entity_id(id)?))
+            .await
+            .map_err(map_gvm_error)?;
+        let parsed = CreateFilterResponse::from_response(&response).map_err(map_parse_error)?;
+        Ok(parsed.id.to_string())
+    }
+
     async fn list_tags(
         &self,
         session_token: &str,
@@ -349,6 +468,71 @@ impl SupportingResourcePort for GvmdAdapter {
             .next()
             .map(tag_from_gmp)
             .ok_or_else(|| GatewayError::NotFound(format!("tag {id} not found")))
+    }
+
+    async fn create_tag(
+        &self,
+        session_token: &str,
+        input: CreateTagInput,
+    ) -> Result<String, GatewayError> {
+        let client = self.session_client(session_token)?;
+        let name = input.name.clone();
+        let opts = tag_opts_from_create_input(input)?;
+        let response = client
+            .lock()
+            .await?
+            .call(create_tag(&name, opts))
+            .await
+            .map_err(map_gvm_error)?;
+        let parsed = CreateTagResponse::from_response(&response).map_err(map_parse_error)?;
+        Ok(parsed.id.to_string())
+    }
+
+    async fn modify_tag(
+        &self,
+        session_token: &str,
+        id: &str,
+        input: ModifyTagInput,
+    ) -> Result<Tag, GatewayError> {
+        let client = self.session_client(session_token)?;
+        let tag_id = parse_entity_id(id)?;
+        let response = client
+            .lock()
+            .await?
+            .call(modify_tag(&tag_id, tag_opts_from_modify_input(input)?))
+            .await
+            .map_err(map_gvm_error)?;
+        ActionResponse::from_response(&response).map_err(map_parse_error)?;
+        self.get_tag(session_token, id).await
+    }
+
+    async fn delete_tag(
+        &self,
+        session_token: &str,
+        id: &str,
+        ultimate: bool,
+    ) -> Result<(), GatewayError> {
+        let client = self.session_client(session_token)?;
+        let response = client
+            .lock()
+            .await?
+            .call(delete_tag(&parse_entity_id(id)?, ultimate))
+            .await
+            .map_err(map_gvm_error)?;
+        ActionResponse::from_response(&response).map_err(map_parse_error)?;
+        Ok(())
+    }
+
+    async fn clone_tag(&self, session_token: &str, id: &str) -> Result<String, GatewayError> {
+        let client = self.session_client(session_token)?;
+        let response = client
+            .lock()
+            .await?
+            .call(clone_tag(&parse_entity_id(id)?))
+            .await
+            .map_err(map_gvm_error)?;
+        let parsed = CreateTagResponse::from_response(&response).map_err(map_parse_error)?;
+        Ok(parsed.id.to_string())
     }
 
     async fn list_tickets(

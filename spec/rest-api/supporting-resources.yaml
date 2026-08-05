@@ -28,6 +28,33 @@ paths:
           $ref: "./common.yaml#/components/responses/Unauthorized"
         "502":
           $ref: "./common.yaml#/components/responses/BadGateway"
+    post:
+      operationId: createHost
+      tags: [Hosts]
+      summary: Create a host
+      description: Creates a host asset identified by a name or IP address.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateHost"
+      responses:
+        "201":
+          description: Host created
+          headers:
+            Location:
+              $ref: "./common.yaml#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "./common.yaml#/components/schemas/ResourceCreated"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
 
   /hosts/{id}:
     parameters:
@@ -44,6 +71,54 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Host"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    put:
+      operationId: modifyHost
+      tags: [Hosts]
+      summary: Modify a host
+      description: >-
+        Updates a host asset's comment. The gvmd `modify_asset` command does not
+        change a host asset's name/IP value, so only the comment can be edited
+        here.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateHost"
+      responses:
+        "200":
+          description: Host updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Host"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    delete:
+      operationId: deleteHost
+      tags: [Hosts]
+      summary: Delete a host
+      description: >-
+        Deletes a host asset. The gvmd host-asset delete command does not
+        support the `ultimate` (permanent) flag, so this endpoint always
+        performs a single delete.
+      responses:
+        "204":
+          description: Host deleted
         "400":
           $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
@@ -175,6 +250,33 @@ paths:
           $ref: "./common.yaml#/components/responses/Unauthorized"
         "502":
           $ref: "./common.yaml#/components/responses/BadGateway"
+    post:
+      operationId: createFilter
+      tags: [Filters]
+      summary: Create a filter
+      description: Creates a saved filter with an optional term, comment, and resource type.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFilter"
+      responses:
+        "201":
+          description: Filter created
+          headers:
+            Location:
+              $ref: "./common.yaml#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "./common.yaml#/components/schemas/ResourceCreated"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
 
   /filters/{id}:
     parameters:
@@ -191,6 +293,77 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Filter"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    put:
+      operationId: modifyFilter
+      tags: [Filters]
+      summary: Modify a filter
+      description: Updates a saved filter's term, comment, or resource type.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateFilter"
+      responses:
+        "200":
+          description: Filter updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Filter"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    delete:
+      operationId: deleteFilter
+      tags: [Filters]
+      summary: Delete a filter
+      description: Deletes a saved filter. Pass `ultimate=true` to request permanent backend deletion instead of the default non-ultimate delete.
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/UltimateDelete"
+      responses:
+        "204":
+          description: Filter deleted
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /filters/{id}/clone:
+    parameters:
+      - $ref: "./common.yaml#/components/parameters/ResourceId"
+    post:
+      operationId: cloneFilter
+      tags: [Filters]
+      summary: Clone a filter
+      description: Creates a copy of an existing saved filter.
+      responses:
+        "201":
+          description: Filter cloned
+          headers:
+            Location:
+              $ref: "./common.yaml#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "./common.yaml#/components/schemas/ResourceCreated"
         "400":
           $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
@@ -224,6 +397,33 @@ paths:
           $ref: "./common.yaml#/components/responses/Unauthorized"
         "502":
           $ref: "./common.yaml#/components/responses/BadGateway"
+    post:
+      operationId: createTag
+      tags: [Tags]
+      summary: Create a tag
+      description: Creates a tag, optionally attaching it to a related resource by type and id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTag"
+      responses:
+        "201":
+          description: Tag created
+          headers:
+            Location:
+              $ref: "./common.yaml#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "./common.yaml#/components/schemas/ResourceCreated"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
 
   /tags/{id}:
     parameters:
@@ -240,6 +440,77 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TagResource"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    put:
+      operationId: modifyTag
+      tags: [Tags]
+      summary: Modify a tag
+      description: Updates a tag's value, comment, resource attachment, or active state.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTag"
+      responses:
+        "200":
+          description: Tag updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagResource"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    delete:
+      operationId: deleteTag
+      tags: [Tags]
+      summary: Delete a tag
+      description: Deletes a tag. Pass `ultimate=true` to request permanent backend deletion instead of the default non-ultimate delete.
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/UltimateDelete"
+      responses:
+        "204":
+          description: Tag deleted
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /tags/{id}/clone:
+    parameters:
+      - $ref: "./common.yaml#/components/parameters/ResourceId"
+    post:
+      operationId: cloneTag
+      tags: [Tags]
+      summary: Clone a tag
+      description: Creates a copy of an existing tag.
+      responses:
+        "201":
+          description: Tag cloned
+          headers:
+            Location:
+              $ref: "./common.yaml#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "./common.yaml#/components/schemas/ResourceCreated"
         "400":
           $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
@@ -741,6 +1012,22 @@ components:
         pagination:
           $ref: "./common.yaml#/components/schemas/Pagination"
 
+    CreateHost:
+      type: object
+      required:
+        - value
+      properties:
+        value:
+          type: string
+        comment:
+          type: string
+
+    UpdateHost:
+      type: object
+      properties:
+        comment:
+          type: string
+
     SupportingResourceMeta:
       type: object
       required:
@@ -857,6 +1144,30 @@ components:
         pagination:
           $ref: "./common.yaml#/components/schemas/Pagination"
 
+    CreateFilter:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+        comment:
+          type: string
+        term:
+          type: string
+        type:
+          type: string
+
+    UpdateFilter:
+      type: object
+      properties:
+        comment:
+          type: string
+        term:
+          type: string
+        type:
+          type: string
+
     TagResource:
       type: object
       required:
@@ -902,6 +1213,40 @@ components:
             $ref: "#/components/schemas/TagResource"
         pagination:
           $ref: "./common.yaml#/components/schemas/Pagination"
+
+    CreateTag:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+        comment:
+          type: string
+        value:
+          type: string
+        resourceType:
+          type: string
+        resourceId:
+          type: string
+          format: uuid
+        active:
+          type: boolean
+
+    UpdateTag:
+      type: object
+      properties:
+        comment:
+          type: string
+        value:
+          type: string
+        resourceType:
+          type: string
+        resourceId:
+          type: string
+          format: uuid
+        active:
+          type: boolean
 
     Ticket:
       type: object

@@ -4,10 +4,11 @@
 //! Supporting-resource use cases.
 
 use gvm_gateway_domain::{
-    CreateNoteInput, CreateOverrideInput, Filter, FilterPage, GatewayError, Host, HostPage,
-    ModifyNoteInput, ModifyOverrideInput, Note, NotePage, Nvt, NvtFamilyPage, NvtPage, Override,
-    OverridePage, ReportFormat, ReportFormatPage, SupportingResourceQuery, Tag, TagPage, Ticket,
-    TicketPage, TlsCertificateAsset, TlsCertificateAssetPage, VulnerabilityPage,
+    CreateFilterInput, CreateHostInput, CreateNoteInput, CreateOverrideInput, CreateTagInput,
+    Filter, FilterPage, GatewayError, Host, HostPage, ModifyFilterInput, ModifyHostInput,
+    ModifyNoteInput, ModifyOverrideInput, ModifyTagInput, Note, NotePage, Nvt, NvtFamilyPage,
+    NvtPage, Override, OverridePage, ReportFormat, ReportFormatPage, SupportingResourceQuery, Tag,
+    TagPage, Ticket, TicketPage, TlsCertificateAsset, TlsCertificateAssetPage, VulnerabilityPage,
 };
 
 use crate::GatewayService;
@@ -85,6 +86,71 @@ impl GatewayService {
             "host",
             Some(id),
             |session| async move { self.supporting_resources.get_host(&session.token, id).await },
+        )
+        .await
+    }
+
+    /// Creates a host asset for an authenticated session.
+    pub async fn create_host(
+        &self,
+        session_token: &str,
+        input: CreateHostInput,
+    ) -> Result<String, GatewayError> {
+        self.execute_with_resource(
+            "hosts.create",
+            session_token,
+            "create",
+            "host",
+            None,
+            |session| async move {
+                self.supporting_resources
+                    .create_host(&session.token, input)
+                    .await
+            },
+        )
+        .await
+    }
+
+    /// Modifies a host asset for an authenticated session.
+    pub async fn modify_host(
+        &self,
+        session_token: &str,
+        id: &str,
+        input: ModifyHostInput,
+    ) -> Result<Host, GatewayError> {
+        self.execute_with_resource(
+            "hosts.modify",
+            session_token,
+            "modify",
+            "host",
+            Some(id),
+            |session| async move {
+                self.supporting_resources
+                    .modify_host(&session.token, id, input)
+                    .await
+            },
+        )
+        .await
+    }
+
+    /// Deletes a host asset for an authenticated session.
+    pub async fn delete_host(
+        &self,
+        session_token: &str,
+        id: &str,
+        ultimate: bool,
+    ) -> Result<(), GatewayError> {
+        self.execute_with_resource(
+            "hosts.delete",
+            session_token,
+            "delete",
+            "host",
+            Some(id),
+            |session| async move {
+                self.supporting_resources
+                    .delete_host(&session.token, id, ultimate)
+                    .await
+            },
         )
         .await
     }
@@ -169,6 +235,92 @@ impl GatewayService {
         .await
     }
 
+    /// Creates a saved filter for an authenticated session.
+    pub async fn create_filter(
+        &self,
+        session_token: &str,
+        input: CreateFilterInput,
+    ) -> Result<String, GatewayError> {
+        self.execute_with_resource(
+            "filters.create",
+            session_token,
+            "create",
+            "filter",
+            None,
+            |session| async move {
+                self.supporting_resources
+                    .create_filter(&session.token, input)
+                    .await
+            },
+        )
+        .await
+    }
+
+    /// Modifies a saved filter for an authenticated session.
+    pub async fn modify_filter(
+        &self,
+        session_token: &str,
+        id: &str,
+        input: ModifyFilterInput,
+    ) -> Result<Filter, GatewayError> {
+        self.execute_with_resource(
+            "filters.modify",
+            session_token,
+            "modify",
+            "filter",
+            Some(id),
+            |session| async move {
+                self.supporting_resources
+                    .modify_filter(&session.token, id, input)
+                    .await
+            },
+        )
+        .await
+    }
+
+    /// Deletes a saved filter for an authenticated session.
+    pub async fn delete_filter(
+        &self,
+        session_token: &str,
+        id: &str,
+        ultimate: bool,
+    ) -> Result<(), GatewayError> {
+        self.execute_with_resource(
+            "filters.delete",
+            session_token,
+            "delete",
+            "filter",
+            Some(id),
+            |session| async move {
+                self.supporting_resources
+                    .delete_filter(&session.token, id, ultimate)
+                    .await
+            },
+        )
+        .await
+    }
+
+    /// Clones a saved filter for an authenticated session.
+    pub async fn clone_filter(
+        &self,
+        session_token: &str,
+        id: &str,
+    ) -> Result<String, GatewayError> {
+        self.execute_with_resource(
+            "filters.clone",
+            session_token,
+            "create",
+            "filter",
+            Some(id),
+            |session| async move {
+                self.supporting_resources
+                    .clone_filter(&session.token, id)
+                    .await
+            },
+        )
+        .await
+    }
+
     /// Lists tags for an authenticated session.
     pub async fn list_tags(
         &self,
@@ -199,6 +351,88 @@ impl GatewayService {
             "tag",
             Some(id),
             |session| async move { self.supporting_resources.get_tag(&session.token, id).await },
+        )
+        .await
+    }
+
+    /// Creates a tag for an authenticated session.
+    pub async fn create_tag(
+        &self,
+        session_token: &str,
+        input: CreateTagInput,
+    ) -> Result<String, GatewayError> {
+        self.execute_with_resource(
+            "tags.create",
+            session_token,
+            "create",
+            "tag",
+            None,
+            |session| async move {
+                self.supporting_resources
+                    .create_tag(&session.token, input)
+                    .await
+            },
+        )
+        .await
+    }
+
+    /// Modifies a tag for an authenticated session.
+    pub async fn modify_tag(
+        &self,
+        session_token: &str,
+        id: &str,
+        input: ModifyTagInput,
+    ) -> Result<Tag, GatewayError> {
+        self.execute_with_resource(
+            "tags.modify",
+            session_token,
+            "modify",
+            "tag",
+            Some(id),
+            |session| async move {
+                self.supporting_resources
+                    .modify_tag(&session.token, id, input)
+                    .await
+            },
+        )
+        .await
+    }
+
+    /// Deletes a tag for an authenticated session.
+    pub async fn delete_tag(
+        &self,
+        session_token: &str,
+        id: &str,
+        ultimate: bool,
+    ) -> Result<(), GatewayError> {
+        self.execute_with_resource(
+            "tags.delete",
+            session_token,
+            "delete",
+            "tag",
+            Some(id),
+            |session| async move {
+                self.supporting_resources
+                    .delete_tag(&session.token, id, ultimate)
+                    .await
+            },
+        )
+        .await
+    }
+
+    /// Clones a tag for an authenticated session.
+    pub async fn clone_tag(&self, session_token: &str, id: &str) -> Result<String, GatewayError> {
+        self.execute_with_resource(
+            "tags.clone",
+            session_token,
+            "create",
+            "tag",
+            Some(id),
+            |session| async move {
+                self.supporting_resources
+                    .clone_tag(&session.token, id)
+                    .await
+            },
         )
         .await
     }
