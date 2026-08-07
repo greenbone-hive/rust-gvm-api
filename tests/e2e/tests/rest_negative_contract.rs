@@ -36,29 +36,29 @@ async fn rest_negative_contract_returns_problem_responses() -> Result<()> {
         )
         .await?;
 
-        let report_formats_post = harness
-            .request(Method::POST, "/api/v1/report-formats")
+        let report_formats_patch = harness
+            .request(Method::PATCH, "/api/v1/report-formats")
             .bearer_auth(&session.token)
             .send()
             .await
-            .context("send report-format POST request")?;
+            .context("send report-format PATCH request")?;
         assert_problem_response(
-            report_formats_post,
+            report_formats_patch,
             StatusCode::METHOD_NOT_ALLOWED,
-            "unsupported report-format mutation",
+            "unsupported report-format partial mutation",
         )
         .await?;
 
-        let hosts_post = harness
-            .request(Method::POST, "/api/v1/hosts")
+        let hosts_patch = harness
+            .request(Method::PATCH, "/api/v1/hosts")
             .bearer_auth(&session.token)
             .send()
             .await
-            .context("send hosts POST request")?;
+            .context("send hosts PATCH request")?;
         assert_problem_response(
-            hosts_post,
+            hosts_patch,
             StatusCode::METHOD_NOT_ALLOWED,
-            "unsupported host mutation",
+            "unsupported host partial mutation",
         )
         .await?;
 
