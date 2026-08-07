@@ -79,6 +79,45 @@ impl E2eHarness {
         );
     }
 
+    pub async fn wait_for_audit_completion(&self, token: &str, audit_id: &str) -> Result<Task> {
+        // Mirrors `wait_for_task_completion` but polls the audit-scoped route so
+        // the compliance workflow observes the audit's own lifecycle rather than
+        // the scan-task view (which excludes audits).
+        let deadline = Instant::now() + self.config.scan_timeout;
+        let mut last_status = String::from("audit status not yet observed");
+
+        while Instant::now() < deadline {
+            let audit = self.get_audit(token, audit_id).await?;
+            last_status = audit.status.clone();
+            eprintln!(
+                "audit {} status={} currentReport={:?} lastReport={:?}",
+                audit.id,
+                audit.status,
+                audit
+                    .current_report
+                    .as_ref()
+                    .map(|report| report.id.as_str()),
+                audit.last_report.as_ref().map(|report| report.id.as_str())
+            );
+
+            match audit.status.as_str() {
+                "Done" => return Ok(audit),
+                "Stopped" | "Interrupted" | "Delete Requested" | "Ultimate Delete Requested" => {
+                    bail!(
+                        "audit {audit_id} reached terminal failure status {}",
+                        audit.status
+                    )
+                }
+                _ => tokio::time::sleep(self.config.poll_interval).await,
+            }
+        }
+
+        bail!(
+            "audit {audit_id} did not complete within {:?}; last status: {last_status}",
+            self.config.scan_timeout
+        );
+    }
+
     pub async fn wait_for_task_stopped(&self, token: &str, task_id: &str) -> Result<Task> {
         let deadline = Instant::now() + self.config.scan_timeout;
         let mut last_status = String::from("task status not yet observed");

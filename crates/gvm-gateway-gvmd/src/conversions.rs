@@ -384,6 +384,7 @@ pub(crate) fn scan_config_from_gmp(config: gvm_gmp::responses::ScanConfig) -> Sc
         family_count: None,
         nvt_count: None,
         config_type: config.type_,
+        usage_type: config.usage_type,
         in_use: config.meta.in_use,
         writable: config.meta.writable,
     }

@@ -511,6 +511,34 @@ pub trait ScanConfigPort: Send + Sync + 'static {
         id: &str,
         ultimate: bool,
     ) -> Result<(), GatewayError>;
+
+    /// List policies (compliance scan configs) for the session.
+    async fn list_policies(
+        &self,
+        session_token: &str,
+        query: &ScanConfigQuery,
+    ) -> Result<ScanConfigPage, GatewayError>;
+
+    /// Fetch a policy by identifier.
+    async fn get_policy(&self, session_token: &str, id: &str) -> Result<ScanConfig, GatewayError>;
+
+    /// Create a new policy (compliance scan config).
+    async fn create_policy(
+        &self,
+        session_token: &str,
+        input: CreateScanConfigInput,
+    ) -> Result<String, GatewayError>;
+
+    /// Modify a policy by identifier.
+    async fn modify_policy(
+        &self,
+        session_token: &str,
+        id: &str,
+        input: ModifyScanConfigInput,
+    ) -> Result<ScanConfig, GatewayError>;
+
+    /// Delete a policy by identifier.
+    async fn delete_policy(&self, session_token: &str, id: &str) -> Result<(), GatewayError>;
 }
 
 /// Port for scanner read operations.
@@ -777,4 +805,42 @@ pub trait TaskPort: Send + Sync + 'static {
 
     /// Resume a stopped task. Returns the report identifier created by the action.
     async fn resume_task(&self, session_token: &str, id: &str) -> Result<TaskAction, GatewayError>;
+
+    /// List audits (compliance tasks) for the session.
+    async fn list_audits(
+        &self,
+        session_token: &str,
+        query: &TaskQuery,
+    ) -> Result<TaskPage, GatewayError>;
+
+    /// Fetch an audit by identifier.
+    async fn get_audit(&self, session_token: &str, id: &str) -> Result<Task, GatewayError>;
+
+    /// Create a new audit (compliance task).
+    async fn create_audit(
+        &self,
+        session_token: &str,
+        input: CreateTaskInput,
+    ) -> Result<String, GatewayError>;
+
+    /// Modify an audit by identifier.
+    async fn modify_audit(
+        &self,
+        session_token: &str,
+        id: &str,
+        input: ModifyTaskInput,
+    ) -> Result<Task, GatewayError>;
+
+    /// Delete an audit by identifier.
+    async fn delete_audit(&self, session_token: &str, id: &str) -> Result<(), GatewayError>;
+
+    /// Start an audit. Returns the report identifier created by the action.
+    async fn start_audit(&self, session_token: &str, id: &str) -> Result<TaskAction, GatewayError>;
+
+    /// Stop a running audit.
+    async fn stop_audit(&self, session_token: &str, id: &str) -> Result<(), GatewayError>;
+
+    /// Resume a stopped audit. Returns the report identifier created by the action.
+    async fn resume_audit(&self, session_token: &str, id: &str)
+        -> Result<TaskAction, GatewayError>;
 }

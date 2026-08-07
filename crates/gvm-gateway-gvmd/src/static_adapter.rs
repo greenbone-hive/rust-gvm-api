@@ -463,6 +463,59 @@ impl TaskPort for StaticGvmdAdapter {
             "static adapter does not support tasks".to_string(),
         ))
     }
+
+    async fn list_audits(&self, _: &str, _: &TaskQuery) -> Result<TaskPage, GatewayError> {
+        Err(GatewayError::BackendUnavailable(
+            "static adapter does not support audits".to_string(),
+        ))
+    }
+
+    async fn create_audit(&self, _: &str, _: CreateTaskInput) -> Result<String, GatewayError> {
+        Err(GatewayError::BackendUnavailable(
+            "static adapter does not support audits".to_string(),
+        ))
+    }
+
+    async fn modify_audit(
+        &self,
+        _: &str,
+        _: &str,
+        _: ModifyTaskInput,
+    ) -> Result<Task, GatewayError> {
+        Err(GatewayError::BackendUnavailable(
+            "static adapter does not support audits".to_string(),
+        ))
+    }
+
+    async fn delete_audit(&self, _: &str, _: &str) -> Result<(), GatewayError> {
+        Err(GatewayError::BackendUnavailable(
+            "static adapter does not support audits".to_string(),
+        ))
+    }
+
+    async fn get_audit(&self, _: &str, _: &str) -> Result<Task, GatewayError> {
+        Err(GatewayError::BackendUnavailable(
+            "static adapter does not support audits".to_string(),
+        ))
+    }
+
+    async fn start_audit(&self, _: &str, _: &str) -> Result<TaskAction, GatewayError> {
+        Err(GatewayError::BackendUnavailable(
+            "static adapter does not support audits".to_string(),
+        ))
+    }
+
+    async fn stop_audit(&self, _: &str, _: &str) -> Result<(), GatewayError> {
+        Err(GatewayError::BackendUnavailable(
+            "static adapter does not support audits".to_string(),
+        ))
+    }
+
+    async fn resume_audit(&self, _: &str, _: &str) -> Result<TaskAction, GatewayError> {
+        Err(GatewayError::BackendUnavailable(
+            "static adapter does not support audits".to_string(),
+        ))
+    }
 }
 
 #[async_trait]
@@ -614,6 +667,49 @@ impl ScanConfigPort for StaticGvmdAdapter {
     async fn delete_scan_config(&self, _: &str, _: &str, _: bool) -> Result<(), GatewayError> {
         Err(GatewayError::BackendUnavailable(
             "static adapter does not support scan configs".to_string(),
+        ))
+    }
+
+    async fn list_policies(
+        &self,
+        _: &str,
+        _: &ScanConfigQuery,
+    ) -> Result<ScanConfigPage, GatewayError> {
+        Err(GatewayError::BackendUnavailable(
+            "static adapter does not support policies".to_string(),
+        ))
+    }
+
+    async fn create_policy(
+        &self,
+        _: &str,
+        _: CreateScanConfigInput,
+    ) -> Result<String, GatewayError> {
+        Err(GatewayError::BackendUnavailable(
+            "static adapter does not support policies".to_string(),
+        ))
+    }
+
+    async fn modify_policy(
+        &self,
+        _: &str,
+        _: &str,
+        _: ModifyScanConfigInput,
+    ) -> Result<ScanConfig, GatewayError> {
+        Err(GatewayError::BackendUnavailable(
+            "static adapter does not support policies".to_string(),
+        ))
+    }
+
+    async fn delete_policy(&self, _: &str, _: &str) -> Result<(), GatewayError> {
+        Err(GatewayError::BackendUnavailable(
+            "static adapter does not support policies".to_string(),
+        ))
+    }
+
+    async fn get_policy(&self, _: &str, _: &str) -> Result<ScanConfig, GatewayError> {
+        Err(GatewayError::BackendUnavailable(
+            "static adapter does not support policies".to_string(),
         ))
     }
 }

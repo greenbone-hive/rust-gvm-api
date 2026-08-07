@@ -104,6 +104,8 @@ pub struct ScanConfig {
     pub id: String,
     pub name: String,
     pub comment: Option<String>,
+    #[serde(rename = "usageType")]
+    pub usage_type: Option<String>,
     #[serde(rename = "inUse")]
     pub in_use: Option<bool>,
     pub writable: Option<bool>,

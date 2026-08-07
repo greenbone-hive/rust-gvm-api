@@ -136,6 +136,9 @@ components:
         type:
           type: integer
           description: "Config type: 0 = standard OpenVAS config, 1 = OSP config."
+        usageType:
+          type: string
+          description: "Backend usage-type discriminator: `scan` or `policy`."
         inUse:
           type: boolean
         writable:

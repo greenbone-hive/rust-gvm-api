@@ -1,0 +1,118 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Greenbone AG
+openapi: 3.1.0
+info:
+  title: GVM REST API - Policies
+  version: 0.1.0
+paths:
+  /policies:
+    get:
+      operationId: getPolicies
+      tags: [Policies]
+      summary: List policies
+      description: Returns a paginated list of compliance policies.
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/FilterString"
+        - $ref: "./common.yaml#/components/parameters/FilterId"
+        - $ref: "./common.yaml#/components/parameters/Page"
+        - $ref: "./common.yaml#/components/parameters/PerPage"
+      responses:
+        "200":
+          description: Paginated list of policies
+          content:
+            application/json:
+              schema:
+                $ref: "./scan-configs.yaml#/components/schemas/ScanConfigList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+    post:
+      operationId: createPolicy
+      tags: [Policies]
+      summary: Create a policy
+      description: Creates a new compliance policy.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./scan-configs.yaml#/components/schemas/CreateScanConfig"
+      responses:
+        "201":
+          description: Policy created
+          headers:
+            Location:
+              $ref: "./common.yaml#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "./common.yaml#/components/schemas/ResourceCreated"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+
+  /policies/{id}:
+    parameters:
+      - $ref: "./common.yaml#/components/parameters/ResourceId"
+    get:
+      operationId: getPolicy
+      tags: [Policies]
+      summary: Get a policy
+      description: Returns the details for a single compliance policy.
+      responses:
+        "200":
+          description: Policy details
+          content:
+            application/json:
+              schema:
+                $ref: "./scan-configs.yaml#/components/schemas/ScanConfig"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    put:
+      operationId: modifyPolicy
+      tags: [Policies]
+      summary: Modify a policy
+      description: Updates an existing compliance policy.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./scan-configs.yaml#/components/schemas/ModifyScanConfig"
+      responses:
+        "200":
+          description: Policy updated
+          content:
+            application/json:
+              schema:
+                $ref: "./scan-configs.yaml#/components/schemas/ScanConfig"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    delete:
+      operationId: deletePolicy
+      tags: [Policies]
+      summary: Delete a policy
+      description: Deletes a compliance policy.
+      responses:
+        "204":
+          description: Policy deleted
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"

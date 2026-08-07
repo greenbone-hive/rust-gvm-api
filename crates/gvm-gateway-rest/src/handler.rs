@@ -328,3 +328,29 @@ where
         Err(error) => gateway_error(error, instance),
     }
 }
+
+/// Delete handler for resources whose backend delete has no `ultimate` toggle.
+pub(crate) async fn delete_resource_without_ultimate<F, Fut>(
+    service: GatewayService,
+    headers: HeaderMap,
+    id: String,
+    uri: OriginalUri,
+    operation: F,
+) -> Response
+where
+    F: FnOnce(GatewayService, String, String) -> Fut,
+    Fut: Future<Output = Result<(), GatewayError>>,
+{
+    let instance = uri.path().to_string();
+    if let Err(error) = validate_uuid("id", &id) {
+        return gateway_error(error, instance);
+    }
+    let session = match bearer_token(&headers) {
+        Ok(session) => session,
+        Err(error) => return gateway_error(error, instance),
+    };
+    match operation(service, session, id).await {
+        Ok(()) => no_content(),
+        Err(error) => gateway_error(error, instance),
+    }
+}

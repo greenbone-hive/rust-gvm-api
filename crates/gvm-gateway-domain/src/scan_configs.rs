@@ -26,6 +26,14 @@ pub struct ScanConfig {
     /// Config type (0 = standard OpenVAS config, 1 = OSP config).
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     pub config_type: Option<u32>,
+    /// Backend usage-type discriminator (`scan` or `policy`).
+    ///
+    /// Exposed so clients can distinguish compliance policies from ordinary
+    /// scan configs in the combined `GET /scan-configs` collection, which lists
+    /// both because gvmd's `get_configs` is not usage-scoped at the pinned
+    /// revision.
+    #[serde(rename = "usageType", skip_serializing_if = "Option::is_none")]
+    pub usage_type: Option<String>,
     /// Whether the scan config is in use.
     #[serde(rename = "inUse")]
     pub in_use: bool,

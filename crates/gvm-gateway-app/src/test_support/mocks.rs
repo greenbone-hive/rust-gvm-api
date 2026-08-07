@@ -622,6 +622,55 @@ impl TaskPort for MockTaskPort {
             report_id: "00000000-0000-0000-0000-000000000003".to_string(),
         })
     }
+
+    async fn list_audits(&self, _: &str, query: &TaskQuery) -> Result<TaskPage, GatewayError> {
+        Ok(TaskPage {
+            data: vec![],
+            pagination: gvm_gateway_domain::Pagination {
+                page: query.page,
+                per_page: query.per_page,
+                total: 0,
+                total_pages: 0,
+            },
+        })
+    }
+
+    async fn create_audit(&self, _: &str, _: CreateTaskInput) -> Result<String, GatewayError> {
+        Ok("00000000-0000-0000-0000-000000000004".to_string())
+    }
+
+    async fn modify_audit(
+        &self,
+        session_token: &str,
+        id: &str,
+        input: ModifyTaskInput,
+    ) -> Result<Task, GatewayError> {
+        self.modify_task(session_token, id, input).await
+    }
+
+    async fn delete_audit(&self, _: &str, _: &str) -> Result<(), GatewayError> {
+        Ok(())
+    }
+
+    async fn get_audit(&self, _: &str, id: &str) -> Result<Task, GatewayError> {
+        Err(GatewayError::NotFound(format!("audit {id} not found")))
+    }
+
+    async fn start_audit(&self, _: &str, _: &str) -> Result<TaskAction, GatewayError> {
+        Ok(TaskAction {
+            report_id: "00000000-0000-0000-0000-000000000030".to_string(),
+        })
+    }
+
+    async fn stop_audit(&self, _: &str, _: &str) -> Result<(), GatewayError> {
+        Ok(())
+    }
+
+    async fn resume_audit(&self, _: &str, _: &str) -> Result<TaskAction, GatewayError> {
+        Ok(TaskAction {
+            report_id: "00000000-0000-0000-0000-000000000031".to_string(),
+        })
+    }
 }
 
 /// Mock auth port for tests that need controlled auth and disconnect outcomes.
@@ -876,6 +925,47 @@ impl ScanConfigPort for MockScanConfigPort {
         Err(GatewayError::NotFound(format!(
             "scan config {id} not found"
         )))
+    }
+
+    async fn list_policies(
+        &self,
+        _: &str,
+        query: &ScanConfigQuery,
+    ) -> Result<ScanConfigPage, GatewayError> {
+        Ok(ScanConfigPage {
+            data: vec![],
+            pagination: gvm_gateway_domain::Pagination {
+                page: query.page,
+                per_page: query.per_page,
+                total: 0,
+                total_pages: 0,
+            },
+        })
+    }
+
+    async fn create_policy(
+        &self,
+        _: &str,
+        _: CreateScanConfigInput,
+    ) -> Result<String, GatewayError> {
+        Ok("mock-policy-id".to_string())
+    }
+
+    async fn modify_policy(
+        &self,
+        _: &str,
+        id: &str,
+        _: ModifyScanConfigInput,
+    ) -> Result<ScanConfig, GatewayError> {
+        Err(GatewayError::NotFound(format!("policy {id} not found")))
+    }
+
+    async fn delete_policy(&self, _: &str, id: &str) -> Result<(), GatewayError> {
+        Err(GatewayError::NotFound(format!("policy {id} not found")))
+    }
+
+    async fn get_policy(&self, _: &str, id: &str) -> Result<ScanConfig, GatewayError> {
+        Err(GatewayError::NotFound(format!("policy {id} not found")))
     }
 }
 

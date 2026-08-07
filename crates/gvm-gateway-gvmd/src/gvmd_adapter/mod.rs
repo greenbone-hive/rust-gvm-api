@@ -72,8 +72,9 @@ use gvm_gmp::{
             create_role, delete_role, get_role, get_roles, modify_role, GetRolesOpts, RoleOpts,
         },
         scan_configs::{
-            create_scan_config, delete_scan_config, get_scan_config, get_scan_configs,
-            modify_scan_config, ConfigOpts, GetScanConfigsOpts,
+            create_policy, create_scan_config, delete_policy as delete_policy_cmd,
+            delete_scan_config, get_policies, get_scan_config, get_scan_configs,
+            modify_policy as modify_policy_cmd, modify_scan_config, ConfigOpts, GetScanConfigsOpts,
         },
         scanners::{get_scanner, get_scanners, GetScannersOpts},
         schedules::{
@@ -87,9 +88,12 @@ use gvm_gmp::{
             CreateTargetOpts, GetTargetsOpts, ModifyTargetOpts,
         },
         tasks::{
-            clone_task, create_task, delete_task as delete_task_cmd, get_task as get_task_cmd,
-            get_tasks, modify_task as modify_task_cmd, resume_task as resume_task_cmd,
-            start_task as start_task_cmd, stop_task as stop_task_cmd, CreateTaskOpts, GetTasksOpts,
+            clone_task, create_audit, create_task, delete_audit as delete_audit_cmd,
+            delete_task as delete_task_cmd, get_audits, get_task as get_task_cmd, get_tasks,
+            modify_audit as modify_audit_cmd, modify_task as modify_task_cmd,
+            resume_audit as resume_audit_cmd, resume_task as resume_task_cmd,
+            start_audit as start_audit_cmd, start_task as start_task_cmd,
+            stop_audit as stop_audit_cmd, stop_task as stop_task_cmd, CreateTaskOpts, GetTasksOpts,
             ModifyTaskOpts,
         },
         tickets::{get_ticket, get_tickets, GetTicketsOpts},

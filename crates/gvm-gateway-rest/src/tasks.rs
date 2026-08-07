@@ -23,8 +23,8 @@ use crate::{
     dto::{parse_uuid, PaginationResponse, ResourceCreatedResponse, ResourceRefResponse},
     error::RestError,
     handler::{
-        clone_resource, create_resource, delete_resource, get_resource, list_resource,
-        update_resource, validate_uuid, ValidateInto,
+        clone_resource, create_resource, delete_resource, delete_resource_without_ultimate,
+        get_resource, list_resource, update_resource, validate_uuid, ValidateInto,
     },
     open_enum::open_string_enum,
     openapi::{
@@ -735,6 +735,306 @@ pub(crate) fn resume_task_docs(op: TransformOperation<'_>) -> TransformOperation
         .security_requirement("bearerAuth")
         .input::<Path<ResourceIdPathDoc>>()
         .response_with::<200, Json<TaskActionResponse>, _>(ok_json("Task resumed"));
+
+    let op = problem_response::<401>(op, "Authentication required or session expired");
+    let op = problem_response::<404>(op, "Resource not found");
+    problem_response::<409>(op, "Resource state conflict")
+}
+
+// ============================================================================
+// Audit handlers (compliance tasks; reuse Task DTOs)
+// ============================================================================
+
+/// List audits handler.
+pub async fn list_audits(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    uri: OriginalUri,
+) -> Response {
+    list_resource(
+        service,
+        headers,
+        uri,
+        TaskListQuery::try_from_query_string,
+        |service, session, query| async move {
+            service
+                .list_audits(
+                    &session,
+                    TaskQuery {
+                        filter_string: query.filter_string,
+                        filter_id: query.filter_id,
+                        page: query.page,
+                        per_page: query.per_page,
+                    },
+                )
+                .await
+        },
+        TaskListResponse::from,
+    )
+    .await
+}
+
+/// Create audit handler.
+pub async fn create_audit(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    uri: OriginalUri,
+    body: Bytes,
+) -> Response {
+    create_resource::<CreateTaskInput, CreateTaskRequest, _, _>(
+        service,
+        headers,
+        uri,
+        body,
+        |service, session, input| async move { service.create_audit(&session, input).await },
+    )
+    .await
+}
+
+/// Update audit handler.
+pub async fn update_audit(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    uri: OriginalUri,
+    body: Bytes,
+) -> Response {
+    update_resource::<ModifyTaskInput, ModifyTaskRequest, _, _, _, _>(
+        service,
+        headers,
+        id,
+        uri,
+        body,
+        |service, session, id, input| async move {
+            service.modify_audit(&session, &id, input).await
+        },
+        TaskResponse::from,
+    )
+    .await
+}
+
+/// Delete audit handler. Audits are always deleted non-ultimately by the backend.
+pub async fn delete_audit(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    uri: OriginalUri,
+) -> Response {
+    delete_resource_without_ultimate(
+        service,
+        headers,
+        id,
+        uri,
+        |service, session, id| async move { service.delete_audit(&session, &id).await },
+    )
+    .await
+}
+
+/// Get audit handler. Scoped to the audit usage type so a scan task is not
+/// readable through this route.
+pub async fn get_audit(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    uri: OriginalUri,
+) -> Response {
+    get_resource(
+        service,
+        headers,
+        id,
+        uri,
+        |service, session, id| async move { service.get_audit(&session, &id).await },
+        TaskResponse::from,
+    )
+    .await
+}
+
+/// Start audit handler.
+pub async fn start_audit(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    uri: OriginalUri,
+) -> Response {
+    let instance = uri.path().to_string();
+    if let Err(error) = validate_uuid("id", &id) {
+        return RestError::from_gateway_error(error, instance).into_response();
+    }
+    let session = match bearer_token(&headers) {
+        Ok(session) => session,
+        Err(error) => return RestError::from_gateway_error(error, instance).into_response(),
+    };
+
+    match service.start_audit(&session, &id).await {
+        Ok(action) => (StatusCode::OK, Json(TaskActionResponse::from(action))).into_response(),
+        Err(error) => RestError::from_gateway_error(error, instance).into_response(),
+    }
+}
+
+/// Stop audit handler.
+pub async fn stop_audit(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    uri: OriginalUri,
+) -> Response {
+    let instance = uri.path().to_string();
+    if let Err(error) = validate_uuid("id", &id) {
+        return RestError::from_gateway_error(error, instance).into_response();
+    }
+    let session = match bearer_token(&headers) {
+        Ok(session) => session,
+        Err(error) => return RestError::from_gateway_error(error, instance).into_response(),
+    };
+
+    match service.stop_audit(&session, &id).await {
+        Ok(()) => StatusCode::OK.into_response(),
+        Err(error) => RestError::from_gateway_error(error, instance).into_response(),
+    }
+}
+
+/// Resume audit handler.
+pub async fn resume_audit(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    uri: OriginalUri,
+) -> Response {
+    let instance = uri.path().to_string();
+    if let Err(error) = validate_uuid("id", &id) {
+        return RestError::from_gateway_error(error, instance).into_response();
+    }
+    let session = match bearer_token(&headers) {
+        Ok(session) => session,
+        Err(error) => return RestError::from_gateway_error(error, instance).into_response(),
+    };
+
+    match service.resume_audit(&session, &id).await {
+        Ok(action) => (StatusCode::OK, Json(TaskActionResponse::from(action))).into_response(),
+        Err(error) => RestError::from_gateway_error(error, instance).into_response(),
+    }
+}
+
+/// OpenAPI transform for `GET /api/v1/audits`.
+pub(crate) fn list_audits_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    let op = op
+        .id("getAudits")
+        .tag("Audits")
+        .summary("List audits")
+        .description("Returns a paginated list of compliance audits.")
+        .security_requirement("bearerAuth")
+        .input::<Query<TaskListQueryDoc>>()
+        .response_with::<200, Json<TaskListResponse>, _>(ok_json("Paginated list of audits"));
+
+    problem_response::<401>(op, "Authentication required or session expired")
+}
+
+/// OpenAPI transform for `POST /api/v1/audits`.
+pub(crate) fn create_audit_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    let op = op
+        .id("createAudit")
+        .tag("Audits")
+        .summary("Create an audit")
+        .description("Creates a new compliance audit.")
+        .security_requirement("bearerAuth")
+        .input::<Json<CreateTaskDoc>>()
+        .response_with::<201, Json<ResourceCreatedResponse>, _>(created_json("Audit created"));
+
+    let op = problem_response::<400>(op, "Invalid request");
+    problem_response::<401>(op, "Authentication required or session expired")
+}
+
+/// OpenAPI transform for `GET /api/v1/audits/{id}`.
+pub(crate) fn get_audit_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    let op = op
+        .id("getAudit")
+        .tag("Audits")
+        .summary("Get an audit")
+        .description("Returns the details for a single compliance audit.")
+        .security_requirement("bearerAuth")
+        .input::<Path<ResourceIdPathDoc>>()
+        .response_with::<200, Json<TaskResponse>, _>(ok_json("Audit details"));
+
+    let op = problem_response::<401>(op, "Authentication required or session expired");
+    problem_response::<404>(op, "Resource not found")
+}
+
+/// OpenAPI transform for `PUT /api/v1/audits/{id}`.
+pub(crate) fn update_audit_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    let op = op
+        .id("modifyAudit")
+        .tag("Audits")
+        .summary("Modify an audit")
+        .description("Updates an existing compliance audit.")
+        .security_requirement("bearerAuth")
+        .input::<(Path<ResourceIdPathDoc>, Json<ModifyTaskDoc>)>()
+        .response_with::<200, Json<TaskResponse>, _>(ok_json("Audit updated"));
+
+    let op = problem_response::<400>(op, "Invalid request");
+    let op = problem_response::<401>(op, "Authentication required or session expired");
+    problem_response::<404>(op, "Resource not found")
+}
+
+/// OpenAPI transform for `DELETE /api/v1/audits/{id}`.
+pub(crate) fn delete_audit_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    let op = op
+        .id("deleteAudit")
+        .tag("Audits")
+        .summary("Delete an audit")
+        .description("Deletes a compliance audit.")
+        .security_requirement("bearerAuth")
+        .input::<Path<ResourceIdPathDoc>>()
+        .response_with::<204, (), _>(|response| response.description("Audit deleted"));
+
+    let op = problem_response::<401>(op, "Authentication required or session expired");
+    problem_response::<404>(op, "Resource not found")
+}
+
+/// OpenAPI transform for `POST /api/v1/audits/{id}/start`.
+pub(crate) fn start_audit_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    let op = op
+        .id("startAudit")
+        .tag("Audits")
+        .summary("Start an audit")
+        .description(
+            "Starts a compliance audit. Returns the report identifier created by the action.",
+        )
+        .security_requirement("bearerAuth")
+        .input::<Path<ResourceIdPathDoc>>()
+        .response_with::<200, Json<TaskActionResponse>, _>(ok_json("Audit started"));
+
+    let op = problem_response::<401>(op, "Authentication required or session expired");
+    let op = problem_response::<404>(op, "Resource not found");
+    let op = problem_response::<409>(op, "Resource state conflict");
+    problem_response::<504>(op, "Backend service did not respond in time")
+}
+
+/// OpenAPI transform for `POST /api/v1/audits/{id}/stop`.
+pub(crate) fn stop_audit_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    let op = op
+        .id("stopAudit")
+        .tag("Audits")
+        .summary("Stop a running audit")
+        .description("Stops a currently running compliance audit.")
+        .security_requirement("bearerAuth")
+        .input::<Path<ResourceIdPathDoc>>()
+        .response_with::<200, (), _>(|response| response.description("Audit stopped"));
+
+    let op = problem_response::<401>(op, "Authentication required or session expired");
+    let op = problem_response::<404>(op, "Resource not found");
+    problem_response::<409>(op, "Resource state conflict")
+}
+
+/// OpenAPI transform for `POST /api/v1/audits/{id}/resume`.
+pub(crate) fn resume_audit_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    let op = op
+        .id("resumeAudit")
+        .tag("Audits")
+        .summary("Resume a stopped audit")
+        .description("Resumes a stopped compliance audit. Returns the report identifier.")
+        .security_requirement("bearerAuth")
+        .input::<Path<ResourceIdPathDoc>>()
+        .response_with::<200, Json<TaskActionResponse>, _>(ok_json("Audit resumed"));
 
     let op = problem_response::<401>(op, "Authentication required or session expired");
     let op = problem_response::<404>(op, "Resource not found");

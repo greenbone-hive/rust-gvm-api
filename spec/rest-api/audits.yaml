@@ -1,0 +1,188 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Greenbone AG
+openapi: 3.1.0
+info:
+  title: GVM REST API - Audits
+  version: 0.1.0
+paths:
+  /audits:
+    get:
+      operationId: getAudits
+      tags: [Audits]
+      summary: List audits
+      description: Returns a paginated list of compliance audits.
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/FilterString"
+        - $ref: "./common.yaml#/components/parameters/FilterId"
+        - $ref: "./common.yaml#/components/parameters/Page"
+        - $ref: "./common.yaml#/components/parameters/PerPage"
+      responses:
+        "200":
+          description: Paginated list of audits
+          content:
+            application/json:
+              schema:
+                $ref: "./tasks.yaml#/components/schemas/TaskList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+    post:
+      operationId: createAudit
+      tags: [Audits]
+      summary: Create an audit
+      description: Creates a new compliance audit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./tasks.yaml#/components/schemas/CreateTask"
+      responses:
+        "201":
+          description: Audit created
+          headers:
+            Location:
+              $ref: "./common.yaml#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "./common.yaml#/components/schemas/ResourceCreated"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+
+  /audits/{id}:
+    parameters:
+      - $ref: "./common.yaml#/components/parameters/ResourceId"
+    get:
+      operationId: getAudit
+      tags: [Audits]
+      summary: Get an audit
+      description: Returns the details for a single compliance audit.
+      responses:
+        "200":
+          description: Audit details
+          content:
+            application/json:
+              schema:
+                $ref: "./tasks.yaml#/components/schemas/Task"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    put:
+      operationId: modifyAudit
+      tags: [Audits]
+      summary: Modify an audit
+      description: Updates an existing compliance audit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./tasks.yaml#/components/schemas/ModifyTask"
+      responses:
+        "200":
+          description: Audit updated
+          content:
+            application/json:
+              schema:
+                $ref: "./tasks.yaml#/components/schemas/Task"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    delete:
+      operationId: deleteAudit
+      tags: [Audits]
+      summary: Delete an audit
+      description: Deletes a compliance audit.
+      responses:
+        "204":
+          description: Audit deleted
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /audits/{id}/start:
+    parameters:
+      - $ref: "./common.yaml#/components/parameters/ResourceId"
+    post:
+      operationId: startAudit
+      tags: [Audits]
+      summary: Start an audit
+      description: Starts a compliance audit. Returns the report identifier created by the action.
+      responses:
+        "200":
+          description: Audit started
+          content:
+            application/json:
+              schema:
+                $ref: "./tasks.yaml#/components/schemas/TaskAction"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "504":
+          $ref: "./common.yaml#/components/responses/GatewayTimeout"
+
+  /audits/{id}/stop:
+    parameters:
+      - $ref: "./common.yaml#/components/parameters/ResourceId"
+    post:
+      operationId: stopAudit
+      tags: [Audits]
+      summary: Stop a running audit
+      description: Stops a currently running compliance audit.
+      responses:
+        "200":
+          description: Audit stopped
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /audits/{id}/resume:
+    parameters:
+      - $ref: "./common.yaml#/components/parameters/ResourceId"
+    post:
+      operationId: resumeAudit
+      tags: [Audits]
+      summary: Resume a stopped audit
+      description: Resumes a stopped compliance audit. Returns the report identifier.
+      responses:
+        "200":
+          description: Audit resumed
+          content:
+            application/json:
+              schema:
+                $ref: "./tasks.yaml#/components/schemas/TaskAction"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"

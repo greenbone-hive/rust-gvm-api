@@ -71,6 +71,8 @@ tags:
     description: Web application target management
   - name: Tasks
     description: Scan task management and control
+  - name: Audits
+    description: Compliance audit management and control
   - name: Reports
     description: Scan report retrieval and export
   - name: Report Exports
@@ -79,6 +81,8 @@ tags:
     description: Asynchronous job status and result retrieval
   - name: Results
     description: Individual scan result retrieval
+  - name: Policies
+    description: Compliance policy management
   - name: Scan Configs
     description: Scan configuration management
   - name: Scanners
@@ -191,6 +195,16 @@ paths:
     $ref: './tasks.yaml#/paths/~1tasks~1{id}~1stop'
   /tasks/{id}/resume:
     $ref: './tasks.yaml#/paths/~1tasks~1{id}~1resume'
+  /audits:
+    $ref: './audits.yaml#/paths/~1audits'
+  /audits/{id}:
+    $ref: './audits.yaml#/paths/~1audits~1{id}'
+  /audits/{id}/start:
+    $ref: './audits.yaml#/paths/~1audits~1{id}~1start'
+  /audits/{id}/stop:
+    $ref: './audits.yaml#/paths/~1audits~1{id}~1stop'
+  /audits/{id}/resume:
+    $ref: './audits.yaml#/paths/~1audits~1{id}~1resume'
   /reports:
     $ref: './reports.yaml#/paths/~1reports'
   /reports/{id}:
@@ -229,6 +243,10 @@ paths:
     $ref: './scan-configs.yaml#/paths/~1scan-configs'
   /scan-configs/{id}:
     $ref: './scan-configs.yaml#/paths/~1scan-configs~1{id}'
+  /policies:
+    $ref: './policies.yaml#/paths/~1policies'
+  /policies/{id}:
+    $ref: './policies.yaml#/paths/~1policies~1{id}'
   /scanners:
     $ref: './scanners.yaml#/paths/~1scanners'
   /scanners/{id}:

@@ -291,6 +291,65 @@ impl E2eHarness {
         .await
     }
 
+    pub async fn create_audit(
+        &self,
+        token: &str,
+        name: &str,
+        target_id: &str,
+        policy_id: &str,
+        scanner_id: &str,
+    ) -> Result<Task> {
+        // Audits reuse the task-create body shape; a compliance policy is a
+        // scan config with `usage_type=policy`, so it is supplied via
+        // `scanConfigId`.
+        let body = json!({
+            "name": name,
+            "targetId": target_id,
+            "scanConfigId": policy_id,
+            "scannerId": scanner_id,
+        });
+        let created: ResourceCreated = self
+            .send_json(
+                self.authed(Method::POST, "/api/v1/audits", token)
+                    .json(&body),
+                StatusCode::CREATED,
+                "create audit",
+            )
+            .await?;
+        self.get_audit(token, &created.id).await
+    }
+
+    pub async fn get_audit(&self, token: &str, audit_id: &str) -> Result<Task> {
+        self.send_json(
+            self.authed(Method::GET, &format!("/api/v1/audits/{audit_id}"), token),
+            StatusCode::OK,
+            "get audit",
+        )
+        .await
+    }
+
+    pub async fn start_audit(&self, token: &str, audit_id: &str) -> Result<TaskAction> {
+        self.send_json(
+            self.authed(
+                Method::POST,
+                &format!("/api/v1/audits/{audit_id}/start"),
+                token,
+            ),
+            StatusCode::OK,
+            "start audit",
+        )
+        .await
+    }
+
+    pub async fn delete_audit(&self, token: &str, audit_id: &str) -> Result<()> {
+        self.send_empty(
+            self.authed(Method::DELETE, &format!("/api/v1/audits/{audit_id}"), token),
+            StatusCode::NO_CONTENT,
+            "delete audit",
+        )
+        .await
+    }
+
     pub async fn get_task(&self, token: &str, task_id: &str) -> Result<Task> {
         self.send_json(
             self.authed(Method::GET, &format!("/api/v1/tasks/{task_id}"), token),

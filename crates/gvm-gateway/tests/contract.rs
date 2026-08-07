@@ -708,6 +708,63 @@ impl TaskPort for CapturingTaskPort {
             "resume_task is not used by this test port".to_string(),
         ))
     }
+
+    async fn list_audits(&self, _: &str, query: &TaskQuery) -> Result<TaskPage, GatewayError> {
+        Ok(TaskPage {
+            data: vec![],
+            pagination: Pagination {
+                page: query.page,
+                per_page: query.per_page,
+                total: 0,
+                total_pages: 0,
+            },
+        })
+    }
+
+    async fn create_audit(&self, _: &str, _: CreateTaskInput) -> Result<String, GatewayError> {
+        Err(GatewayError::Internal(
+            "create_audit is not used by this test port".to_string(),
+        ))
+    }
+
+    async fn modify_audit(
+        &self,
+        _: &str,
+        _: &str,
+        _: ModifyTaskInput,
+    ) -> Result<Task, GatewayError> {
+        Err(GatewayError::Internal(
+            "modify_audit is not used by this test port".to_string(),
+        ))
+    }
+
+    async fn delete_audit(&self, _: &str, _: &str) -> Result<(), GatewayError> {
+        Err(GatewayError::Internal(
+            "delete_audit is not used by this test port".to_string(),
+        ))
+    }
+
+    async fn get_audit(&self, _: &str, id: &str) -> Result<Task, GatewayError> {
+        Ok(task_response(id, "Captured Audit"))
+    }
+
+    async fn start_audit(&self, _: &str, _: &str) -> Result<TaskAction, GatewayError> {
+        Err(GatewayError::Internal(
+            "start_audit is not used by this test port".to_string(),
+        ))
+    }
+
+    async fn stop_audit(&self, _: &str, _: &str) -> Result<(), GatewayError> {
+        Err(GatewayError::Internal(
+            "stop_audit is not used by this test port".to_string(),
+        ))
+    }
+
+    async fn resume_audit(&self, _: &str, _: &str) -> Result<TaskAction, GatewayError> {
+        Err(GatewayError::Internal(
+            "resume_audit is not used by this test port".to_string(),
+        ))
+    }
 }
 
 fn task_response(id: &str, name: &str) -> Task {

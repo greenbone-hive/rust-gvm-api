@@ -305,6 +305,10 @@ fn openapi_tags() -> Value {
             "description": "Scan task management"
         },
         {
+            "name": "Audits",
+            "description": "Compliance audit management"
+        },
+        {
             "name": "Reports",
             "description": "Scan report management"
         },
@@ -315,6 +319,10 @@ fn openapi_tags() -> Value {
         {
             "name": "Results",
             "description": "Scan result management"
+        },
+        {
+            "name": "Policies",
+            "description": "Compliance policy management"
         },
         {
             "name": "Scan Configs",
