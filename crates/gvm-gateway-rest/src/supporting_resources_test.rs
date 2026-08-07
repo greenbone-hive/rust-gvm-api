@@ -3,7 +3,10 @@
 
 use serde_json::json;
 
-use super::{PaginationOnlyQuery, SupportingListQuery, TicketResponse, TicketStatus};
+use super::{
+    reject_host_ultimate_query, ModifyHostRequest, PaginationOnlyQuery, SupportingListQuery,
+    TicketResponse, TicketStatus,
+};
 use crate::query::parse_delete_resource_query;
 use gvm_gateway_domain::{SupportingResourceMeta, Ticket};
 
@@ -59,6 +62,52 @@ fn delete_supporting_resource_query_rejects_invalid_bool() {
         }
         other => panic!("unexpected error variant: {:?}", other),
     }
+}
+
+#[test]
+fn modify_host_request_rejects_unknown_value_field() {
+    // gvmd cannot change a host asset's name/IP, so a `PUT /hosts/{id}` body
+    // carrying `value` must be a 400 rather than a silently ignored mutation.
+    let error = serde_json::from_value::<ModifyHostRequest>(json!({
+        "comment": "lab host",
+        "value": "192.0.2.10"
+    }))
+    .expect_err("unknown `value` field should be rejected");
+    assert!(
+        error.to_string().contains("value"),
+        "error should name the rejected field: {error}"
+    );
+
+    // A comment-only body still parses.
+    serde_json::from_value::<ModifyHostRequest>(json!({ "comment": "lab host" }))
+        .expect("comment-only body should parse");
+}
+
+#[test]
+fn host_delete_rejects_ultimate_query() {
+    // gvmd's host-asset delete ignores `ultimate`, so any form of the flag is a
+    // 400 rather than a silent ordinary delete reported as permanent.
+    for query in [
+        "ultimate=true",
+        "ultimate=false",
+        "ultimate",
+        "comment=x&ultimate=true",
+    ] {
+        let error = reject_host_ultimate_query(Some(query))
+            .expect_err("ultimate must be rejected for host deletion");
+        match error {
+            gvm_gateway_domain::GatewayError::InvalidInput(detail) => assert!(
+                detail.contains("ultimate"),
+                "detail should mention ultimate: {detail}"
+            ),
+            other => panic!("unexpected error variant: {:?}", other),
+        }
+    }
+
+    // Absent, empty, and unrelated query strings are accepted.
+    reject_host_ultimate_query(None).expect("no query is fine");
+    reject_host_ultimate_query(Some("")).expect("empty query is fine");
+    reject_host_ultimate_query(Some("foo=bar")).expect("unrelated params are fine");
 }
 
 fn ticket_with_status(status: &str) -> Ticket {

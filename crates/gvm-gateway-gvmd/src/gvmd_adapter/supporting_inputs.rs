@@ -35,7 +35,9 @@ pub(super) fn host_opts_from_create_input(input: CreateHostInput) -> HostOpts {
 pub(super) fn host_opts_from_modify_input(input: ModifyHostInput) -> HostOpts {
     HostOpts {
         comment: input.comment,
-        value: input.value,
+        // gvmd `modify_asset` ignores the value; a host's name/IP is immutable,
+        // so we never emit one.
+        value: None,
     }
 }
 

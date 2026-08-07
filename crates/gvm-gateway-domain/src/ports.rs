@@ -571,12 +571,11 @@ pub trait SupportingResourcePort: Send + Sync + 'static {
     ) -> Result<Host, GatewayError>;
 
     /// Delete a host asset by identifier.
-    async fn delete_host(
-        &self,
-        session_token: &str,
-        id: &str,
-        ultimate: bool,
-    ) -> Result<(), GatewayError>;
+    ///
+    /// The gvmd host-asset delete command does not support the `ultimate`
+    /// (permanent) flag, so this method intentionally takes no `ultimate`
+    /// argument: callers cannot request a permanent delete the backend ignores.
+    async fn delete_host(&self, session_token: &str, id: &str) -> Result<(), GatewayError>;
 
     /// List report formats for the session.
     async fn list_report_formats(

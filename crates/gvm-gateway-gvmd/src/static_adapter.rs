@@ -677,7 +677,7 @@ impl SupportingResourcePort for StaticGvmdAdapter {
         unsupported!("static adapter does not support hosts")
     }
 
-    async fn delete_host(&self, _: &str, _: &str, _: bool) -> Result<(), GatewayError> {
+    async fn delete_host(&self, _: &str, _: &str) -> Result<(), GatewayError> {
         unsupported!("static adapter does not support hosts")
     }
 

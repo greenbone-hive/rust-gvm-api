@@ -423,9 +423,11 @@ pub struct CreateHostInput {
 /// Host asset update command.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ModifyHostInput {
-    /// Optional host name or IP address.
-    pub value: Option<String>,
     /// Optional comment.
+    ///
+    /// The gvmd `modify_asset` command does not update a host asset's name/IP
+    /// value, so this input intentionally carries no `value`: a host's
+    /// identity cannot be edited and callers must not be able to request it.
     pub comment: Option<String>,
 }
 

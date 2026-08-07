@@ -183,17 +183,14 @@ impl SupportingResourcePort for GvmdAdapter {
         self.get_host(session_token, id).await
     }
 
-    async fn delete_host(
-        &self,
-        session_token: &str,
-        id: &str,
-        ultimate: bool,
-    ) -> Result<(), GatewayError> {
+    async fn delete_host(&self, session_token: &str, id: &str) -> Result<(), GatewayError> {
         let client = self.session_client(session_token)?;
         let response = client
             .lock()
             .await?
-            .call(delete_host(&parse_entity_id(id)?, ultimate))
+            // The gvmd host-asset delete command ignores an ultimate flag, so a
+            // plain delete is always issued.
+            .call(delete_host(&parse_entity_id(id)?, false))
             .await
             .map_err(map_gvm_error)?;
         ActionResponse::from_response(&response).map_err(map_parse_error)?;

@@ -972,7 +972,7 @@ impl SupportingResourcePort for MockSupportingResourcePort {
         Err(GatewayError::NotFound(format!("host {id} not found")))
     }
 
-    async fn delete_host(&self, _: &str, _: &str, _: bool) -> Result<(), GatewayError> {
+    async fn delete_host(&self, _: &str, _: &str) -> Result<(), GatewayError> {
         Ok(())
     }
 

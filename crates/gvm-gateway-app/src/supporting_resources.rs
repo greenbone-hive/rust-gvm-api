@@ -134,12 +134,7 @@ impl GatewayService {
     }
 
     /// Deletes a host asset for an authenticated session.
-    pub async fn delete_host(
-        &self,
-        session_token: &str,
-        id: &str,
-        ultimate: bool,
-    ) -> Result<(), GatewayError> {
+    pub async fn delete_host(&self, session_token: &str, id: &str) -> Result<(), GatewayError> {
         self.execute_with_resource(
             "hosts.delete",
             session_token,
@@ -148,7 +143,7 @@ impl GatewayService {
             Some(id),
             |session| async move {
                 self.supporting_resources
-                    .delete_host(&session.token, id, ultimate)
+                    .delete_host(&session.token, id)
                     .await
             },
         )

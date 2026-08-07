@@ -263,17 +263,18 @@ impl ValidateInto<CreateHostInput> for CreateHostRequest {
 
 #[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]
 #[schemars(rename = "UpdateHost")]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ModifyHostRequest {
-    // The gvmd `modify_asset` command does not update a host asset's
-    // name/IP value, so this endpoint only edits the comment. The `value`
-    // field is intentionally not accepted rather than silently ignored.
+    // The gvmd `modify_asset` command does not update a host asset's name/IP
+    // value, so this endpoint only edits the comment. `deny_unknown_fields`
+    // makes a body carrying `value` (or any other unsupported field) a `400`
+    // rather than silently dropping it and reporting success.
     comment: Option<String>,
 }
 
 impl ValidateInto<ModifyHostInput> for ModifyHostRequest {
     fn validate_into(self) -> Result<ModifyHostInput, GatewayError> {
         Ok(ModifyHostInput {
-            value: None,
             comment: self.comment,
         })
     }
@@ -1129,6 +1130,24 @@ pub async fn get_host(
     }
 }
 
+/// Rejects the `ultimate` query parameter on host deletion.
+///
+/// gvmd's host-asset delete command does not support permanent (`ultimate`)
+/// deletion, so accepting the flag and silently performing an ordinary delete
+/// would misrepresent the outcome. Any `ultimate` key is a `400` instead.
+fn reject_host_ultimate_query(query: Option<&str>) -> Result<(), GatewayError> {
+    let has_ultimate = query
+        .into_iter()
+        .flat_map(|query| query.split('&'))
+        .any(|pair| matches!(pair.split('=').next(), Some("ultimate")));
+    if has_ultimate {
+        return Err(GatewayError::InvalidInput(
+            "the `ultimate` query parameter is not supported for host deletion".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 /// Creates a host asset.
 pub async fn create_host(
     State(service): State<GatewayService>,
@@ -1182,11 +1201,17 @@ pub async fn delete_host(
     if let Err(error) = validate_uuid("id", &id) {
         return gateway_error(error, instance);
     }
+    // gvmd's host-asset delete does not support the `ultimate` (permanent)
+    // flag; reject it at the boundary instead of silently performing an
+    // ordinary delete and reporting success.
+    if let Err(error) = reject_host_ultimate_query(uri.query()) {
+        return gateway_error(error, instance);
+    }
     let session = match bearer_token(&headers) {
         Ok(session) => session,
         Err(error) => return gateway_error(error, instance),
     };
-    match service.delete_host(&session, &id, false).await {
+    match service.delete_host(&session, &id).await {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(error) => gateway_error(error, instance),
     }
