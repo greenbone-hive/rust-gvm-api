@@ -84,6 +84,14 @@ components:
           $ref: "./common.yaml#/components/schemas/ResourceRef"
         report:
           $ref: "./common.yaml#/components/schemas/ResourceRef"
+        hostsCount:
+          type: integer
+          minimum: 0
+          description: Number of distinct hosts represented by an aggregate report vulnerability. Omitted for ordinary results and when the backend does not provide an aggregate count.
+        occurrences:
+          type: integer
+          minimum: 0
+          description: Number of result occurrences represented by an aggregate report vulnerability. Omitted for ordinary results and when the backend does not provide an aggregate count.
 
     NvtRef:
       type: object

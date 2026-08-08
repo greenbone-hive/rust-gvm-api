@@ -1129,7 +1129,6 @@ async fn gvmd_adapter_list_hosts_emits_backend_pagination_filter() {
         .expect("get_assets command should be recorded");
     let xml = String::from_utf8(command.raw_xml().to_vec()).expect("xml command");
     assert!(xml.contains("<get_assets"));
-    assert!(xml.contains("asset_type=\"host\""));
     assert!(xml.contains("type=\"host\""));
     assert!(xml.contains("filter=\"name~host first=11 rows=10\""));
 
@@ -1189,15 +1188,23 @@ async fn gvmd_adapter_get_report_vulnerabilities_uses_typed_command() {
     assert_eq!(page.pagination.per_page, 10);
     assert_eq!(page.pagination.total, 1);
     assert_eq!(page.data.len(), 1);
-    assert_eq!(page.data[0].host.as_deref(), Some("192.0.2.10"));
-    assert_eq!(page.data[0].severity, Some(8.2));
+    assert_eq!(page.data[0].name, "SSL/TLS Renegotiation Vulnerability");
+    assert_eq!(page.data[0].host, None);
+    assert_eq!(page.data[0].port, None);
+    assert_eq!(page.data[0].severity, Some(5.0));
+    assert_eq!(page.data[0].hosts_count, Some(2));
+    assert_eq!(page.data[0].occurrences, Some(3));
+    assert_eq!(
+        page.data[0].nvt.as_ref().and_then(|nvt| nvt.oid.as_deref()),
+        Some("1.3.6.1.4.1.25623.1.0.117761")
+    );
     assert_eq!(
         page.data[0]
             .nvt
             .as_ref()
             .map(|nvt| nvt.cves.clone())
             .unwrap_or_default(),
-        vec!["CVE-2026-0001".to_string()]
+        vec!["CVE-2011-1473".to_string(), "CVE-2011-5094".to_string()]
     );
 
     let history = server.command_history();

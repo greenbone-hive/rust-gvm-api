@@ -2,9 +2,18 @@
 // Copyright (C) 2026 Greenbone AG
 
 use std::{
+    collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
 };
+
+const RUST_GVM_COMPONENTS: &[&str] = &[
+    "gvm-client",
+    "gvm-connection",
+    "gvm-gmp",
+    "gvm-mock-server",
+    "gvm-protocol",
+];
 
 #[derive(Debug, Eq, PartialEq)]
 struct Finding {
@@ -119,6 +128,59 @@ fn gmp_wire_handling_stays_in_rust_gvm() {
          greenbone-hive/rust-gvm, not rust-gvm-api. Stop this change and report an \
          upstream issue using docs/rust-gvm-gmp-boundary-issue-template.md.\n\n{}",
         format_findings(&findings.iter().collect::<Vec<_>>())
+    );
+}
+
+#[test]
+fn rust_gvm_components_resolve_to_one_revision() {
+    // These five crates share one upstream workspace and typed protocol
+    // contract. A partial lockfile update can compile against incompatible
+    // command, response, and transport revisions, so the resolved SHAs must
+    // remain atomic.
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let lockfile = fs::read_to_string(manifest_dir.join("../../Cargo.lock"))
+        .expect("read workspace Cargo.lock");
+    let mut revisions = BTreeMap::new();
+
+    for package in lockfile.split("[[package]]") {
+        let name = package.lines().find_map(|line| {
+            line.trim()
+                .strip_prefix("name = \"")
+                .and_then(|value| value.strip_suffix('"'))
+        });
+        let Some(name) = name.filter(|name| RUST_GVM_COMPONENTS.contains(name)) else {
+            continue;
+        };
+        let source = package
+            .lines()
+            .find_map(|line| {
+                line.trim()
+                    .strip_prefix("source = \"")
+                    .and_then(|value| value.strip_suffix('"'))
+            })
+            .unwrap_or_else(|| panic!("{name} must have a git source"));
+        let revision = source
+            .rsplit_once('#')
+            .map(|(_, revision)| revision)
+            .unwrap_or_else(|| panic!("{name} git source must record a revision"));
+        assert!(
+            revisions.insert(name, revision).is_none(),
+            "{name} must resolve exactly once"
+        );
+    }
+
+    assert_eq!(
+        revisions.len(),
+        RUST_GVM_COMPONENTS.len(),
+        "all five rust-gvm components must be present in Cargo.lock"
+    );
+    let expected = revisions
+        .values()
+        .next()
+        .expect("at least one rust-gvm revision");
+    assert!(
+        revisions.values().all(|revision| revision == expected),
+        "rust-gvm components resolved to different revisions: {revisions:?}"
     );
 }
 

@@ -38,6 +38,12 @@ pub struct ScanResult {
     /// Associated report reference.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub report: Option<ResourceRef>,
+    /// Number of distinct hosts represented by an aggregate vulnerability.
+    #[serde(rename = "hostsCount", skip_serializing_if = "Option::is_none")]
+    pub hosts_count: Option<u32>,
+    /// Number of result occurrences represented by an aggregate vulnerability.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub occurrences: Option<u32>,
 }
 
 /// NVT (Network Vulnerability Test) reference.

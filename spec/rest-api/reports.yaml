@@ -104,7 +104,7 @@ paths:
         - $ref: "./common.yaml#/components/parameters/PerPage"
       responses:
         "200":
-          description: Paginated list of vulnerability findings
+          description: Paginated list of aggregate vulnerability findings. Aggregate rows expose `hostsCount` and `occurrences` when supplied by gvmd and omit singular `host` and `port` when no single observation exists.
           content:
             application/json:
               schema:

@@ -19,6 +19,8 @@ fn result_response_preserves_critical_threat() {
         description: None,
         task: None,
         report: None,
+        hosts_count: None,
+        occurrences: None,
     });
 
     let value = serde_json::to_value(response).expect("result response should serialize");
@@ -38,6 +40,8 @@ fn result_response_preserves_unknown_threat() {
         description: None,
         task: None,
         report: None,
+        hosts_count: None,
+        occurrences: None,
     });
 
     let value = serde_json::to_value(response).expect("result response should serialize");

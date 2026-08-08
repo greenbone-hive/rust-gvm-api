@@ -62,14 +62,6 @@ impl CredentialPort for GvmdAdapter {
         session_token: &str,
         input: CreateCredentialInput,
     ) -> Result<String, GatewayError> {
-        if input.private_key.is_some()
-            || input.certificate.is_some()
-            || input.privacy_password.is_some()
-        {
-            return Err(GatewayError::InvalidInput(
-                "privateKey, certificate, and privacyPassword are not supported by the current GMP adapter".to_string(),
-            ));
-        }
         let client = self.session_client(session_token)?;
         let response = client
             .lock()
@@ -80,20 +72,28 @@ impl CredentialPort for GvmdAdapter {
                     comment: input.comment,
                     credential_type: Some(parse_credential_type(&input.credential_type)?),
                     login: input.login,
-                    password: input.password.or(input.community),
-                    private_key: None,
-                    certificate: None,
+                    password: input.password,
+                    private_key: input.private_key,
+                    key_phrase: None,
+                    public_key: None,
+                    certificate: input.certificate,
+                    community: input.community,
                     auth_algorithm: input
                         .auth_algorithm
                         .as_deref()
                         .map(parse_snmp_auth_algorithm)
                         .transpose()?,
+                    privacy_password: input.privacy_password,
                     privacy_algorithm: input
                         .privacy_algorithm
                         .as_deref()
                         .map(parse_snmp_privacy_algorithm)
                         .transpose()?,
-                    format: None,
+                    allow_insecure: None,
+                    kdc: None,
+                    kdcs: vec![],
+                    realm: None,
+                    ..Default::default()
                 },
             ))
             .await
@@ -129,38 +129,37 @@ impl CredentialPort for GvmdAdapter {
         id: &str,
         input: ModifyCredentialInput,
     ) -> Result<Credential, GatewayError> {
-        if input.private_key.is_some()
-            || input.certificate.is_some()
-            || input.privacy_password.is_some()
-        {
-            return Err(GatewayError::InvalidInput(
-                "privateKey, certificate, and privacyPassword are not supported by the current GMP adapter".to_string(),
-            ));
-        }
         let client = self.session_client(session_token)?;
         let response = client
             .lock()
             .await?
             .call(modify_credential(
                 &parse_entity_id(id)?,
-                CredentialOpts {
+                ModifyCredentialOpts {
+                    name: input.name,
                     comment: input.comment,
-                    credential_type: None,
                     login: input.login,
-                    password: input.password.or(input.community),
-                    private_key: None,
-                    certificate: None,
+                    password: input.password,
+                    private_key: input.private_key,
+                    key_phrase: None,
+                    public_key: None,
+                    certificate: input.certificate,
+                    community: input.community,
                     auth_algorithm: input
                         .auth_algorithm
                         .as_deref()
                         .map(parse_snmp_auth_algorithm)
                         .transpose()?,
+                    privacy_password: input.privacy_password,
                     privacy_algorithm: input
                         .privacy_algorithm
                         .as_deref()
                         .map(parse_snmp_privacy_algorithm)
                         .transpose()?,
-                    format: None,
+                    allow_insecure: None,
+                    kdc: None,
+                    kdcs: vec![],
+                    realm: None,
                 },
             ))
             .await

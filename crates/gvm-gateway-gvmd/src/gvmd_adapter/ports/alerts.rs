@@ -59,14 +59,6 @@ impl AlertPort for GvmdAdapter {
         session_token: &str,
         input: CreateAlertInput,
     ) -> Result<String, GatewayError> {
-        if !input.event_data.is_empty()
-            || !input.condition_data.is_empty()
-            || !input.method_data.is_empty()
-        {
-            return Err(GatewayError::InvalidInput(
-                "alert eventData/conditionData/methodData are not supported by the current GMP adapter".to_string(),
-            ));
-        }
         let client = self.session_client(session_token)?;
         let response = client
             .lock()
@@ -74,18 +66,22 @@ impl AlertPort for GvmdAdapter {
             .call(create_alert(
                 &input.name,
                 AlertOpts {
+                    name: None,
                     comment: input.comment,
                     event: input.event.as_deref().map(parse_alert_event).transpose()?,
+                    event_data: alert_data(input.event_data),
                     condition: input
                         .condition
                         .as_deref()
                         .map(parse_alert_condition)
                         .transpose()?,
+                    condition_data: alert_data(input.condition_data),
                     method: input
                         .method
                         .as_deref()
                         .map(parse_alert_method)
                         .transpose()?,
+                    method_data: alert_data(input.method_data),
                     filter_id: input
                         .filter_id
                         .as_deref()
@@ -122,23 +118,6 @@ impl AlertPort for GvmdAdapter {
         id: &str,
         input: ModifyAlertInput,
     ) -> Result<Alert, GatewayError> {
-        if input
-            .event_data
-            .as_ref()
-            .is_some_and(|value| !value.is_empty())
-            || input
-                .condition_data
-                .as_ref()
-                .is_some_and(|value| !value.is_empty())
-            || input
-                .method_data
-                .as_ref()
-                .is_some_and(|value| !value.is_empty())
-        {
-            return Err(GatewayError::InvalidInput(
-                "alert eventData/conditionData/methodData are not supported by the current GMP adapter".to_string(),
-            ));
-        }
         let client = self.session_client(session_token)?;
         let response = client
             .lock()
@@ -146,18 +125,22 @@ impl AlertPort for GvmdAdapter {
             .call(modify_alert(
                 &parse_entity_id(id)?,
                 AlertOpts {
+                    name: input.name,
                     comment: input.comment,
                     event: input.event.as_deref().map(parse_alert_event).transpose()?,
+                    event_data: alert_data(input.event_data.unwrap_or_default()),
                     condition: input
                         .condition
                         .as_deref()
                         .map(parse_alert_condition)
                         .transpose()?,
+                    condition_data: alert_data(input.condition_data.unwrap_or_default()),
                     method: input
                         .method
                         .as_deref()
                         .map(parse_alert_method)
                         .transpose()?,
+                    method_data: alert_data(input.method_data.unwrap_or_default()),
                     filter_id: input
                         .filter_id
                         .as_deref()
@@ -188,4 +171,13 @@ impl AlertPort for GvmdAdapter {
         let _ = ActionResponse::from_response(&response).map_err(map_parse_error)?;
         Ok(())
     }
+}
+
+fn alert_data(values: HashMap<String, String>) -> Vec<AlertData> {
+    let mut data = values
+        .into_iter()
+        .map(|(name, value)| AlertData::new(name, value))
+        .collect::<Vec<_>>();
+    data.sort_by(|left, right| left.name.cmp(&right.name));
+    data
 }

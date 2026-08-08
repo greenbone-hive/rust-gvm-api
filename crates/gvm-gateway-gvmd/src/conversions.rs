@@ -72,9 +72,7 @@ pub(crate) fn schedule_from_gmp(schedule: gvm_gmp::responses::Schedule) -> Sched
         timezone: schedule.timezone,
         first_run: schedule.first_run,
         next_run: schedule.next_run,
-        duration: schedule
-            .duration
-            .and_then(|value| value.parse::<u32>().ok()),
+        duration: schedule.duration,
         in_use: schedule.meta.in_use,
         writable: schedule.meta.writable,
     }
@@ -279,15 +277,18 @@ pub(crate) fn result_from_gmp(result: gvm_gmp::responses::ScanResult) -> ScanRes
         description: result.description,
         task: result.task.map(resource_ref_from_named_entity),
         report: result.report.map(resource_ref_from_named_entity),
+        hosts_count: None,
+        occurrences: None,
     }
 }
 
 pub(crate) fn result_from_report_vulnerability(
     vulnerability: gvm_gmp::responses::ReportVulnerability,
 ) -> ScanResult {
+    let name = vulnerability.name.unwrap_or_default();
     ScanResult {
         id: vulnerability.id.unwrap_or_default(),
-        name: vulnerability.name.unwrap_or_default(),
+        name: name.clone(),
         host: vulnerability.host,
         port: vulnerability.port,
         severity: vulnerability
@@ -296,8 +297,8 @@ pub(crate) fn result_from_report_vulnerability(
             .and_then(|value| value.parse::<f64>().ok()),
         threat: vulnerability.threat,
         nvt: Some(NvtRef {
-            oid: None,
-            name: None,
+            oid: vulnerability.nvt_oid,
+            name: if name.is_empty() { None } else { Some(name) },
             family: vulnerability.family,
             cvss_base: None,
             cves: vulnerability.cves,
@@ -306,6 +307,8 @@ pub(crate) fn result_from_report_vulnerability(
         description: None,
         task: None,
         report: None,
+        hosts_count: vulnerability.hosts_count,
+        occurrences: vulnerability.occurrences,
     }
 }
 
@@ -343,35 +346,38 @@ pub(crate) fn result_from_report_error(error: gvm_gmp::responses::ReportError) -
         description: error.description,
         task: None,
         report: None,
+        hosts_count: None,
+        occurrences: None,
     }
 }
 
 pub(crate) fn result_from_report_closed_cve(
     closed_cve: gvm_gmp::responses::ReportClosedCve,
 ) -> ScanResult {
+    let cve = closed_cve.cve.unwrap_or_default();
     ScanResult {
         id: closed_cve.id.unwrap_or_default(),
-        name: closed_cve
-            .name
-            .unwrap_or_else(|| closed_cve.cve.clone().unwrap_or_default()),
+        name: cve.clone(),
         host: closed_cve.host,
         port: None,
         severity: closed_cve
             .severity
             .as_deref()
             .and_then(|value| value.parse::<f64>().ok()),
-        threat: None,
+        threat: closed_cve.threat,
         nvt: Some(NvtRef {
-            oid: None,
-            name: None,
+            oid: closed_cve.nvt_oid,
+            name: closed_cve.name,
             family: None,
             cvss_base: None,
-            cves: closed_cve.cve.into_iter().collect(),
+            cves: if cve.is_empty() { vec![] } else { vec![cve] },
             tags: None,
         }),
         description: None,
         task: None,
         report: None,
+        hosts_count: None,
+        occurrences: None,
     }
 }
 

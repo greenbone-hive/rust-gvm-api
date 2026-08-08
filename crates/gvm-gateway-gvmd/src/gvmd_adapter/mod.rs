@@ -37,13 +37,13 @@ use gvm_gateway_domain::{
 use gvm_gmp::{
     commands::{
         alerts::{
-            create_alert, delete_alert, get_alert, get_alerts, modify_alert, AlertOpts,
+            create_alert, delete_alert, get_alert, get_alerts, modify_alert, AlertData, AlertOpts,
             GetAlertsOpts,
         },
         authentication::authenticate,
         credentials::{
             create_credential, delete_credential, get_credential, get_credentials,
-            modify_credential, CredentialOpts, GetCredentialsOpts,
+            modify_credential, CredentialOpts, GetCredentialsOpts, ModifyCredentialOpts,
         },
         feed::get_feeds,
         filters::{get_filter, get_filters, GetFiltersOpts},
@@ -149,8 +149,8 @@ use filters::{
 };
 use session::{SessionClient, SharedClient};
 use supporting_inputs::{
-    note_opts_from_create_input, note_opts_from_modify_input, override_opts_from_create_input,
-    override_opts_from_modify_input,
+    collection_update, note_opts_from_create_input, note_opts_from_modify_input,
+    override_opts_from_create_input, override_opts_from_modify_input,
 };
 
 /// gvmd adapter backed by session-keyed GMP clients.

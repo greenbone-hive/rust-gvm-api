@@ -630,6 +630,7 @@ impl SupportingResourcePort for GvmdAdapter {
                 filter_string,
                 filter_id: None,
                 details: Some(true),
+                ..Default::default()
             }))
             .await
             .map_err(map_gvm_error)?;
@@ -665,6 +666,7 @@ impl SupportingResourcePort for GvmdAdapter {
                             .await?,
                         filter_id: None,
                         details: Some(true),
+                        ..Default::default()
                     }),
                 )
                 .await?;

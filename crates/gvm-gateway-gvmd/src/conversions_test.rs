@@ -4,8 +4,9 @@
 use super::*;
 use gvm_gmp::responses::{
     GetAlertsResponse, GetCredentialsResponse, GetFeedsResponse, GetPortListsResponse,
-    GetReportsResponse, GetResultsResponse, GetScanConfigsResponse, GetSchedulesResponse,
-    GetTargetsResponse, GetTasksResponse, GetTicketsResponse, GetUsersResponse,
+    GetReportClosedCvesResponse, GetReportVulnsResponse, GetReportsResponse, GetResultsResponse,
+    GetScanConfigsResponse, GetSchedulesResponse, GetTargetsResponse, GetTasksResponse,
+    GetTicketsResponse, GetUsersResponse,
 };
 use gvm_protocol::Response as GmpResponse;
 
@@ -549,6 +550,70 @@ fn schedule_from_gmp_preserves_run_times() {
 
     assert_eq!(schedule.first_run.as_deref(), Some("2026-01-03T00:00:00Z"));
     assert_eq!(schedule.next_run.as_deref(), Some("2026-01-04T00:00:00Z"));
+}
+
+#[test]
+fn aggregate_vulnerability_preserves_counts_and_nested_nvt_identity() {
+    // Report vulnerability rows are aggregates, so they expose counts and NVT
+    // identity while intentionally leaving singular host and port absent.
+    let response = GmpResponse::from(
+        r#"<get_report_vulns_response status="200" status_text="OK">
+            <vulns><vuln>
+                <nvt oid="1.3.6.1.4.1.25623.1.0.117761"><name>TLS finding</name></nvt>
+                <cves><cve>CVE-2026-0001</cve></cves>
+                <hosts_count>2</hosts_count><occurrences>3</occurrences>
+                <severity>5.0</severity><threat>Medium</threat>
+            </vuln></vulns>
+            <report_vuln_count>1<filtered>1</filtered></report_vuln_count>
+        </get_report_vulns_response>"#,
+    );
+    let parsed = GetReportVulnsResponse::from_response(&response).expect("vulnerabilities parse");
+
+    let result = result_from_report_vulnerability(parsed.items.into_iter().next().unwrap());
+
+    assert_eq!(result.name, "TLS finding");
+    assert_eq!(result.host, None);
+    assert_eq!(result.port, None);
+    assert_eq!(result.hosts_count, Some(2));
+    assert_eq!(result.occurrences, Some(3));
+    assert_eq!(
+        result.nvt.as_ref().and_then(|nvt| nvt.oid.as_deref()),
+        Some("1.3.6.1.4.1.25623.1.0.117761")
+    );
+    assert_eq!(
+        result.nvt.as_ref().and_then(|nvt| nvt.name.as_deref()),
+        Some("TLS finding")
+    );
+}
+
+#[test]
+fn closed_cve_keeps_cve_name_and_maps_nested_nvt_identity() {
+    // The public result name is the closed CVE identifier; the nested NVT
+    // name and OID remain available separately instead of replacing it.
+    let response = GmpResponse::from(
+        r#"<get_report_closed_cves_response status="200" status_text="OK">
+            <closed_cves><closed_cve>
+                <host>192.0.2.30</host><cve>CVE-2025-9999</cve>
+                <nvt oid="1.3.6.1.4.1.25623.1.0.100000"><name>Closed check</name></nvt>
+                <severity>5.0</severity><threat>Medium</threat>
+            </closed_cve></closed_cves>
+            <report_closed_cve_count>1<filtered>1</filtered></report_closed_cve_count>
+        </get_report_closed_cves_response>"#,
+    );
+    let parsed = GetReportClosedCvesResponse::from_response(&response).expect("closed CVEs parse");
+
+    let result = result_from_report_closed_cve(parsed.items.into_iter().next().unwrap());
+
+    assert_eq!(result.name, "CVE-2025-9999");
+    assert_eq!(result.threat.as_deref(), Some("Medium"));
+    assert_eq!(
+        result.nvt.as_ref().and_then(|nvt| nvt.oid.as_deref()),
+        Some("1.3.6.1.4.1.25623.1.0.100000")
+    );
+    assert_eq!(
+        result.nvt.as_ref().and_then(|nvt| nvt.name.as_deref()),
+        Some("Closed check")
+    );
 }
 
 #[test]

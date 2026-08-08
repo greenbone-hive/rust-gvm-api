@@ -401,11 +401,15 @@ fn scan_result_serializes_camel_case() {
         description: Some("A vulnerability was found.".to_string()),
         task: None,
         report: None,
+        hosts_count: None,
+        occurrences: None,
     };
     let json = serde_json::to_string(&result).unwrap();
     assert!(json.contains("\"cvssBase\""));
     assert!(!json.contains("\"tags\""));
     assert!(!json.contains("\"task\""));
+    assert!(!json.contains("\"hostsCount\""));
+    assert!(!json.contains("\"occurrences\""));
 }
 
 /// NvtRef omits the CVE list when it is empty.

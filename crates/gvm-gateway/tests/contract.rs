@@ -626,6 +626,8 @@ fn scan_result_response(report_id: &str) -> ScanResult {
             id: report_id.to_string(),
             name: None,
         }),
+        hosts_count: None,
+        occurrences: None,
     }
 }
 

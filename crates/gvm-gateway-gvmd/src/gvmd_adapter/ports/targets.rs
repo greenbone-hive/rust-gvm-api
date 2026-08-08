@@ -178,8 +178,8 @@ impl TargetPort for GvmdAdapter {
                     ModifyTargetOpts {
                         name: input.name,
                         comment: input.comment,
-                        hosts: input.hosts.unwrap_or_default(),
-                        exclude_hosts: input.exclude_hosts.unwrap_or_default(),
+                        hosts: collection_update(input.hosts),
+                        exclude_hosts: collection_update(input.exclude_hosts),
                         reverse_lookup_only: input.reverse_lookup_only,
                         reverse_lookup_unify: input.reverse_lookup_unify,
                         alive_test: input

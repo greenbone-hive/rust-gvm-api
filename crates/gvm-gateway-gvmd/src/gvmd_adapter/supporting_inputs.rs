@@ -4,7 +4,13 @@
 use gvm_gateway_domain::{
     CreateNoteInput, CreateOverrideInput, GatewayError, ModifyNoteInput, ModifyOverrideInput,
 };
-use gvm_gmp::commands::{notes::NoteOpts, overrides::OverrideOpts};
+use gvm_gmp::{
+    commands::{
+        notes::{ModifyNoteOpts, NoteOpts},
+        overrides::{ModifyOverrideOpts, OverrideOpts},
+    },
+    CollectionUpdate,
+};
 
 use crate::conversions::parse_entity_id;
 
@@ -29,10 +35,10 @@ pub(super) fn note_opts_from_create_input(
 
 pub(super) fn note_opts_from_modify_input(
     input: ModifyNoteInput,
-) -> Result<NoteOpts, GatewayError> {
-    Ok(NoteOpts {
+) -> Result<ModifyNoteOpts, GatewayError> {
+    Ok(ModifyNoteOpts {
         text: input.text,
-        hosts: input.hosts.unwrap_or_default(),
+        hosts: collection_update(input.hosts),
         port: input.port,
         severity: input.severity,
         task_id: input.task_id.as_deref().map(parse_entity_id).transpose()?,
@@ -67,10 +73,10 @@ pub(super) fn override_opts_from_create_input(
 
 pub(super) fn override_opts_from_modify_input(
     input: ModifyOverrideInput,
-) -> Result<OverrideOpts, GatewayError> {
-    Ok(OverrideOpts {
+) -> Result<ModifyOverrideOpts, GatewayError> {
+    Ok(ModifyOverrideOpts {
         text: input.text,
-        hosts: input.hosts.unwrap_or_default(),
+        hosts: collection_update(input.hosts),
         port: input.port,
         severity: input.severity,
         new_severity: input.new_severity,
@@ -83,3 +89,11 @@ pub(super) fn override_opts_from_modify_input(
         active: input.active,
     })
 }
+
+pub(super) fn collection_update(values: Option<Vec<String>>) -> CollectionUpdate<String> {
+    values.map(CollectionUpdate::from).unwrap_or_default()
+}
+
+#[cfg(test)]
+#[path = "supporting_inputs_test.rs"]
+mod supporting_inputs_test;

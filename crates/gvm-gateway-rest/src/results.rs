@@ -94,6 +94,10 @@ pub(crate) struct ResultResponse {
     task: Option<ResourceRefResponse>,
     #[serde(skip_serializing_if = "Option::is_none")]
     report: Option<ResourceRefResponse>,
+    #[serde(rename = "hostsCount", skip_serializing_if = "Option::is_none")]
+    hosts_count: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    occurrences: Option<u32>,
 }
 
 impl From<gvm_gateway_domain::ScanResult> for ResultResponse {
@@ -109,6 +113,8 @@ impl From<gvm_gateway_domain::ScanResult> for ResultResponse {
             description: r.description,
             task: r.task.map(ResourceRefResponse::from),
             report: r.report.map(ResourceRefResponse::from),
+            hosts_count: r.hosts_count,
+            occurrences: r.occurrences,
         }
     }
 }
