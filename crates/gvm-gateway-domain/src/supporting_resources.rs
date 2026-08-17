@@ -355,6 +355,82 @@ pub struct TagPage {
     pub pagination: Pagination,
 }
 
+/// Filter create command.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct CreateFilterInput {
+    /// Required filter name.
+    pub name: String,
+    /// Optional comment.
+    pub comment: Option<String>,
+    /// Optional GMP filter term expression.
+    pub term: Option<String>,
+    /// Optional resource type the filter applies to.
+    pub filter_type: Option<String>,
+}
+
+/// Filter update command.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ModifyFilterInput {
+    /// Optional comment.
+    pub comment: Option<String>,
+    /// Optional GMP filter term expression.
+    pub term: Option<String>,
+    /// Optional resource type the filter applies to.
+    pub filter_type: Option<String>,
+}
+
+/// Tag create command.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct CreateTagInput {
+    /// Required tag name.
+    pub name: String,
+    /// Optional comment.
+    pub comment: Option<String>,
+    /// Optional free-form value payload.
+    pub value: Option<String>,
+    /// Optional related resource type.
+    pub resource_type: Option<String>,
+    /// Optional related resource identifier.
+    pub resource_id: Option<String>,
+    /// Whether the tag should be active.
+    pub active: Option<bool>,
+}
+
+/// Tag update command.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ModifyTagInput {
+    /// Optional comment.
+    pub comment: Option<String>,
+    /// Optional free-form value payload.
+    pub value: Option<String>,
+    /// Optional related resource type.
+    pub resource_type: Option<String>,
+    /// Optional related resource identifier.
+    pub resource_id: Option<String>,
+    /// Whether the tag should be active.
+    pub active: Option<bool>,
+}
+
+/// Host asset create command.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct CreateHostInput {
+    /// Host name or IP address.
+    pub value: String,
+    /// Optional comment.
+    pub comment: Option<String>,
+}
+
+/// Host asset update command.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ModifyHostInput {
+    /// Optional comment.
+    ///
+    /// The gvmd `modify_asset` command does not update a host asset's name/IP
+    /// value, so this input intentionally carries no `value`: a host's
+    /// identity cannot be edited and callers must not be able to request it.
+    pub comment: Option<String>,
+}
+
 /// Domain ticket representation.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Ticket {

@@ -111,17 +111,21 @@ use crate::{
     },
     shutdown::ShutdownRuntime,
     supporting_resources::{
-        create_note, create_note_docs, create_override, create_override_docs, delete_note,
-        delete_note_docs, delete_override, delete_override_docs, get_filter, get_filter_docs,
-        get_host, get_host_docs, get_note, get_note_docs, get_nvt, get_nvt_docs, get_override,
-        get_override_docs, get_report_format, get_report_format_docs, get_tag, get_tag_docs,
-        get_ticket, get_ticket_docs, get_tls_certificate, get_tls_certificate_docs, list_filters,
-        list_filters_docs, list_hosts, list_hosts_docs, list_notes, list_notes_docs,
+        clone_filter, clone_filter_docs, clone_tag, clone_tag_docs, create_filter,
+        create_filter_docs, create_host, create_host_docs, create_note, create_note_docs,
+        create_override, create_override_docs, create_tag, create_tag_docs, delete_filter,
+        delete_filter_docs, delete_host, delete_host_docs, delete_note, delete_note_docs,
+        delete_override, delete_override_docs, delete_tag, delete_tag_docs, get_filter,
+        get_filter_docs, get_host, get_host_docs, get_note, get_note_docs, get_nvt, get_nvt_docs,
+        get_override, get_override_docs, get_report_format, get_report_format_docs, get_tag,
+        get_tag_docs, get_ticket, get_ticket_docs, get_tls_certificate, get_tls_certificate_docs,
+        list_filters, list_filters_docs, list_hosts, list_hosts_docs, list_notes, list_notes_docs,
         list_nvt_families, list_nvt_families_docs, list_nvts, list_nvts_docs, list_overrides,
         list_overrides_docs, list_report_formats, list_report_formats_docs, list_tags,
         list_tags_docs, list_tickets, list_tickets_docs, list_tls_certificates,
-        list_tls_certificates_docs, list_vulnerabilities, list_vulnerabilities_docs, update_note,
-        update_note_docs, update_override, update_override_docs,
+        list_tls_certificates_docs, list_vulnerabilities, list_vulnerabilities_docs, update_filter,
+        update_filter_docs, update_host, update_host_docs, update_note, update_note_docs,
+        update_override, update_override_docs, update_tag, update_tag_docs,
     },
     system::{health, health_docs, ready, ready_docs, version, version_docs},
     targets::{
@@ -479,7 +483,16 @@ fn documented_router() -> ApiRouter<GatewayService> {
         .api_route("/api/v1/feeds", get_with(list_feeds, list_feeds_docs))
         // Supporting resources
         .api_route("/api/v1/hosts", get_with(list_hosts, list_hosts_docs))
+        .api_route("/api/v1/hosts", post_with(create_host, create_host_docs))
         .api_route("/api/v1/hosts/{id}", get_with(get_host, get_host_docs))
+        .api_route(
+            "/api/v1/hosts/{id}",
+            put_with(update_host, update_host_docs),
+        )
+        .api_route(
+            "/api/v1/hosts/{id}",
+            delete_with(delete_host, delete_host_docs),
+        )
         .api_route(
             "/api/v1/tls-certificates",
             get_with(list_tls_certificates, list_tls_certificates_docs),
@@ -498,11 +511,37 @@ fn documented_router() -> ApiRouter<GatewayService> {
         )
         .api_route("/api/v1/filters", get_with(list_filters, list_filters_docs))
         .api_route(
+            "/api/v1/filters",
+            post_with(create_filter, create_filter_docs),
+        )
+        .api_route(
             "/api/v1/filters/{id}",
             get_with(get_filter, get_filter_docs),
         )
+        .api_route(
+            "/api/v1/filters/{id}",
+            put_with(update_filter, update_filter_docs),
+        )
+        .api_route(
+            "/api/v1/filters/{id}",
+            delete_with(delete_filter, delete_filter_docs),
+        )
+        .api_route(
+            "/api/v1/filters/{id}/clone",
+            post_with(clone_filter, clone_filter_docs),
+        )
         .api_route("/api/v1/tags", get_with(list_tags, list_tags_docs))
+        .api_route("/api/v1/tags", post_with(create_tag, create_tag_docs))
         .api_route("/api/v1/tags/{id}", get_with(get_tag, get_tag_docs))
+        .api_route("/api/v1/tags/{id}", put_with(update_tag, update_tag_docs))
+        .api_route(
+            "/api/v1/tags/{id}",
+            delete_with(delete_tag, delete_tag_docs),
+        )
+        .api_route(
+            "/api/v1/tags/{id}/clone",
+            post_with(clone_tag, clone_tag_docs),
+        )
         .api_route("/api/v1/tickets", get_with(list_tickets, list_tickets_docs))
         .api_route(
             "/api/v1/tickets/{id}",

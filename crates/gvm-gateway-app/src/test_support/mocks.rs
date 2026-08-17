@@ -6,24 +6,25 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use gvm_gateway_domain::{
     Alert, AlertPage, AlertPort, AlertQuery, AuthPort, CreateAlertInput, CreateCredentialInput,
-    CreateGroupInput, CreateNoteInput, CreateOverrideInput, CreatePermissionInput,
-    CreatePortListInput, CreateRoleInput, CreateScanConfigInput, CreateScheduleInput,
-    CreateTargetInput, CreateTaskInput, CreateUserInput, Credential, CredentialPage,
-    CredentialPort, CredentialQuery, CredentialStore, Feed, FeedPort, Filter, FilterPage,
-    GatewayError, GetReportOpts, Group, GroupPage, Host, HostPage, IdentityPort, IdentityQuery,
-    ModifyAlertInput, ModifyCredentialInput, ModifyGroupInput, ModifyNoteInput,
-    ModifyOverrideInput, ModifyPermissionInput, ModifyPortListInput, ModifyRoleInput,
-    ModifyScanConfigInput, ModifyScheduleInput, ModifyTargetInput, ModifyTaskInput,
-    ModifyUserInput, ModifyUserSettingInput, Note, NotePage, Nvt, NvtFamilyPage, NvtPage, Override,
-    OverridePage, Permission, PermissionPage, PortList, PortListPage, PortListPort, PortListQuery,
-    ReadinessStatus, Report, ReportExport, ReportExportRequest, ReportFormat, ReportFormatPage,
-    ReportPage, ReportPort, ReportQuery, ResultPage, ResultPort, ResultQuery, Role, RolePage,
-    ScanConfig, ScanConfigPage, ScanConfigPort, ScanConfigQuery, ScanResult, Scanner, ScannerPage,
-    ScannerPort, ScannerQuery, Schedule, SchedulePage, SchedulePort, ScheduleQuery,
-    SupportingResourcePort, SupportingResourceQuery, SystemPort, Tag, TagPage, Target, TargetPage,
-    TargetPort, TargetQuery, Task, TaskAction, TaskPage, TaskPort, TaskQuery, Ticket, TicketPage,
-    TlsCertificateAsset, TlsCertificateAssetPage, TlsCertificatePage, User, UserPage, UserSetting,
-    UserSettingList, UserSettingQuery, VulnerabilityPage,
+    CreateFilterInput, CreateGroupInput, CreateHostInput, CreateNoteInput, CreateOverrideInput,
+    CreatePermissionInput, CreatePortListInput, CreateRoleInput, CreateScanConfigInput,
+    CreateScheduleInput, CreateTagInput, CreateTargetInput, CreateTaskInput, CreateUserInput,
+    Credential, CredentialPage, CredentialPort, CredentialQuery, CredentialStore, Feed, FeedPort,
+    Filter, FilterPage, GatewayError, GetReportOpts, Group, GroupPage, Host, HostPage,
+    IdentityPort, IdentityQuery, ModifyAlertInput, ModifyCredentialInput, ModifyFilterInput,
+    ModifyGroupInput, ModifyHostInput, ModifyNoteInput, ModifyOverrideInput, ModifyPermissionInput,
+    ModifyPortListInput, ModifyRoleInput, ModifyScanConfigInput, ModifyScheduleInput,
+    ModifyTagInput, ModifyTargetInput, ModifyTaskInput, ModifyUserInput, ModifyUserSettingInput,
+    Note, NotePage, Nvt, NvtFamilyPage, NvtPage, Override, OverridePage, Permission,
+    PermissionPage, PortList, PortListPage, PortListPort, PortListQuery, ReadinessStatus, Report,
+    ReportExport, ReportExportRequest, ReportFormat, ReportFormatPage, ReportPage, ReportPort,
+    ReportQuery, ResultPage, ResultPort, ResultQuery, Role, RolePage, ScanConfig, ScanConfigPage,
+    ScanConfigPort, ScanConfigQuery, ScanResult, Scanner, ScannerPage, ScannerPort, ScannerQuery,
+    Schedule, SchedulePage, SchedulePort, ScheduleQuery, SupportingResourcePort,
+    SupportingResourceQuery, SystemPort, Tag, TagPage, Target, TargetPage, TargetPort, TargetQuery,
+    Task, TaskAction, TaskPage, TaskPort, TaskQuery, Ticket, TicketPage, TlsCertificateAsset,
+    TlsCertificateAssetPage, TlsCertificatePage, User, UserPage, UserSetting, UserSettingList,
+    UserSettingQuery, VulnerabilityPage,
 };
 
 /// Mock system port for tests that need deterministic readiness/version responses.
@@ -1048,6 +1049,23 @@ impl SupportingResourcePort for MockSupportingResourcePort {
         )))
     }
 
+    async fn create_host(&self, _: &str, _: CreateHostInput) -> Result<String, GatewayError> {
+        Ok("00000000-0000-0000-0000-0000000000d1".to_string())
+    }
+
+    async fn modify_host(
+        &self,
+        _: &str,
+        id: &str,
+        _: ModifyHostInput,
+    ) -> Result<Host, GatewayError> {
+        Err(GatewayError::NotFound(format!("host {id} not found")))
+    }
+
+    async fn delete_host(&self, _: &str, _: &str) -> Result<(), GatewayError> {
+        Ok(())
+    }
+
     async fn list_report_formats(
         &self,
         _: &str,
@@ -1090,6 +1108,27 @@ impl SupportingResourcePort for MockSupportingResourcePort {
         Err(GatewayError::NotFound(format!("filter {id} not found")))
     }
 
+    async fn create_filter(&self, _: &str, _: CreateFilterInput) -> Result<String, GatewayError> {
+        Ok("00000000-0000-0000-0000-0000000000f1".to_string())
+    }
+
+    async fn modify_filter(
+        &self,
+        _: &str,
+        id: &str,
+        _: ModifyFilterInput,
+    ) -> Result<Filter, GatewayError> {
+        Err(GatewayError::NotFound(format!("filter {id} not found")))
+    }
+
+    async fn delete_filter(&self, _: &str, _: &str, _: bool) -> Result<(), GatewayError> {
+        Ok(())
+    }
+
+    async fn clone_filter(&self, _: &str, _: &str) -> Result<String, GatewayError> {
+        Ok("00000000-0000-0000-0000-0000000000f2".to_string())
+    }
+
     async fn list_tags(
         &self,
         _: &str,
@@ -1108,6 +1147,22 @@ impl SupportingResourcePort for MockSupportingResourcePort {
 
     async fn get_tag(&self, _: &str, id: &str) -> Result<Tag, GatewayError> {
         Err(GatewayError::NotFound(format!("tag {id} not found")))
+    }
+
+    async fn create_tag(&self, _: &str, _: CreateTagInput) -> Result<String, GatewayError> {
+        Ok("00000000-0000-0000-0000-0000000000a1".to_string())
+    }
+
+    async fn modify_tag(&self, _: &str, id: &str, _: ModifyTagInput) -> Result<Tag, GatewayError> {
+        Err(GatewayError::NotFound(format!("tag {id} not found")))
+    }
+
+    async fn delete_tag(&self, _: &str, _: &str, _: bool) -> Result<(), GatewayError> {
+        Ok(())
+    }
+
+    async fn clone_tag(&self, _: &str, _: &str) -> Result<String, GatewayError> {
+        Ok("00000000-0000-0000-0000-0000000000a2".to_string())
     }
 
     async fn list_tickets(

@@ -7,24 +7,25 @@
 use async_trait::async_trait;
 use gvm_gateway_domain::{
     Alert, AlertPage, AlertPort, AlertQuery, AuthPort, CreateAlertInput, CreateCredentialInput,
-    CreateGroupInput, CreateNoteInput, CreateOverrideInput, CreatePermissionInput,
-    CreatePortListInput, CreateRoleInput, CreateScanConfigInput, CreateScheduleInput,
-    CreateTargetInput, CreateTaskInput, CreateUserInput, Credential, CredentialPage,
-    CredentialPort, CredentialQuery, CredentialStore, Feed, FeedPort, Filter, FilterPage,
-    GatewayError, GetReportOpts, Group, GroupPage, Host, HostPage, IdentityPort, IdentityQuery,
-    ModifyAlertInput, ModifyCredentialInput, ModifyGroupInput, ModifyNoteInput,
-    ModifyOverrideInput, ModifyPermissionInput, ModifyPortListInput, ModifyRoleInput,
-    ModifyScanConfigInput, ModifyScheduleInput, ModifyTargetInput, ModifyTaskInput,
-    ModifyUserInput, ModifyUserSettingInput, Note, NotePage, Nvt, NvtFamilyPage, NvtPage, Override,
-    OverridePage, Permission, PermissionPage, PortList, PortListPage, PortListPort, PortListQuery,
-    ReadinessStatus, Report, ReportExport, ReportExportRequest, ReportFormat, ReportFormatPage,
-    ReportPage, ReportPort, ReportQuery, ResultPage, ResultPort, ResultQuery, Role, RolePage,
-    ScanConfig, ScanConfigPage, ScanConfigPort, ScanConfigQuery, ScanResult, Scanner, ScannerPage,
-    ScannerPort, ScannerQuery, Schedule, SchedulePage, SchedulePort, ScheduleQuery,
-    SupportingResourcePort, SupportingResourceQuery, SystemPort, Tag, TagPage, Target, TargetPage,
-    TargetPort, TargetQuery, Task, TaskAction, TaskPage, TaskPort, TaskQuery, Ticket, TicketPage,
-    TlsCertificateAsset, TlsCertificateAssetPage, TlsCertificatePage, User, UserPage, UserSetting,
-    UserSettingList, UserSettingQuery, VulnerabilityPage,
+    CreateFilterInput, CreateGroupInput, CreateHostInput, CreateNoteInput, CreateOverrideInput,
+    CreatePermissionInput, CreatePortListInput, CreateRoleInput, CreateScanConfigInput,
+    CreateScheduleInput, CreateTagInput, CreateTargetInput, CreateTaskInput, CreateUserInput,
+    Credential, CredentialPage, CredentialPort, CredentialQuery, CredentialStore, Feed, FeedPort,
+    Filter, FilterPage, GatewayError, GetReportOpts, Group, GroupPage, Host, HostPage,
+    IdentityPort, IdentityQuery, ModifyAlertInput, ModifyCredentialInput, ModifyFilterInput,
+    ModifyGroupInput, ModifyHostInput, ModifyNoteInput, ModifyOverrideInput, ModifyPermissionInput,
+    ModifyPortListInput, ModifyRoleInput, ModifyScanConfigInput, ModifyScheduleInput,
+    ModifyTagInput, ModifyTargetInput, ModifyTaskInput, ModifyUserInput, ModifyUserSettingInput,
+    Note, NotePage, Nvt, NvtFamilyPage, NvtPage, Override, OverridePage, Permission,
+    PermissionPage, PortList, PortListPage, PortListPort, PortListQuery, ReadinessStatus, Report,
+    ReportExport, ReportExportRequest, ReportFormat, ReportFormatPage, ReportPage, ReportPort,
+    ReportQuery, ResultPage, ResultPort, ResultQuery, Role, RolePage, ScanConfig, ScanConfigPage,
+    ScanConfigPort, ScanConfigQuery, ScanResult, Scanner, ScannerPage, ScannerPort, ScannerQuery,
+    Schedule, SchedulePage, SchedulePort, ScheduleQuery, SupportingResourcePort,
+    SupportingResourceQuery, SystemPort, Tag, TagPage, Target, TargetPage, TargetPort, TargetQuery,
+    Task, TaskAction, TaskPage, TaskPort, TaskQuery, Ticket, TicketPage, TlsCertificateAsset,
+    TlsCertificateAssetPage, TlsCertificatePage, User, UserPage, UserSetting, UserSettingList,
+    UserSettingQuery, VulnerabilityPage,
 };
 
 /// Static adapter for system readiness and version information.
@@ -759,6 +760,23 @@ impl SupportingResourcePort for StaticGvmdAdapter {
         unsupported!("static adapter does not support tls certificates")
     }
 
+    async fn create_host(&self, _: &str, _: CreateHostInput) -> Result<String, GatewayError> {
+        unsupported!("static adapter does not support hosts")
+    }
+
+    async fn modify_host(
+        &self,
+        _: &str,
+        _: &str,
+        _: ModifyHostInput,
+    ) -> Result<Host, GatewayError> {
+        unsupported!("static adapter does not support hosts")
+    }
+
+    async fn delete_host(&self, _: &str, _: &str) -> Result<(), GatewayError> {
+        unsupported!("static adapter does not support hosts")
+    }
+
     async fn list_report_formats(
         &self,
         _: &str,
@@ -783,6 +801,27 @@ impl SupportingResourcePort for StaticGvmdAdapter {
         unsupported!("static adapter does not support filters")
     }
 
+    async fn create_filter(&self, _: &str, _: CreateFilterInput) -> Result<String, GatewayError> {
+        unsupported!("static adapter does not support filters")
+    }
+
+    async fn modify_filter(
+        &self,
+        _: &str,
+        _: &str,
+        _: ModifyFilterInput,
+    ) -> Result<Filter, GatewayError> {
+        unsupported!("static adapter does not support filters")
+    }
+
+    async fn delete_filter(&self, _: &str, _: &str, _: bool) -> Result<(), GatewayError> {
+        unsupported!("static adapter does not support filters")
+    }
+
+    async fn clone_filter(&self, _: &str, _: &str) -> Result<String, GatewayError> {
+        unsupported!("static adapter does not support filters")
+    }
+
     async fn list_tags(
         &self,
         _: &str,
@@ -792,6 +831,22 @@ impl SupportingResourcePort for StaticGvmdAdapter {
     }
 
     async fn get_tag(&self, _: &str, _: &str) -> Result<Tag, GatewayError> {
+        unsupported!("static adapter does not support tags")
+    }
+
+    async fn create_tag(&self, _: &str, _: CreateTagInput) -> Result<String, GatewayError> {
+        unsupported!("static adapter does not support tags")
+    }
+
+    async fn modify_tag(&self, _: &str, _: &str, _: ModifyTagInput) -> Result<Tag, GatewayError> {
+        unsupported!("static adapter does not support tags")
+    }
+
+    async fn delete_tag(&self, _: &str, _: &str, _: bool) -> Result<(), GatewayError> {
+        unsupported!("static adapter does not support tags")
+    }
+
+    async fn clone_tag(&self, _: &str, _: &str) -> Result<String, GatewayError> {
         unsupported!("static adapter does not support tags")
     }
 

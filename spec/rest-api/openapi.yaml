@@ -311,10 +311,14 @@ paths:
     $ref: './supporting-resources.yaml#/paths/~1filters'
   /filters/{id}:
     $ref: './supporting-resources.yaml#/paths/~1filters~1{id}'
+  /filters/{id}/clone:
+    $ref: './supporting-resources.yaml#/paths/~1filters~1{id}~1clone'
   /tags:
     $ref: './supporting-resources.yaml#/paths/~1tags'
   /tags/{id}:
     $ref: './supporting-resources.yaml#/paths/~1tags~1{id}'
+  /tags/{id}/clone:
+    $ref: './supporting-resources.yaml#/paths/~1tags~1{id}~1clone'
   /tickets:
     $ref: './supporting-resources.yaml#/paths/~1tickets'
   /tickets/{id}:

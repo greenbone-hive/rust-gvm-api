@@ -6,14 +6,15 @@
 use async_trait::async_trait;
 
 use crate::{
-    Alert, AlertPage, AlertQuery, CreateAlertInput, CreateCredentialInput, CreateGroupInput,
-    CreateNoteInput, CreateOverrideInput, CreatePermissionInput, CreatePortListInput,
-    CreateRoleInput, CreateScanConfigInput, CreateScheduleInput, CreateTargetInput,
-    CreateTaskInput, CreateUserInput, Credential, CredentialPage, CredentialQuery, CredentialStore,
-    Feed, Filter, FilterPage, GatewayError, GetReportOpts, Group, GroupPage, Host, HostPage,
-    IdentityQuery, ModifyAlertInput, ModifyCredentialInput, ModifyGroupInput, ModifyNoteInput,
+    Alert, AlertPage, AlertQuery, CreateAlertInput, CreateCredentialInput, CreateFilterInput,
+    CreateGroupInput, CreateHostInput, CreateNoteInput, CreateOverrideInput, CreatePermissionInput,
+    CreatePortListInput, CreateRoleInput, CreateScanConfigInput, CreateScheduleInput,
+    CreateTagInput, CreateTargetInput, CreateTaskInput, CreateUserInput, Credential,
+    CredentialPage, CredentialQuery, CredentialStore, Feed, Filter, FilterPage, GatewayError,
+    GetReportOpts, Group, GroupPage, Host, HostPage, IdentityQuery, ModifyAlertInput,
+    ModifyCredentialInput, ModifyFilterInput, ModifyGroupInput, ModifyHostInput, ModifyNoteInput,
     ModifyOverrideInput, ModifyPermissionInput, ModifyPortListInput, ModifyRoleInput,
-    ModifyScanConfigInput, ModifyScheduleInput, ModifyTargetInput, ModifyTaskInput,
+    ModifyScanConfigInput, ModifyScheduleInput, ModifyTagInput, ModifyTargetInput, ModifyTaskInput,
     ModifyUserInput, ModifyUserSettingInput, Note, NotePage, Nvt, NvtFamilyPage, NvtPage, Override,
     OverridePage, Permission, PermissionPage, PortList, PortListPage, PortListQuery,
     ReadinessStatus, Report, ReportExport, ReportExportRequest, ReportFormat, ReportFormatPage,
@@ -582,6 +583,28 @@ pub trait SupportingResourcePort: Send + Sync + 'static {
         id: &str,
     ) -> Result<TlsCertificateAsset, GatewayError>;
 
+    /// Create a host asset.
+    async fn create_host(
+        &self,
+        session_token: &str,
+        input: CreateHostInput,
+    ) -> Result<String, GatewayError>;
+
+    /// Modify a host asset by identifier.
+    async fn modify_host(
+        &self,
+        session_token: &str,
+        id: &str,
+        input: ModifyHostInput,
+    ) -> Result<Host, GatewayError>;
+
+    /// Delete a host asset by identifier.
+    ///
+    /// The gvmd host-asset delete command does not support the `ultimate`
+    /// (permanent) flag, so this method intentionally takes no `ultimate`
+    /// argument: callers cannot request a permanent delete the backend ignores.
+    async fn delete_host(&self, session_token: &str, id: &str) -> Result<(), GatewayError>;
+
     /// List report formats for the session.
     async fn list_report_formats(
         &self,
@@ -606,6 +629,32 @@ pub trait SupportingResourcePort: Send + Sync + 'static {
     /// Fetch a saved filter by identifier.
     async fn get_filter(&self, session_token: &str, id: &str) -> Result<Filter, GatewayError>;
 
+    /// Create a saved filter.
+    async fn create_filter(
+        &self,
+        session_token: &str,
+        input: CreateFilterInput,
+    ) -> Result<String, GatewayError>;
+
+    /// Modify a saved filter by identifier.
+    async fn modify_filter(
+        &self,
+        session_token: &str,
+        id: &str,
+        input: ModifyFilterInput,
+    ) -> Result<Filter, GatewayError>;
+
+    /// Delete a saved filter by identifier.
+    async fn delete_filter(
+        &self,
+        session_token: &str,
+        id: &str,
+        ultimate: bool,
+    ) -> Result<(), GatewayError>;
+
+    /// Clone a saved filter by identifier.
+    async fn clone_filter(&self, session_token: &str, id: &str) -> Result<String, GatewayError>;
+
     /// List tags for the session.
     async fn list_tags(
         &self,
@@ -615,6 +664,32 @@ pub trait SupportingResourcePort: Send + Sync + 'static {
 
     /// Fetch a tag by identifier.
     async fn get_tag(&self, session_token: &str, id: &str) -> Result<Tag, GatewayError>;
+
+    /// Create a tag.
+    async fn create_tag(
+        &self,
+        session_token: &str,
+        input: CreateTagInput,
+    ) -> Result<String, GatewayError>;
+
+    /// Modify a tag by identifier.
+    async fn modify_tag(
+        &self,
+        session_token: &str,
+        id: &str,
+        input: ModifyTagInput,
+    ) -> Result<Tag, GatewayError>;
+
+    /// Delete a tag by identifier.
+    async fn delete_tag(
+        &self,
+        session_token: &str,
+        id: &str,
+        ultimate: bool,
+    ) -> Result<(), GatewayError>;
+
+    /// Clone a tag by identifier.
+    async fn clone_tag(&self, session_token: &str, id: &str) -> Result<String, GatewayError>;
 
     /// List tickets for the session.
     async fn list_tickets(

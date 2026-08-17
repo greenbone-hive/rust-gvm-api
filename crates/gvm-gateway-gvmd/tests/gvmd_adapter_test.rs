@@ -1914,3 +1914,107 @@ async fn gvmd_adapter_clone_task_emits_copy_command() {
 
     server.shutdown().await;
 }
+
+fn recorded_xml(server: &MockGmpServer, command_name: &str) -> String {
+    let history = server.command_history();
+    let command = history
+        .iter()
+        .find(|record| record.command_name() == command_name)
+        .unwrap_or_else(|| panic!("{command_name} command should be recorded"));
+    String::from_utf8(command.raw_xml().to_vec()).expect("xml command should be UTF-8")
+}
+
+#[tokio::test]
+async fn gvmd_adapter_create_filter_emits_name_and_term() {
+    let (adapter, server, token) = create_mock_adapter().await;
+    server.clear_history();
+
+    let _ = adapter
+        .create_filter(
+            &token,
+            CreateFilterInput {
+                name: "High severity".to_string(),
+                comment: Some("saved".to_string()),
+                term: Some("severity>7".to_string()),
+                filter_type: Some("result".to_string()),
+            },
+        )
+        .await;
+
+    let xml = recorded_xml(&server, "create_filter");
+    assert!(xml.contains("<name>High severity</name>"), "xml={xml}");
+    assert!(xml.contains("<term>severity&gt;7</term>"), "xml={xml}");
+    assert!(xml.contains("<type>result</type>"), "xml={xml}");
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_clone_filter_emits_copy() {
+    let (adapter, server, token) = create_mock_adapter().await;
+    let filter_id = uuid::Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_00f1).to_string();
+    server.clear_history();
+
+    let _ = adapter.clone_filter(&token, &filter_id).await;
+
+    let xml = recorded_xml(&server, "create_filter");
+    assert!(
+        xml.contains(&format!("<copy>{filter_id}</copy>")),
+        "clone should copy the source filter id; xml={xml}"
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_create_tag_emits_name_and_resource() {
+    let (adapter, server, token) = create_mock_adapter().await;
+    let resource_id = uuid::Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_00a1).to_string();
+    server.clear_history();
+
+    let _ = adapter
+        .create_tag(
+            &token,
+            CreateTagInput {
+                name: "owner:alice".to_string(),
+                comment: None,
+                value: Some("alice".to_string()),
+                resource_type: Some("task".to_string()),
+                resource_id: Some(resource_id.clone()),
+                active: Some(true),
+            },
+        )
+        .await;
+
+    let xml = recorded_xml(&server, "create_tag");
+    assert!(xml.contains("<name>owner:alice</name>"), "xml={xml}");
+    assert!(xml.contains("<type>task</type>"), "xml={xml}");
+    assert!(
+        xml.contains(&format!("id=\"{resource_id}\"")),
+        "tag should reference the resource id; xml={xml}"
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_create_host_emits_asset() {
+    let (adapter, server, token) = create_mock_adapter().await;
+    server.clear_history();
+
+    let _ = adapter
+        .create_host(
+            &token,
+            CreateHostInput {
+                value: "192.0.2.10".to_string(),
+                comment: Some("lab host".to_string()),
+            },
+        )
+        .await;
+
+    let xml = recorded_xml(&server, "create_asset");
+    assert!(xml.contains("<asset_type>host</asset_type>"), "xml={xml}");
+    assert!(xml.contains("<value>192.0.2.10</value>"), "xml={xml}");
+
+    server.shutdown().await;
+}

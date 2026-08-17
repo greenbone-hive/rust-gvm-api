@@ -15,24 +15,25 @@ use gvm_client::{GetReportDetailsOpts, GetReportExportOpts, GmpClient};
 use gvm_connection::UnixSocketConnection;
 use gvm_gateway_domain::{
     Alert, AlertPage, AlertPort, AlertQuery, AuthPort, CreateAlertInput, CreateCredentialInput,
-    CreateGroupInput, CreateNoteInput, CreateOverrideInput, CreatePermissionInput,
-    CreatePortListInput, CreateRoleInput, CreateScanConfigInput, CreateScheduleInput,
-    CreateTargetInput, CreateTaskInput, CreateUserInput, Credential, CredentialPage,
-    CredentialPort, CredentialQuery, CredentialStore, Feed, FeedPort, Filter, FilterPage,
-    GatewayError, GetReportOpts, Group, GroupPage, Host, HostPage, IdentityPort, IdentityQuery,
-    ModifyAlertInput, ModifyCredentialInput, ModifyGroupInput, ModifyNoteInput,
-    ModifyOverrideInput, ModifyPermissionInput, ModifyPortListInput, ModifyRoleInput,
-    ModifyScanConfigInput, ModifyScheduleInput, ModifyTargetInput, ModifyTaskInput,
-    ModifyUserInput, ModifyUserSettingInput, Note, NotePage, Nvt, NvtFamilyPage, NvtPage, Override,
-    OverridePage, Permission, PermissionPage, PortList, PortListPage, PortListPort, PortListQuery,
-    ReadinessStatus, Report, ReportExport, ReportExportRequest, ReportFormat, ReportFormatPage,
-    ReportPage, ReportPort, ReportQuery, ResultPage, ResultPort, ResultQuery, Role, RolePage,
-    ScanConfig, ScanConfigPage, ScanConfigPort, ScanConfigQuery, ScanResult, Scanner, ScannerPage,
-    ScannerPort, ScannerQuery, Schedule, SchedulePage, SchedulePort, ScheduleQuery,
-    SessionTokenDigest, SupportingResourcePort, SupportingResourceQuery, SystemPort, Tag, TagPage,
-    Target, TargetPage, TargetPort, TargetQuery, Task, TaskAction, TaskPage, TaskPort, TaskQuery,
-    Ticket, TicketPage, TlsCertificateAsset, TlsCertificateAssetPage, TlsCertificatePage, User,
-    UserPage, UserSetting, UserSettingList, UserSettingQuery, VulnerabilityPage,
+    CreateFilterInput, CreateGroupInput, CreateHostInput, CreateNoteInput, CreateOverrideInput,
+    CreatePermissionInput, CreatePortListInput, CreateRoleInput, CreateScanConfigInput,
+    CreateScheduleInput, CreateTagInput, CreateTargetInput, CreateTaskInput, CreateUserInput,
+    Credential, CredentialPage, CredentialPort, CredentialQuery, CredentialStore, Feed, FeedPort,
+    Filter, FilterPage, GatewayError, GetReportOpts, Group, GroupPage, Host, HostPage,
+    IdentityPort, IdentityQuery, ModifyAlertInput, ModifyCredentialInput, ModifyFilterInput,
+    ModifyGroupInput, ModifyHostInput, ModifyNoteInput, ModifyOverrideInput, ModifyPermissionInput,
+    ModifyPortListInput, ModifyRoleInput, ModifyScanConfigInput, ModifyScheduleInput,
+    ModifyTagInput, ModifyTargetInput, ModifyTaskInput, ModifyUserInput, ModifyUserSettingInput,
+    Note, NotePage, Nvt, NvtFamilyPage, NvtPage, Override, OverridePage, Permission,
+    PermissionPage, PortList, PortListPage, PortListPort, PortListQuery, ReadinessStatus, Report,
+    ReportExport, ReportExportRequest, ReportFormat, ReportFormatPage, ReportPage, ReportPort,
+    ReportQuery, ResultPage, ResultPort, ResultQuery, Role, RolePage, ScanConfig, ScanConfigPage,
+    ScanConfigPort, ScanConfigQuery, ScanResult, Scanner, ScannerPage, ScannerPort, ScannerQuery,
+    Schedule, SchedulePage, SchedulePort, ScheduleQuery, SessionTokenDigest,
+    SupportingResourcePort, SupportingResourceQuery, SystemPort, Tag, TagPage, Target, TargetPage,
+    TargetPort, TargetQuery, Task, TaskAction, TaskPage, TaskPort, TaskQuery, Ticket, TicketPage,
+    TlsCertificateAsset, TlsCertificateAssetPage, TlsCertificatePage, User, UserPage, UserSetting,
+    UserSettingList, UserSettingQuery, VulnerabilityPage,
 };
 use gvm_gmp::{
     commands::{
@@ -46,12 +47,15 @@ use gvm_gmp::{
             modify_credential, CredentialOpts, GetCredentialsOpts,
         },
         feed::get_feeds,
-        filters::{get_filter, get_filters, GetFiltersOpts},
+        filters::{
+            clone_filter, create_filter, delete_filter, get_filter, get_filters, modify_filter,
+            GetFiltersOpts,
+        },
         groups::{
             create_group, delete_group, get_group, get_groups, modify_group, GetGroupsOpts,
             GroupOpts,
         },
-        hosts::{get_host, get_hosts, GetHostsOpts},
+        hosts::{create_host, delete_host, get_host, get_hosts, modify_host, GetHostsOpts},
         notes::{create_note, delete_note, get_notes, modify_note, GetNotesOpts},
         nvts::{get_nvt, get_nvt_families, get_nvts, GetNvtsOpts},
         overrides::{
@@ -82,7 +86,7 @@ use gvm_gmp::{
             GetSchedulesOpts, ScheduleOpts,
         },
         system::{get_vulns, FilteredGetOpts},
-        tags::{get_tag, get_tags, GetTagsOpts},
+        tags::{clone_tag, create_tag, delete_tag, get_tag, get_tags, modify_tag, GetTagsOpts},
         targets::{
             clone_target, create_target, delete_target, get_target, get_targets, modify_target,
             CreateTargetOpts, GetTargetsOpts, ModifyTargetOpts,
@@ -109,12 +113,13 @@ use gvm_gmp::{
     },
     responses::{
         ActionResponse, AuthenticateResponse, CreateAlertResponse, CreateCredentialResponse,
-        CreateGroupResponse, CreateNoteResponse, CreateOverrideResponse, CreatePermissionResponse,
-        CreatePortListResponse, CreateRoleResponse, CreateScanConfigResponse,
-        CreateScheduleResponse, CreateTargetResponse, CreateTaskResponse, CreateUserResponse,
-        GetAlertsResponse, GetCredentialsResponse, GetFeedsResponse, GetFiltersResponse,
-        GetGroupsResponse, GetHostsResponse, GetNotesResponse, GetNvtFamiliesResponse,
-        GetNvtsResponse, GetOverridesResponse, GetPermissionsResponse, GetPortListsResponse,
+        CreateFilterResponse, CreateGroupResponse, CreateHostResponse, CreateNoteResponse,
+        CreateOverrideResponse, CreatePermissionResponse, CreatePortListResponse,
+        CreateRoleResponse, CreateScanConfigResponse, CreateScheduleResponse, CreateTagResponse,
+        CreateTargetResponse, CreateTaskResponse, CreateUserResponse, GetAlertsResponse,
+        GetCredentialsResponse, GetFeedsResponse, GetFiltersResponse, GetGroupsResponse,
+        GetHostsResponse, GetNotesResponse, GetNvtFamiliesResponse, GetNvtsResponse,
+        GetOverridesResponse, GetPermissionsResponse, GetPortListsResponse,
         GetReportFormatsResponse, GetReportsResponse, GetResultsResponse, GetRolesResponse,
         GetScanConfigsResponse, GetScannersResponse, GetSchedulesResponse, GetTagsResponse,
         GetTargetsResponse, GetTasksResponse, GetTicketsResponse, GetTlsCertificatesResponse,
@@ -156,8 +161,10 @@ use filters::{
 };
 use session::{SessionClient, SharedClient};
 use supporting_inputs::{
-    note_opts_from_create_input, note_opts_from_modify_input, override_opts_from_create_input,
-    override_opts_from_modify_input,
+    filter_opts_from_create_input, filter_opts_from_modify_input, host_opts_from_create_input,
+    host_opts_from_modify_input, note_opts_from_create_input, note_opts_from_modify_input,
+    override_opts_from_create_input, override_opts_from_modify_input, tag_opts_from_create_input,
+    tag_opts_from_modify_input,
 };
 
 /// gvmd adapter backed by session-keyed GMP clients.
