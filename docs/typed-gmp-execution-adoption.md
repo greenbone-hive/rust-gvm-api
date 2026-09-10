@@ -36,6 +36,12 @@ because they run before a session-bound client exists. The first session-bound
 slice covers standard target CRUD/clone/list operations and synchronous report
 export.
 
+The subsequent bounded families cover tasks and audits; reports and their
+drill-downs; credentials and credential stores; scanners; generic configs,
+scan configs, and policies; and port lists. Architecture tests prevent these
+migrated modules from reintroducing the raw call/parser boundary while other
+families are still being converted.
+
 ## Intentional raw exceptions
 
 The two ticket reads remain on the raw compatibility path. The public ticket
