@@ -114,6 +114,191 @@ paths:
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
 
+  /scan-configs/{id}/nvts:
+    parameters:
+      - $ref: "./common.yaml#/components/parameters/ResourceId"
+    get:
+      operationId: getScanConfigNvts
+      tags: [Scan Configs]
+      summary: List selected NVTs
+      parameters:
+        - name: family
+          in: query
+          schema: { type: string }
+        - $ref: "./common.yaml#/components/parameters/Page"
+        - $ref: "./common.yaml#/components/parameters/PerPage"
+      responses:
+        "200":
+          description: Selected NVTs
+          content:
+            application/json:
+              schema:
+                $ref: "./supporting-resources.yaml#/components/schemas/NvtList"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+
+  /scan-configs/{id}/nvts/{oid}:
+    parameters:
+      - $ref: "./common.yaml#/components/parameters/ResourceId"
+      - name: oid
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getScanConfigNvt
+      tags: [Scan Configs]
+      summary: Get a selected NVT
+      responses:
+        "200":
+          description: Selected NVT
+          content:
+            application/json:
+              schema:
+                $ref: "./supporting-resources.yaml#/components/schemas/Nvt"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+
+  /scan-configs/{id}/preferences:
+    parameters:
+      - $ref: "./common.yaml#/components/parameters/ResourceId"
+    get:
+      operationId: getScanConfigPreferences
+      tags: [Scan Configs]
+      summary: List configured preferences
+      parameters:
+        - name: nvtOid
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Configured preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanConfigPreferenceList"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+
+  /scan-configs/{id}/preferences/{name}:
+    parameters:
+      - $ref: "./common.yaml#/components/parameters/ResourceId"
+      - name: name
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getScanConfigPreference
+      tags: [Scan Configs]
+      summary: Get a configured preference
+      parameters:
+        - name: nvtOid
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Configured preference
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanConfigPreference"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+    put:
+      operationId: setScanConfigPreference
+      tags: [Scan Configs]
+      summary: Set or reset a configured preference
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetScanConfigPreference"
+      responses:
+        "204": { description: Preference updated }
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+
+  /scan-configs/{id}/families/{family}/nvts:
+    parameters:
+      - $ref: "./common.yaml#/components/parameters/ResourceId"
+      - name: family
+        in: path
+        required: true
+        schema: { type: string }
+    put:
+      operationId: setScanConfigNvtSelection
+      tags: [Scan Configs]
+      summary: Replace a family's NVT selection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetScanConfigNvtSelection"
+      responses:
+        "204": { description: NVT selection replaced }
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+
+  /scan-configs/{id}/family-selection:
+    parameters:
+      - $ref: "./common.yaml#/components/parameters/ResourceId"
+    put:
+      operationId: setScanConfigFamilySelection
+      tags: [Scan Configs]
+      summary: Replace family selection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetScanConfigFamilySelection"
+      responses:
+        "204": { description: Family selection replaced }
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
 components:
   schemas:
     ScanConfig:
@@ -178,3 +363,66 @@ components:
             $ref: "#/components/schemas/ScanConfig"
         pagination:
           $ref: "./common.yaml#/components/schemas/Pagination"
+
+    ScanConfigPreference:
+      type: object
+      required: [name]
+      properties:
+        nvt:
+          type: object
+          required: [oid]
+          properties:
+            oid: { type: string }
+            name: { type: string }
+        name: { type: string }
+        id: { type: string }
+        type: { type: string }
+        value: { type: string }
+        alternatives:
+          type: array
+          items: { type: string }
+        default: { type: string }
+
+    ScanConfigPreferenceList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScanConfigPreference"
+
+    SetScanConfigNvtSelection:
+      type: object
+      required: [nvtOids]
+      additionalProperties: false
+      properties:
+        nvtOids:
+          type: array
+          maxItems: 10000
+          items: { type: string, maxLength: 255 }
+
+    SetScanConfigFamilySelection:
+      type: object
+      required: [families]
+      additionalProperties: false
+      properties:
+        families:
+          type: array
+          maxItems: 1000
+          items:
+            type: object
+            required: [name, growing, all]
+            additionalProperties: false
+            properties:
+              name: { type: string, maxLength: 512 }
+              growing: { type: boolean }
+              all: { type: boolean }
+        autoAddNewFamilies: { type: boolean, default: false }
+
+    SetScanConfigPreference:
+      type: object
+      additionalProperties: false
+      properties:
+        nvtOid: { type: string, maxLength: 255 }
+        value: { type: string, maxLength: 65536 }

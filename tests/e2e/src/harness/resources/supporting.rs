@@ -82,15 +82,17 @@ impl E2eHarness {
         .await
     }
 
-    pub async fn list_feeds(&self, token: &str) -> Result<Vec<Feed>> {
-        let response: UnpaginatedListResponse<Feed> = self
-            .send_json(
-                self.authed(Method::GET, "/api/v1/feeds", token),
-                StatusCode::OK,
-                "list feeds",
-            )
-            .await?;
-        Ok(response.data)
+    pub async fn list_feeds(&self, token: &str, feed_type: Option<&str>) -> Result<FeedCatalog> {
+        let path = feed_type.map_or_else(
+            || "/api/v1/feeds".to_string(),
+            |feed_type| format!("/api/v1/feeds?type={feed_type}"),
+        );
+        self.send_json(
+            self.authed(Method::GET, &path, token),
+            StatusCode::OK,
+            "list feeds",
+        )
+        .await
     }
 
     pub async fn list_hosts(&self, token: &str) -> Result<ListResponse<HostResource>> {

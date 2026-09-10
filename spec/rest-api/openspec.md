@@ -244,6 +244,9 @@ Report reads and result subresources use `page` and `perPage`.
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/v1/credential-stores` | List available credential stores |
+| `GET` | `/api/v1/credential-stores/{id}` | Get a credential store without exposing preference values |
+| `PUT` | `/api/v1/credential-stores/{id}` | Update credential-store connection settings and write-only preferences |
+| `POST` | `/api/v1/credential-stores/{id}/actions/verify` | Verify the credential-store connection |
 | `GET` | `/api/v1/credentials` | List credentials |
 | `POST` | `/api/v1/credentials` | Create credential |
 | `GET` | `/api/v1/credentials/{id}` | Get credential |

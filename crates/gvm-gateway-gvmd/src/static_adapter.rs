@@ -15,28 +15,30 @@ use gvm_gateway_domain::{
     CreateRoleInput, CreateScanConfigInput, CreateScheduleInput, CreateTagInput, CreateTargetInput,
     CreateTaskInput, CreateUserInput, CreateWebApplicationTargetInput, Credential, CredentialPage,
     CredentialPort, CredentialQuery, CredentialStore, Cve, CvePage, DfnCertAdvisory,
-    DfnCertAdvisoryPage, Feed, FeedPort, Filter, FilterPage, GatewayError, GenericAsset,
-    GenericAssetPage, GenericConfig, GenericConfigPage, GenericConfigQuery, GetReportOpts, Group,
-    GroupPage, Host, HostPage, IdentityPort, IdentityQuery, ModifyAgentControlScanConfigInput,
-    ModifyAgentGroupInput, ModifyAgentInput, ModifyAlertInput, ModifyAssetInput,
-    ModifyCredentialInput, ModifyFilterInput, ModifyGroupInput, ModifyHostInput, ModifyNoteInput,
-    ModifyOciImageTargetInput, ModifyOperatingSystemInput, ModifyOverrideInput,
-    ModifyPermissionInput, ModifyPortListInput, ModifyRoleInput, ModifyScanConfigInput,
-    ModifyScheduleInput, ModifyTagInput, ModifyTargetInput, ModifyTaskInput, ModifyUserInput,
-    ModifyUserSettingInput, ModifyWebApplicationTargetInput, Note, NotePage, Nvt, NvtFamilyPage,
-    NvtPage, NvtQuery, OciImageTarget, OciImageTargetPage, OperatingSystem, OperatingSystemPage,
-    Override, OverridePage, Permission, PermissionPage, PortList, PortListPage, PortListPort,
-    PortListQuery, ReadinessStatus, Report, ReportApplicationPage, ReportClosedCvePage,
-    ReportCvePage, ReportErrorPage, ReportExport, ReportExportRequest, ReportFormat,
-    ReportFormatPage, ReportHostPage, ReportOperatingSystemPage, ReportPage, ReportPort,
-    ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResultPage, ResultPort, ResultQuery,
-    Role, RolePage, ScanConfig, ScanConfigPage, ScanConfigPort, ScanConfigQuery, ScanResult,
-    Scanner, ScannerPage, ScannerPort, ScannerQuery, Schedule, SchedulePage, SchedulePort,
-    ScheduleQuery, SpecializedTargetQuery, SupportingResourcePort, SupportingResourceQuery,
-    SystemPort, Tag, TagPage, Target, TargetPage, TargetPort, TargetQuery, Task, TaskAction,
-    TaskPage, TaskPort, TaskQuery, Ticket, TicketPage, Timezone, TlsCertificateAsset,
-    TlsCertificateAssetPage, TlsCertificatePage, User, UserPage, UserSetting, UserSettingList,
-    UserSettingQuery, VulnerabilityPage, WebApplicationTarget, WebApplicationTargetPage,
+    DfnCertAdvisoryPage, FeedList, FeedPort, FeedQuery, Filter, FilterPage, GatewayError,
+    GenericAsset, GenericAssetPage, GenericConfig, GenericConfigPage, GenericConfigQuery,
+    GetReportOpts, Group, GroupPage, Host, HostPage, IdentityPort, IdentityQuery,
+    ModifyAgentControlScanConfigInput, ModifyAgentGroupInput, ModifyAgentInput, ModifyAlertInput,
+    ModifyAssetInput, ModifyCredentialInput, ModifyCredentialStoreInput, ModifyFilterInput,
+    ModifyGroupInput, ModifyHostInput, ModifyNoteInput, ModifyOciImageTargetInput,
+    ModifyOperatingSystemInput, ModifyOverrideInput, ModifyPermissionInput, ModifyPortListInput,
+    ModifyRoleInput, ModifyScanConfigInput, ModifyScheduleInput, ModifyTagInput, ModifyTargetInput,
+    ModifyTaskInput, ModifyUserInput, ModifyUserSettingInput, ModifyWebApplicationTargetInput,
+    Note, NotePage, Nvt, NvtFamilyPage, NvtPage, NvtQuery, OciImageTarget, OciImageTargetPage,
+    OperatingSystem, OperatingSystemPage, Override, OverridePage, Permission, PermissionPage,
+    PortList, PortListPage, PortListPort, PortListQuery, ReadinessStatus, Report,
+    ReportApplicationPage, ReportClosedCvePage, ReportCvePage, ReportErrorPage, ReportExport,
+    ReportExportRequest, ReportFormat, ReportFormatPage, ReportHostPage, ReportOperatingSystemPage,
+    ReportPage, ReportPort, ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResultPage,
+    ResultPort, ResultQuery, Role, RolePage, ScanConfig, ScanConfigNvtPage, ScanConfigNvtQuery,
+    ScanConfigPage, ScanConfigPort, ScanConfigPreference, ScanConfigPreferenceQuery,
+    ScanConfigQuery, ScanResult, Scanner, ScannerPage, ScannerPort, ScannerQuery, Schedule,
+    SchedulePage, SchedulePort, ScheduleQuery, SetScanConfigFamilySelectionInput,
+    SpecializedTargetQuery, SupportingResourcePort, SupportingResourceQuery, SystemPort, Tag,
+    TagPage, Target, TargetPage, TargetPort, TargetQuery, Task, TaskAction, TaskPage, TaskPort,
+    TaskQuery, Ticket, TicketPage, Timezone, TlsCertificateAsset, TlsCertificateAssetPage,
+    TlsCertificatePage, User, UserPage, UserSetting, UserSettingList, UserSettingQuery,
+    VulnerabilityPage, WebApplicationTarget, WebApplicationTargetPage,
 };
 
 /// Static adapter for system readiness and version information.
@@ -176,6 +178,27 @@ impl CredentialPort for StaticGvmdAdapter {
         }])
     }
 
+    async fn get_credential_store(
+        &self,
+        _: &str,
+        _: &str,
+    ) -> Result<CredentialStore, GatewayError> {
+        unsupported!("static adapter does not support credential stores")
+    }
+
+    async fn modify_credential_store(
+        &self,
+        _: &str,
+        _: &str,
+        _: ModifyCredentialStoreInput,
+    ) -> Result<CredentialStore, GatewayError> {
+        unsupported!("static adapter does not support credential stores")
+    }
+
+    async fn verify_credential_store(&self, _: &str, _: &str) -> Result<(), GatewayError> {
+        unsupported!("static adapter does not support credential stores")
+    }
+
     async fn list_credentials(
         &self,
         _: &str,
@@ -240,7 +263,7 @@ impl PortListPort for StaticGvmdAdapter {
 
 #[async_trait]
 impl FeedPort for StaticGvmdAdapter {
-    async fn list_feeds(&self, _: &str) -> Result<Vec<Feed>, GatewayError> {
+    async fn list_feeds(&self, _: &str, _: &FeedQuery) -> Result<FeedList, GatewayError> {
         unsupported!("static adapter does not support feeds")
     }
 }
@@ -834,6 +857,68 @@ impl ScanConfigPort for StaticGvmdAdapter {
         Err(GatewayError::BackendUnavailable(
             "static adapter does not support scan configs".to_string(),
         ))
+    }
+
+    async fn list_scan_config_nvts(
+        &self,
+        _: &str,
+        _: &str,
+        _: &ScanConfigNvtQuery,
+    ) -> Result<ScanConfigNvtPage, GatewayError> {
+        unsupported!("static adapter does not support scan config NVTs")
+    }
+
+    async fn get_scan_config_nvt(&self, _: &str, _: &str, _: &str) -> Result<Nvt, GatewayError> {
+        unsupported!("static adapter does not support scan config NVTs")
+    }
+
+    async fn list_scan_config_preferences(
+        &self,
+        _: &str,
+        _: &str,
+        _: &ScanConfigPreferenceQuery,
+    ) -> Result<Vec<ScanConfigPreference>, GatewayError> {
+        unsupported!("static adapter does not support scan config preferences")
+    }
+
+    async fn get_scan_config_preference(
+        &self,
+        _: &str,
+        _: &str,
+        _: &str,
+        _: &ScanConfigPreferenceQuery,
+    ) -> Result<ScanConfigPreference, GatewayError> {
+        unsupported!("static adapter does not support scan config preferences")
+    }
+
+    async fn set_scan_config_nvt_selection(
+        &self,
+        _: &str,
+        _: &str,
+        _: &str,
+        _: Vec<String>,
+    ) -> Result<(), GatewayError> {
+        unsupported!("static adapter does not support scan config selection")
+    }
+
+    async fn set_scan_config_family_selection(
+        &self,
+        _: &str,
+        _: &str,
+        _: SetScanConfigFamilySelectionInput,
+    ) -> Result<(), GatewayError> {
+        unsupported!("static adapter does not support scan config selection")
+    }
+
+    async fn set_scan_config_preference(
+        &self,
+        _: &str,
+        _: &str,
+        _: &str,
+        _: Option<String>,
+        _: Option<String>,
+    ) -> Result<(), GatewayError> {
+        unsupported!("static adapter does not support scan config preferences")
     }
 
     async fn list_policies(

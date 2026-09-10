@@ -148,8 +148,24 @@ pub struct Feed {
     pub name: String,
     pub version: Option<String>,
     pub description: Option<String>,
+    pub status: Option<String>,
+    #[serde(rename = "syncError")]
+    pub sync_error: Option<String>,
+    #[serde(rename = "syncTimestamp")]
+    pub sync_timestamp: Option<String>,
     #[serde(rename = "currentlySyncing")]
     pub currently_syncing: bool,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct FeedCatalog {
+    pub data: Vec<Feed>,
+    #[serde(rename = "feedOwnerConfigured")]
+    pub feed_owner_configured: bool,
+    #[serde(rename = "feedRolesConfigured")]
+    pub feed_roles_configured: bool,
+    #[serde(rename = "feedResourcesAccess")]
+    pub feed_resources_access: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]

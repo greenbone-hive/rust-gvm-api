@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::Pagination;
+use crate::{Nvt, Pagination};
 
 /// Domain scan configuration representation.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -81,4 +81,86 @@ pub struct ModifyScanConfigInput {
     pub name: Option<String>,
     /// Optional comment.
     pub comment: Option<String>,
+}
+
+/// Query options for NVTs selected by a scan configuration.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ScanConfigNvtQuery {
+    /// Optional NVT family restriction.
+    pub family: Option<String>,
+    /// Requested page number.
+    pub page: u32,
+    /// Requested page size.
+    pub per_page: u32,
+}
+
+/// NVTs selected by a scan configuration.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct ScanConfigNvtPage {
+    /// Selected NVTs.
+    pub data: Vec<Nvt>,
+    /// Pagination metadata.
+    pub pagination: Pagination,
+}
+
+/// NVT reference attached to a scan-config preference.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ScanConfigPreferenceNvt {
+    /// NVT OID.
+    pub oid: String,
+    /// Optional NVT display name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
+/// Scanner or NVT preference resolved for a scan configuration.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ScanConfigPreference {
+    /// Optional associated NVT.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nvt: Option<ScanConfigPreferenceNvt>,
+    /// Preference name.
+    pub name: String,
+    /// Optional backend preference identifier.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    /// Optional preference type.
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    pub preference_type: Option<String>,
+    /// Configured value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+    /// Allowed alternative values.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub alternatives: Vec<String>,
+    /// Optional default value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default: Option<String>,
+}
+
+/// Query options for scan-config preferences.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ScanConfigPreferenceQuery {
+    /// Optional NVT OID restriction; omission selects scanner preferences.
+    pub nvt_oid: Option<String>,
+}
+
+/// Family selection entry applied atomically to a scan configuration.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ScanConfigFamilySelection {
+    /// NVT family name.
+    pub name: String,
+    /// Whether new NVTs should be selected automatically.
+    pub growing: bool,
+    /// Whether all current NVTs in the family are selected.
+    pub all: bool,
+}
+
+/// Atomic family-selection update.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SetScanConfigFamilySelectionInput {
+    /// Family entries.
+    pub families: Vec<ScanConfigFamilySelection>,
+    /// Whether newly discovered families should be selected automatically.
+    pub auto_add_new_families: bool,
 }

@@ -353,7 +353,10 @@ fn generated_openapi_documents_open_enum_fields_as_non_exhaustive() {
     assert_open_enum_schema(
         schemas,
         &schemas["CredentialType"],
-        json!(["cc", "pw", "snmp", "snmpv3", "up", "usk"]),
+        json!([
+            "cc", "pw", "snmp", "snmpv3", "up", "usk", "cs_cc", "cs_pw", "cs_pgp", "cs_smime",
+            "cs_snmp", "cs_up", "cs_usk"
+        ]),
         "CredentialType",
     );
     assert_open_enum_schema(
@@ -476,13 +479,19 @@ fn generated_openapi_documents_open_enum_fields_as_non_exhaustive() {
     assert_open_enum_schema(
         schemas,
         &schemas["Credential"]["properties"]["type"],
-        json!(["cc", "pw", "snmp", "snmpv3", "up", "usk"]),
+        json!([
+            "cc", "pw", "snmp", "snmpv3", "up", "usk", "cs_cc", "cs_pw", "cs_pgp", "cs_smime",
+            "cs_snmp", "cs_up", "cs_usk"
+        ]),
         "Credential.type",
     );
     assert_open_enum_schema(
         schemas,
         &schemas["CreateCredential"]["properties"]["type"],
-        json!(["cc", "pw", "snmp", "snmpv3", "up", "usk"]),
+        json!([
+            "cc", "pw", "snmp", "snmpv3", "up", "usk", "cs_cc", "cs_pw", "cs_pgp", "cs_smime",
+            "cs_snmp", "cs_up", "cs_usk"
+        ]),
         "CreateCredential.type",
     );
     assert_open_enum_schema(

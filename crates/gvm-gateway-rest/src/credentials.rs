@@ -24,17 +24,18 @@ use uuid::Uuid;
 use crate::{
     dto::{parse_uuid, password_schema, PaginationResponse, ResourceCreatedResponse},
     handler::{
-        authenticated_resource, create_resource_with_json_error, delete_resource, get_resource,
-        list_resource, update_resource_with_json_error, ValidateInto,
+        authenticated_resource, create_resource_with_json_error, delete_resource, gateway_error,
+        get_resource, list_resource, no_content, update_resource_with_json_error, ValidateInto,
     },
     open_enum::open_string_enum,
     openapi::{created_json, ok_json, problem_response, ResourceIdPathDoc, TargetListQueryDoc},
     query::{CollectionListQuery, DeleteResourceQueryParams},
+    router::bearer_token,
 };
 
 pub use gvm_gateway_domain::{
     CreateCredentialInput, Credential, CredentialPage, CredentialQuery, CredentialStore,
-    ModifyCredentialInput,
+    CredentialStorePreferenceInput, ModifyCredentialInput, ModifyCredentialStoreInput,
 };
 
 open_string_enum! {
@@ -46,6 +47,13 @@ open_string_enum! {
         SnmpV3 => "snmpv3",
         UsernamePassword => "up",
         UsernameSshKey => "usk",
+        CredentialStoreClientCertificate => "cs_cc",
+        CredentialStorePasswordOnly => "cs_pw",
+        CredentialStorePgpEncryptionKey => "cs_pgp",
+        CredentialStoreSmimeCertificate => "cs_smime",
+        CredentialStoreSnmp => "cs_snmp",
+        CredentialStoreUsernamePassword => "cs_up",
+        CredentialStoreUsernameSshKey => "cs_usk",
     }
 }
 
@@ -122,6 +130,99 @@ pub(crate) struct CredentialStoreListResponse {
     data: Vec<CredentialStoreResponse>,
 }
 
+#[derive(Clone, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct CredentialStorePreferenceRequest {
+    #[schemars(length(max = 1024))]
+    name: String,
+    #[schemars(schema_with = "credential_store_preference_value_schema")]
+    value: String,
+}
+
+fn credential_store_preference_value_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    schemars::json_schema!({
+        "type": "string",
+        "format": "password",
+        "maxLength": 65536
+    })
+}
+
+impl fmt::Debug for CredentialStorePreferenceRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("CredentialStorePreferenceRequest")
+            .field("name", &self.name)
+            .field("value", &"<redacted>")
+            .finish()
+    }
+}
+
+#[derive(Clone, Default, Deserialize, JsonSchema)]
+#[schemars(rename = "ModifyCredentialStore")]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ModifyCredentialStoreRequest {
+    active: Option<bool>,
+    host: Option<String>,
+    path: Option<String>,
+    port: Option<u16>,
+    comment: Option<String>,
+    #[serde(default)]
+    #[schemars(length(max = 256))]
+    preferences: Vec<CredentialStorePreferenceRequest>,
+}
+
+impl fmt::Debug for ModifyCredentialStoreRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ModifyCredentialStoreRequest")
+            .field("active", &self.active)
+            .field("host", &self.host)
+            .field("path", &self.path)
+            .field("port", &self.port)
+            .field("comment", &self.comment)
+            .field("preferences", &self.preferences)
+            .finish()
+    }
+}
+
+impl ValidateInto<ModifyCredentialStoreInput> for ModifyCredentialStoreRequest {
+    fn validate_into(self) -> Result<ModifyCredentialStoreInput, GatewayError> {
+        if self.preferences.len() > 256 {
+            return Err(GatewayError::InvalidInput(
+                "preferences must contain at most 256 entries".to_string(),
+            ));
+        }
+        let preferences = self
+            .preferences
+            .into_iter()
+            .map(|preference| {
+                if preference.name.trim().is_empty() {
+                    return Err(GatewayError::InvalidInput(
+                        "preference name is required".to_string(),
+                    ));
+                }
+                if preference.name.len() > 1024 || preference.value.len() > 65_536 {
+                    return Err(GatewayError::InvalidInput(
+                        "credential-store preference exceeds the supported size".to_string(),
+                    ));
+                }
+                Ok(CredentialStorePreferenceInput {
+                    name: preference.name,
+                    value: preference.value,
+                })
+            })
+            .collect::<Result<Vec<_>, GatewayError>>()?;
+        Ok(ModifyCredentialStoreInput {
+            active: self.active,
+            host: self.host,
+            path: self.path,
+            port: self.port,
+            comment: self.comment,
+            preferences,
+        })
+    }
+}
+
 impl From<Vec<CredentialStore>> for CredentialStoreListResponse {
     fn from(stores: Vec<CredentialStore>) -> Self {
         Self {
@@ -170,6 +271,12 @@ pub(crate) struct CreateCredentialRequest {
     #[serde(rename = "privacyPassword")]
     #[schemars(schema_with = "password_schema")]
     privacy_password: Option<String>,
+    #[serde(rename = "credentialStoreId")]
+    credential_store_id: Option<Uuid>,
+    #[serde(rename = "vaultId")]
+    vault_id: Option<String>,
+    #[serde(rename = "hostIdentifier")]
+    host_identifier: Option<String>,
 }
 
 impl fmt::Debug for CreateCredentialRequest {
@@ -190,6 +297,12 @@ impl fmt::Debug for CreateCredentialRequest {
                 "privacy_password",
                 &hide_optional_value(&self.privacy_password),
             )
+            .field("credential_store_id", &self.credential_store_id)
+            .field("vault_id", &hide_optional_value(&self.vault_id))
+            .field(
+                "host_identifier",
+                &hide_optional_value(&self.host_identifier),
+            )
             .finish()
     }
 }
@@ -201,6 +314,39 @@ impl CreateCredentialRequest {
         }
         if self.credential_type.as_str().trim().is_empty() {
             return Err(GatewayError::InvalidInput("type is required".to_string()));
+        }
+        let store_backed = self.credential_type.as_str().starts_with("cs_");
+        let has_store_fields = self.credential_store_id.is_some()
+            || self.vault_id.is_some()
+            || self.host_identifier.is_some();
+        if store_backed {
+            if self.vault_id.as_deref().is_none_or(str::is_empty)
+                || self.host_identifier.as_deref().is_none_or(str::is_empty)
+            {
+                return Err(GatewayError::InvalidInput(
+                    "vaultId and hostIdentifier are required for credential-store-backed credentials"
+                        .to_string(),
+                ));
+            }
+            if self.login.is_some()
+                || self.password.is_some()
+                || self.private_key.is_some()
+                || self.certificate.is_some()
+                || self.community.is_some()
+                || self.auth_algorithm.is_some()
+                || self.privacy_algorithm.is_some()
+                || self.privacy_password.is_some()
+            {
+                return Err(GatewayError::InvalidInput(
+                    "credential-store references cannot be combined with local credential values"
+                        .to_string(),
+                ));
+            }
+        } else if has_store_fields {
+            return Err(GatewayError::InvalidInput(
+                "credential-store fields require a credential type with the `cs_` prefix"
+                    .to_string(),
+            ));
         }
         Ok(CreateCredentialInput {
             name: self.name,
@@ -214,6 +360,9 @@ impl CreateCredentialRequest {
             auth_algorithm: self.auth_algorithm,
             privacy_algorithm: self.privacy_algorithm,
             privacy_password: self.privacy_password,
+            credential_store_id: self.credential_store_id.map(|id| id.to_string()),
+            vault_id: self.vault_id,
+            host_identifier: self.host_identifier,
         })
     }
 }
@@ -246,6 +395,12 @@ pub struct ModifyCredentialRequest {
     #[serde(rename = "privacyPassword")]
     #[schemars(schema_with = "password_schema")]
     pub privacy_password: Option<String>,
+    #[serde(rename = "credentialStoreId")]
+    pub credential_store_id: Option<Uuid>,
+    #[serde(rename = "vaultId")]
+    pub vault_id: Option<String>,
+    #[serde(rename = "hostIdentifier")]
+    pub host_identifier: Option<String>,
 }
 
 fn auth_algorithm_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
@@ -279,6 +434,12 @@ impl fmt::Debug for ModifyCredentialRequest {
                 "privacy_password",
                 &hide_optional_value(&self.privacy_password),
             )
+            .field("credential_store_id", &self.credential_store_id)
+            .field("vault_id", &hide_optional_value(&self.vault_id))
+            .field(
+                "host_identifier",
+                &hide_optional_value(&self.host_identifier),
+            )
             .finish()
     }
 }
@@ -296,6 +457,9 @@ impl ModifyCredentialRequest {
             auth_algorithm: self.auth_algorithm,
             privacy_algorithm: self.privacy_algorithm,
             privacy_password: self.privacy_password,
+            credential_store_id: self.credential_store_id.map(|id| id.to_string()),
+            vault_id: self.vault_id,
+            host_identifier: self.host_identifier,
         }
     }
 }
@@ -355,6 +519,76 @@ pub async fn list_credential_stores(
         CredentialStoreListResponse::from,
     )
     .await
+}
+
+pub async fn get_credential_store(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    uri: OriginalUri,
+) -> Response {
+    get_resource(
+        service,
+        headers,
+        id,
+        uri,
+        |service, session, id| async move { service.get_credential_store(&session, &id).await },
+        CredentialStoreResponse::from,
+    )
+    .await
+}
+
+pub async fn update_credential_store(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    uri: OriginalUri,
+    body: Bytes,
+) -> Response {
+    update_resource_with_json_error::<
+        ModifyCredentialStoreInput,
+        ModifyCredentialStoreRequest,
+        _,
+        _,
+        _,
+        _,
+        _,
+    >(
+        service,
+        headers,
+        id,
+        uri,
+        body,
+        |service, session, id, input| async move {
+            service.modify_credential_store(&session, &id, input).await
+        },
+        CredentialStoreResponse::from,
+        credential_json_body_error,
+    )
+    .await
+}
+
+pub async fn verify_credential_store(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    uri: OriginalUri,
+) -> Response {
+    let instance = uri.path().to_string();
+    if Uuid::parse_str(&id).is_err() {
+        return gateway_error(
+            GatewayError::InvalidInput("id must be a valid UUID".to_string()),
+            instance,
+        );
+    }
+    let session = match bearer_token(&headers) {
+        Ok(session) => session,
+        Err(error) => return gateway_error(error, instance),
+    };
+    match service.verify_credential_store(&session, &id).await {
+        Ok(()) => no_content(),
+        Err(error) => gateway_error(error, instance),
+    }
 }
 
 pub async fn create_credential(
@@ -471,6 +705,61 @@ pub(crate) fn list_credential_stores_docs(op: TransformOperation<'_>) -> Transfo
         op,
         "The connected gvmd backend does not expose credential stores",
     );
+    problem_response::<502>(op, "Backend service unreachable or connection failed")
+}
+
+pub(crate) fn get_credential_store_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    let op = op
+        .id("getCredentialStore")
+        .tag("Credentials")
+        .summary("Get a credential store")
+        .description("Returns one credential store without exposing backend preference values.")
+        .security_requirement("bearerAuth")
+        .input::<Path<ResourceIdPathDoc>>()
+        .response_with::<200, Json<CredentialStoreResponse>, _>(ok_json(
+            "Credential store details",
+        ));
+    credential_store_problem_responses(op, true)
+}
+
+pub(crate) fn update_credential_store_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    let op = op
+        .id("modifyCredentialStore")
+        .tag("Credentials")
+        .summary("Modify a credential store")
+        .description("Updates credential-store connection settings. Preference values are write-only and never returned.")
+        .security_requirement("bearerAuth")
+        .input::<(Path<ResourceIdPathDoc>, Json<ModifyCredentialStoreRequest>)>()
+        .response_with::<200, Json<CredentialStoreResponse>, _>(ok_json(
+            "Credential store updated",
+        ));
+    credential_store_problem_responses(op, true)
+}
+
+pub(crate) fn verify_credential_store_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    let op = op
+        .id("verifyCredentialStore")
+        .tag("Credentials")
+        .summary("Verify a credential store")
+        .description("Asks gvmd to verify the credential-store connection.")
+        .security_requirement("bearerAuth")
+        .input::<Path<ResourceIdPathDoc>>()
+        .response_with::<204, (), _>(|response| response.description("Credential store verified"));
+    credential_store_problem_responses(op, true)
+}
+
+fn credential_store_problem_responses(
+    op: TransformOperation<'_>,
+    include_not_found: bool,
+) -> TransformOperation<'_> {
+    let op = problem_response::<400>(op, "Invalid request");
+    let op = problem_response::<401>(op, "Authentication required or session expired");
+    let op = if include_not_found {
+        problem_response::<404>(op, "Credential store not found")
+    } else {
+        op
+    };
+    let op = problem_response::<501>(op, "Backend does not expose credential stores");
     problem_response::<502>(op, "Backend service unreachable or connection failed")
 }
 

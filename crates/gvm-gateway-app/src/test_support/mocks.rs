@@ -14,23 +14,25 @@ use gvm_gateway_domain::{
     CreateOverrideInput, CreatePermissionInput, CreatePortListInput, CreateRoleInput,
     CreateScanConfigInput, CreateScheduleInput, CreateTagInput, CreateTargetInput, CreateTaskInput,
     CreateUserInput, Credential, CredentialPage, CredentialPort, CredentialQuery, CredentialStore,
-    Cve, CvePage, DfnCertAdvisory, DfnCertAdvisoryPage, Feed, FeedPort, Filter, FilterPage,
-    GatewayError, GenericAsset, GenericAssetPage, GenericConfig, GenericConfigPage,
+    Cve, CvePage, DfnCertAdvisory, DfnCertAdvisoryPage, FeedList, FeedPort, FeedQuery, Filter,
+    FilterPage, GatewayError, GenericAsset, GenericAssetPage, GenericConfig, GenericConfigPage,
     GenericConfigQuery, GetReportOpts, Group, GroupPage, Host, HostPage, IdentityPort,
     IdentityQuery, JobArtifact, ModifyAgentControlScanConfigInput, ModifyAgentGroupInput,
-    ModifyAgentInput, ModifyAlertInput, ModifyAssetInput, ModifyCredentialInput, ModifyFilterInput,
-    ModifyGroupInput, ModifyHostInput, ModifyNoteInput, ModifyOperatingSystemInput,
-    ModifyOverrideInput, ModifyPermissionInput, ModifyPortListInput, ModifyRoleInput,
-    ModifyScanConfigInput, ModifyScheduleInput, ModifyTagInput, ModifyTargetInput, ModifyTaskInput,
-    ModifyUserInput, ModifyUserSettingInput, Note, NotePage, Nvt, NvtFamilyPage, NvtPage, NvtQuery,
-    OperatingSystem, OperatingSystemPage, Override, OverridePage, Permission, PermissionPage,
-    PortList, PortListPage, PortListPort, PortListQuery, ReadinessStatus, Report,
-    ReportApplicationPage, ReportClosedCvePage, ReportCvePage, ReportErrorPage, ReportExport,
-    ReportExportRequest, ReportFormat, ReportFormatPage, ReportHostPage, ReportOperatingSystemPage,
-    ReportPage, ReportPort, ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResourceRef,
-    ResultPage, ResultPort, ResultQuery, Role, RolePage, ScanConfig, ScanConfigPage,
-    ScanConfigPort, ScanConfigQuery, ScanResult, Scanner, ScannerPage, ScannerPort, ScannerQuery,
-    Schedule, SchedulePage, SchedulePort, ScheduleQuery, SupportingResourceMeta,
+    ModifyAgentInput, ModifyAlertInput, ModifyAssetInput, ModifyCredentialInput,
+    ModifyCredentialStoreInput, ModifyFilterInput, ModifyGroupInput, ModifyHostInput,
+    ModifyNoteInput, ModifyOperatingSystemInput, ModifyOverrideInput, ModifyPermissionInput,
+    ModifyPortListInput, ModifyRoleInput, ModifyScanConfigInput, ModifyScheduleInput,
+    ModifyTagInput, ModifyTargetInput, ModifyTaskInput, ModifyUserInput, ModifyUserSettingInput,
+    Note, NotePage, Nvt, NvtFamilyPage, NvtPage, NvtQuery, OperatingSystem, OperatingSystemPage,
+    Override, OverridePage, Permission, PermissionPage, PortList, PortListPage, PortListPort,
+    PortListQuery, ReadinessStatus, Report, ReportApplicationPage, ReportClosedCvePage,
+    ReportCvePage, ReportErrorPage, ReportExport, ReportExportRequest, ReportFormat,
+    ReportFormatPage, ReportHostPage, ReportOperatingSystemPage, ReportPage, ReportPort,
+    ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResourceRef, ResultPage, ResultPort,
+    ResultQuery, Role, RolePage, ScanConfig, ScanConfigNvtPage, ScanConfigNvtQuery, ScanConfigPage,
+    ScanConfigPort, ScanConfigPreference, ScanConfigPreferenceQuery, ScanConfigQuery, ScanResult,
+    Scanner, ScannerPage, ScannerPort, ScannerQuery, Schedule, SchedulePage, SchedulePort,
+    ScheduleQuery, SetScanConfigFamilySelectionInput, SupportingResourceMeta,
     SupportingResourcePort, SupportingResourceQuery, SystemPort, Tag, TagPage, Target, TargetPage,
     TargetPort, TargetQuery, Task, TaskAction, TaskPage, TaskPort, TaskQuery, Ticket, TicketPage,
     Timezone, TlsCertificateAsset, TlsCertificateAssetPage, TlsCertificatePage, User, UserPage,
@@ -173,6 +175,31 @@ impl CredentialPort for MockCredentialPort {
         }])
     }
 
+    async fn get_credential_store(
+        &self,
+        _: &str,
+        id: &str,
+    ) -> Result<CredentialStore, GatewayError> {
+        Err(GatewayError::NotFound(format!(
+            "credential store {id} not found"
+        )))
+    }
+
+    async fn modify_credential_store(
+        &self,
+        _: &str,
+        id: &str,
+        _: ModifyCredentialStoreInput,
+    ) -> Result<CredentialStore, GatewayError> {
+        Err(GatewayError::NotFound(format!(
+            "credential store {id} not found"
+        )))
+    }
+
+    async fn verify_credential_store(&self, _: &str, _: &str) -> Result<(), GatewayError> {
+        Ok(())
+    }
+
     async fn list_credentials(
         &self,
         _: &str,
@@ -269,8 +296,13 @@ pub(crate) struct MockFeedPort;
 
 #[async_trait]
 impl FeedPort for MockFeedPort {
-    async fn list_feeds(&self, _: &str) -> Result<Vec<Feed>, GatewayError> {
-        Ok(vec![])
+    async fn list_feeds(&self, _: &str, _: &FeedQuery) -> Result<FeedList, GatewayError> {
+        Ok(FeedList {
+            data: vec![],
+            feed_owner_configured: false,
+            feed_roles_configured: false,
+            feed_resources_access: false,
+        })
     }
 }
 
@@ -1058,6 +1090,78 @@ impl ScanConfigPort for MockScanConfigPort {
         Err(GatewayError::NotFound(format!(
             "scan config {id} not found"
         )))
+    }
+
+    async fn list_scan_config_nvts(
+        &self,
+        _: &str,
+        _: &str,
+        query: &ScanConfigNvtQuery,
+    ) -> Result<ScanConfigNvtPage, GatewayError> {
+        Ok(ScanConfigNvtPage {
+            data: vec![],
+            pagination: gvm_gateway_domain::Pagination {
+                page: query.page,
+                per_page: query.per_page,
+                total: 0,
+                total_pages: 0,
+            },
+        })
+    }
+
+    async fn get_scan_config_nvt(&self, _: &str, _: &str, oid: &str) -> Result<Nvt, GatewayError> {
+        Err(GatewayError::NotFound(format!("NVT {oid} not found")))
+    }
+
+    async fn list_scan_config_preferences(
+        &self,
+        _: &str,
+        _: &str,
+        _: &ScanConfigPreferenceQuery,
+    ) -> Result<Vec<ScanConfigPreference>, GatewayError> {
+        Ok(vec![])
+    }
+
+    async fn get_scan_config_preference(
+        &self,
+        _: &str,
+        _: &str,
+        name: &str,
+        _: &ScanConfigPreferenceQuery,
+    ) -> Result<ScanConfigPreference, GatewayError> {
+        Err(GatewayError::NotFound(format!(
+            "preference {name} not found"
+        )))
+    }
+
+    async fn set_scan_config_nvt_selection(
+        &self,
+        _: &str,
+        _: &str,
+        _: &str,
+        _: Vec<String>,
+    ) -> Result<(), GatewayError> {
+        Ok(())
+    }
+
+    async fn set_scan_config_family_selection(
+        &self,
+        _: &str,
+        _: &str,
+        _: SetScanConfigFamilySelectionInput,
+    ) -> Result<(), GatewayError> {
+        Ok(())
+    }
+
+    async fn set_scan_config_preference(
+        &self,
+        _: &str,
+        _: &str,
+        _: &str,
+        _: Option<String>,
+        _: Option<String>,
+    ) -> Result<(), GatewayError> {
+        Ok(())
     }
 
     async fn list_policies(

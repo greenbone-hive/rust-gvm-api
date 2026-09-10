@@ -5,7 +5,9 @@
 
 use gvm_gateway_domain::{
     CreateScanConfigInput, GatewayError, GenericConfig, GenericConfigPage, GenericConfigQuery,
-    ModifyScanConfigInput, ScanConfig, ScanConfigPage, ScanConfigQuery,
+    ModifyScanConfigInput, Nvt, ScanConfig, ScanConfigNvtPage, ScanConfigNvtQuery, ScanConfigPage,
+    ScanConfigPreference, ScanConfigPreferenceQuery, ScanConfigQuery,
+    SetScanConfigFamilySelectionInput,
 };
 
 use crate::GatewayService;
@@ -181,6 +183,164 @@ impl GatewayService {
             |session| async move {
                 self.scan_configs
                     .delete_scan_config(&session.token, id, ultimate)
+                    .await
+            },
+        )
+        .await
+    }
+
+    /// Lists NVTs selected by a scan configuration.
+    pub async fn list_scan_config_nvts(
+        &self,
+        session_token: &str,
+        id: &str,
+        query: ScanConfigNvtQuery,
+    ) -> Result<ScanConfigNvtPage, GatewayError> {
+        self.execute_with_resource(
+            "scan_configs.nvts.list",
+            session_token,
+            "list",
+            "scan_config_nvt",
+            Some(id),
+            |session| async move {
+                self.scan_configs
+                    .list_scan_config_nvts(&session.token, id, &query)
+                    .await
+            },
+        )
+        .await
+    }
+
+    /// Fetches one NVT selected by a scan configuration.
+    pub async fn get_scan_config_nvt(
+        &self,
+        session_token: &str,
+        id: &str,
+        oid: &str,
+    ) -> Result<Nvt, GatewayError> {
+        self.execute_with_resource(
+            "scan_configs.nvts.get",
+            session_token,
+            "read",
+            "scan_config_nvt",
+            Some(id),
+            |session| async move {
+                self.scan_configs
+                    .get_scan_config_nvt(&session.token, id, oid)
+                    .await
+            },
+        )
+        .await
+    }
+
+    /// Lists scanner or NVT preferences for a scan configuration.
+    pub async fn list_scan_config_preferences(
+        &self,
+        session_token: &str,
+        id: &str,
+        query: ScanConfigPreferenceQuery,
+    ) -> Result<Vec<ScanConfigPreference>, GatewayError> {
+        self.execute_with_resource(
+            "scan_configs.preferences.list",
+            session_token,
+            "list",
+            "scan_config_preference",
+            Some(id),
+            |session| async move {
+                self.scan_configs
+                    .list_scan_config_preferences(&session.token, id, &query)
+                    .await
+            },
+        )
+        .await
+    }
+
+    /// Fetches one scanner or NVT preference for a scan configuration.
+    pub async fn get_scan_config_preference(
+        &self,
+        session_token: &str,
+        id: &str,
+        name: &str,
+        query: ScanConfigPreferenceQuery,
+    ) -> Result<ScanConfigPreference, GatewayError> {
+        self.execute_with_resource(
+            "scan_configs.preferences.get",
+            session_token,
+            "read",
+            "scan_config_preference",
+            Some(id),
+            |session| async move {
+                self.scan_configs
+                    .get_scan_config_preference(&session.token, id, name, &query)
+                    .await
+            },
+        )
+        .await
+    }
+
+    /// Replaces one family's selected NVTs.
+    pub async fn set_scan_config_nvt_selection(
+        &self,
+        session_token: &str,
+        id: &str,
+        family: &str,
+        nvt_oids: Vec<String>,
+    ) -> Result<(), GatewayError> {
+        self.execute_with_resource(
+            "scan_configs.nvt_selection.set",
+            session_token,
+            "modify",
+            "scan_config",
+            Some(id),
+            |session| async move {
+                self.scan_configs
+                    .set_scan_config_nvt_selection(&session.token, id, family, nvt_oids)
+                    .await
+            },
+        )
+        .await
+    }
+
+    /// Replaces family selection atomically.
+    pub async fn set_scan_config_family_selection(
+        &self,
+        session_token: &str,
+        id: &str,
+        input: SetScanConfigFamilySelectionInput,
+    ) -> Result<(), GatewayError> {
+        self.execute_with_resource(
+            "scan_configs.family_selection.set",
+            session_token,
+            "modify",
+            "scan_config",
+            Some(id),
+            |session| async move {
+                self.scan_configs
+                    .set_scan_config_family_selection(&session.token, id, input)
+                    .await
+            },
+        )
+        .await
+    }
+
+    /// Sets or resets a scanner or NVT preference.
+    pub async fn set_scan_config_preference(
+        &self,
+        session_token: &str,
+        id: &str,
+        name: &str,
+        nvt_oid: Option<String>,
+        value: Option<String>,
+    ) -> Result<(), GatewayError> {
+        self.execute_with_resource(
+            "scan_configs.preferences.set",
+            session_token,
+            "modify",
+            "scan_config_preference",
+            Some(id),
+            |session| async move {
+                self.scan_configs
+                    .set_scan_config_preference(&session.token, id, name, nvt_oid, value)
                     .await
             },
         )

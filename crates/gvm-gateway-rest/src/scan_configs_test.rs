@@ -3,8 +3,12 @@
 
 use serde_json::json;
 
-use super::{ModifyScanConfigRequest, ScanConfigResponse, ScanConfigType};
-use gvm_gateway_domain::ScanConfig;
+use super::{
+    parse_preference_query, parse_scan_config_nvt_query, ModifyScanConfigRequest,
+    ScanConfigPreferenceResponse, ScanConfigResponse, ScanConfigType, SetFamilySelectionRequest,
+    SetNvtSelectionRequest, SetPreferenceRequest,
+};
+use gvm_gateway_domain::{ScanConfig, ScanConfigPreference, ScanConfigPreferenceNvt};
 
 fn scan_config_with_type(config_type: u32) -> ScanConfig {
     scan_config_with(config_type, None)
@@ -80,4 +84,61 @@ fn modify_scan_config_request_preserves_rename() {
     .expect("rename-only scan config updates are valid");
 
     assert_eq!(input.name.as_deref(), Some("renamed config"));
+}
+
+#[test]
+fn scan_config_subresource_queries_validate_bounds() {
+    let nvts = parse_scan_config_nvt_query("family=Web+Servers&page=2&perPage=50")
+        .expect("valid selected-NVT query");
+    assert_eq!(nvts.family.as_deref(), Some("Web Servers"));
+    assert_eq!((nvts.page, nvts.per_page), (2, 50));
+
+    let preferences = parse_preference_query("nvtOid=1.3.6.1.4.1").expect("valid preference query");
+    assert_eq!(preferences.nvt_oid.as_deref(), Some("1.3.6.1.4.1"));
+    assert!(parse_scan_config_nvt_query("page=0").is_err());
+    assert!(parse_scan_config_nvt_query("perPage=1001").is_err());
+}
+
+#[test]
+fn scan_config_selection_requests_are_closed_camel_case_contracts() {
+    let nvts: SetNvtSelectionRequest = serde_json::from_value(json!({
+        "nvtOids": ["1.3.6.1"]
+    }))
+    .expect("valid NVT selection");
+    assert_eq!(nvts.nvt_oids[0].0, "1.3.6.1");
+
+    let families: SetFamilySelectionRequest = serde_json::from_value(json!({
+        "families": [{"name": "Web Servers", "growing": true, "all": false}],
+        "autoAddNewFamilies": true
+    }))
+    .expect("valid family selection");
+    assert!(families.auto_add_new_families);
+
+    let preference: SetPreferenceRequest = serde_json::from_value(json!({
+        "nvtOid": "1.3.6.1"
+    }))
+    .expect("valid preference reset");
+    assert_eq!(preference.value, None);
+    assert!(serde_json::from_value::<SetPreferenceRequest>(json!({"secret": "no"})).is_err());
+}
+
+#[test]
+fn scan_config_preference_response_preserves_typed_fields() {
+    let response = serde_json::to_value(ScanConfigPreferenceResponse::from(ScanConfigPreference {
+        nvt: Some(ScanConfigPreferenceNvt {
+            oid: "1.3.6.1".to_string(),
+            name: Some("Services".to_string()),
+        }),
+        name: "Timeout".to_string(),
+        id: Some("7".to_string()),
+        preference_type: Some("entry".to_string()),
+        value: Some("10".to_string()),
+        alternatives: vec!["5".to_string(), "10".to_string()],
+        default: Some("5".to_string()),
+    }))
+    .expect("preference response serializes");
+
+    assert_eq!(response["nvt"]["oid"], json!("1.3.6.1"));
+    assert_eq!(response["type"], json!("entry"));
+    assert_eq!(response["alternatives"], json!(["5", "10"]));
 }

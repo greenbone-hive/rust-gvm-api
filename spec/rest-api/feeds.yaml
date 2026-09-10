@@ -9,6 +9,19 @@ paths:
       operationId: getFeeds
       tags: [Feeds]
       summary: Get feed status
+      description: Returns feed status, optionally filtered by feed type.
+      parameters:
+        - name: type
+          in: query
+          required: false
+          description: Return one known feed type.
+          schema:
+            type: string
+            enum:
+              - NVT
+              - CERT
+              - SCAP
+              - GVMD_DATA
       responses:
         "200":
           description: Feed status for all feed types
@@ -18,6 +31,8 @@ paths:
                 $ref: "#/components/schemas/FeedList"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
         "502":
           $ref: "./common.yaml#/components/responses/BadGateway"
 
@@ -43,6 +58,13 @@ components:
           type: string
         description:
           type: string
+        status:
+          type: string
+        syncError:
+          type: string
+        syncTimestamp:
+          type: string
+          format: date-time
         currentlySyncing:
           type: boolean
 
@@ -50,8 +72,17 @@ components:
       type: object
       required:
         - data
+        - feedOwnerConfigured
+        - feedRolesConfigured
+        - feedResourcesAccess
       properties:
         data:
           type: array
           items:
             $ref: "#/components/schemas/Feed"
+        feedOwnerConfigured:
+          type: boolean
+        feedRolesConfigured:
+          type: boolean
+        feedResourcesAccess:
+          type: boolean
