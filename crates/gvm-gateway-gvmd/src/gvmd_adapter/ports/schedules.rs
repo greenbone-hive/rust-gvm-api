@@ -9,7 +9,6 @@ impl SchedulePort for GvmdAdapter {
         session_token: &str,
         query: &ScheduleQuery,
     ) -> Result<SchedulePage, GatewayError> {
-        let client = self.session_client(session_token)?;
         let filter_id = query
             .filter_id
             .as_deref()
@@ -29,19 +28,19 @@ impl SchedulePort for GvmdAdapter {
                 &[],
             )
             .await?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_schedules(GetSchedulesOpts {
-                filter_string,
-                filter_id: None,
-                trash: None,
-                details: Some(true),
-                tasks: None,
-            }))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetSchedulesResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "schedules.list",
+                GetSchedulesRequest::new(GetSchedulesOpts {
+                    filter_string,
+                    filter_id: None,
+                    trash: None,
+                    details: Some(true),
+                    tasks: None,
+                }),
+            )
+            .await?;
         let items = parsed
             .items
             .into_iter()
@@ -59,34 +58,32 @@ impl SchedulePort for GvmdAdapter {
         session_token: &str,
         input: CreateScheduleInput,
     ) -> Result<String, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(create_schedule(
-                &input.name,
-                ScheduleOpts {
-                    comment: input.comment,
-                    icalendar: Some(input.icalendar),
-                    timezone: Some(input.timezone),
-                    name: None,
-                },
-            ))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = CreateScheduleResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "schedules.create",
+                CreateScheduleRequest::new(
+                    input.name,
+                    ScheduleOpts {
+                        comment: input.comment,
+                        icalendar: Some(input.icalendar),
+                        timezone: Some(input.timezone),
+                        name: None,
+                    },
+                ),
+            )
+            .await?;
         Ok(parsed.id.to_string())
     }
 
     async fn get_schedule(&self, session_token: &str, id: &str) -> Result<Schedule, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_schedule(&parse_entity_id(id)?))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetSchedulesResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "schedules.get",
+                GetScheduleRequest::new(parse_entity_id(id)?),
+            )
+            .await?;
         parsed
             .items
             .into_iter()
@@ -101,23 +98,20 @@ impl SchedulePort for GvmdAdapter {
         id: &str,
         input: ModifyScheduleInput,
     ) -> Result<Schedule, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(modify_schedule(
-                &parse_entity_id(id)?,
+        self.execute_with_session(
+            session_token,
+            "schedules.modify",
+            ModifyScheduleRequest::new(
+                parse_entity_id(id)?,
                 ScheduleOpts {
                     comment: input.comment,
                     icalendar: input.icalendar,
                     timezone: input.timezone,
                     name: input.name,
                 },
-            ))
-            .await
-            .map_err(map_gvm_error)?;
-        let _ = ActionResponse::from_response(&response).map_err(map_parse_error)?;
-        drop(client);
+            ),
+        )
+        .await?;
         self.get_schedule(session_token, id).await
     }
 
@@ -127,14 +121,12 @@ impl SchedulePort for GvmdAdapter {
         id: &str,
         ultimate: bool,
     ) -> Result<(), GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(delete_schedule(&parse_entity_id(id)?, ultimate))
-            .await
-            .map_err(map_gvm_error)?;
-        let _ = ActionResponse::from_response(&response).map_err(map_parse_error)?;
+        self.execute_with_session(
+            session_token,
+            "schedules.delete",
+            DeleteScheduleRequest::new(parse_entity_id(id)?, ultimate),
+        )
+        .await?;
         Ok(())
     }
 }

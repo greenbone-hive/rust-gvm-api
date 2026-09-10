@@ -293,6 +293,25 @@ fn migrated_security_and_config_families_stay_on_typed_execution() {
 }
 
 #[test]
+fn migrated_automation_families_stay_on_typed_execution() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let ports_dir = manifest_dir.join("src/gvmd_adapter/ports");
+
+    for (file, request, description) in [
+        ("alerts.rs", "GetAlertsRequest::new", "alert family"),
+        (
+            "schedules.rs",
+            "GetSchedulesRequest::new",
+            "schedule family",
+        ),
+    ] {
+        let contents = fs::read_to_string(ports_dir.join(file))
+            .unwrap_or_else(|error| panic!("read {description} adapter module: {error}"));
+        assert_typed_section(&contents, request, description);
+    }
+}
+
+#[test]
 fn migrated_supporting_resource_families_stay_on_typed_execution() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let ports_dir = manifest_dir.join("src/gvmd_adapter/ports");

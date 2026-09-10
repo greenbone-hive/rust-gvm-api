@@ -9,7 +9,6 @@ impl AlertPort for GvmdAdapter {
         session_token: &str,
         query: &AlertQuery,
     ) -> Result<AlertPage, GatewayError> {
-        let client = self.session_client(session_token)?;
         let filter_id = query
             .filter_id
             .as_deref()
@@ -29,18 +28,18 @@ impl AlertPort for GvmdAdapter {
                 &[],
             )
             .await?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_alerts(GetAlertsOpts {
-                filter_string,
-                filter_id: None,
-                trash: None,
-                details: Some(true),
-            }))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetAlertsResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "alerts.list",
+                GetAlertsRequest::new(GetAlertsOpts {
+                    filter_string,
+                    filter_id: None,
+                    trash: None,
+                    details: Some(true),
+                }),
+            )
+            .await?;
         let items = parsed
             .items
             .into_iter()
@@ -59,52 +58,50 @@ impl AlertPort for GvmdAdapter {
         session_token: &str,
         input: CreateAlertInput,
     ) -> Result<String, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(create_alert(
-                &input.name,
-                AlertOpts {
-                    name: None,
-                    comment: input.comment,
-                    event: input.event.as_deref().map(parse_alert_event).transpose()?,
-                    event_data: alert_data(input.event_data),
-                    condition: input
-                        .condition
-                        .as_deref()
-                        .map(parse_alert_condition)
-                        .transpose()?,
-                    condition_data: alert_data(input.condition_data),
-                    method: input
-                        .method
-                        .as_deref()
-                        .map(parse_alert_method)
-                        .transpose()?,
-                    method_data: alert_data(input.method_data),
-                    filter_id: input
-                        .filter_id
-                        .as_deref()
-                        .map(parse_entity_id)
-                        .transpose()?,
-                    active: None,
-                },
-            ))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = CreateAlertResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "alerts.create",
+                CreateAlertRequest::new(
+                    input.name,
+                    AlertOpts {
+                        name: None,
+                        comment: input.comment,
+                        event: input.event.as_deref().map(parse_alert_event).transpose()?,
+                        event_data: alert_data(input.event_data),
+                        condition: input
+                            .condition
+                            .as_deref()
+                            .map(parse_alert_condition)
+                            .transpose()?,
+                        condition_data: alert_data(input.condition_data),
+                        method: input
+                            .method
+                            .as_deref()
+                            .map(parse_alert_method)
+                            .transpose()?,
+                        method_data: alert_data(input.method_data),
+                        filter_id: input
+                            .filter_id
+                            .as_deref()
+                            .map(parse_entity_id)
+                            .transpose()?,
+                        active: None,
+                    },
+                ),
+            )
+            .await?;
         Ok(parsed.id.to_string())
     }
 
     async fn get_alert(&self, session_token: &str, id: &str) -> Result<Alert, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_alert(&parse_entity_id(id)?))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetAlertsResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "alerts.get",
+                GetAlertRequest::new(parse_entity_id(id)?),
+            )
+            .await?;
         parsed
             .items
             .into_iter()
@@ -119,12 +116,11 @@ impl AlertPort for GvmdAdapter {
         id: &str,
         input: ModifyAlertInput,
     ) -> Result<Alert, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(modify_alert(
-                &parse_entity_id(id)?,
+        self.execute_with_session(
+            session_token,
+            "alerts.modify",
+            ModifyAlertRequest::new(
+                parse_entity_id(id)?,
                 AlertOpts {
                     name: input.name,
                     comment: input.comment,
@@ -149,11 +145,9 @@ impl AlertPort for GvmdAdapter {
                         .transpose()?,
                     active: None,
                 },
-            ))
-            .await
-            .map_err(map_gvm_error)?;
-        let _ = ActionResponse::from_response(&response).map_err(map_parse_error)?;
-        drop(client);
+            ),
+        )
+        .await?;
         self.get_alert(session_token, id).await
     }
 
@@ -163,14 +157,12 @@ impl AlertPort for GvmdAdapter {
         id: &str,
         ultimate: bool,
     ) -> Result<(), GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(delete_alert(&parse_entity_id(id)?, ultimate))
-            .await
-            .map_err(map_gvm_error)?;
-        let _ = ActionResponse::from_response(&response).map_err(map_parse_error)?;
+        self.execute_with_session(
+            session_token,
+            "alerts.delete",
+            DeleteAlertRequest::new(parse_entity_id(id)?, ultimate),
+        )
+        .await?;
         Ok(())
     }
 }
