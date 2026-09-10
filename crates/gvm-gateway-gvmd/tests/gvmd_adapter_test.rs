@@ -3294,7 +3294,7 @@ async fn gvmd_adapter_clone_task_emits_copy_command() {
 
 #[tokio::test]
 async fn gvmd_adapter_create_task_emits_each_typed_target_variant() {
-    let (adapter, server, token) = create_mock_adapter().await;
+    let (adapter, server, token) = create_mock_adapter_v22_8().await;
     let scanner_id = "11111111-1111-1111-1111-111111111111";
     let target_id = "22222222-2222-2222-2222-222222222222";
     let config_id = "33333333-3333-3333-3333-333333333333";
