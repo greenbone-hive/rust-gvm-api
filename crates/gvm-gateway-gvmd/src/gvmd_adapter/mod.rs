@@ -53,7 +53,8 @@ use gvm_gmp::{
             GetAlertsOpts,
         },
         assets::{
-            delete_asset, get_assets, modify_asset, DeleteAssetOpts, GetAssetsOpts, ModifyAssetOpts,
+            DeleteAssetOpts, DeleteAssetRequest, GetAssetRequest, GetAssetsOpts, GetAssetsRequest,
+            ModifyAssetOpts, ModifyAssetRequest,
         },
         configs::{
             CloneConfigOpts, CloneConfigRequest, ConfigUsageType, DeleteConfigOpts,
@@ -71,27 +72,37 @@ use gvm_gmp::{
         },
         feed::{get_feed, get_feeds},
         filters::{
-            clone_filter, create_filter, delete_filter, get_filter, get_filters, modify_filter,
-            GetFiltersOpts,
+            CloneFilterRequest, CreateFilterRequest, DeleteFilterRequest, GetFilterRequest,
+            GetFiltersOpts, GetFiltersRequest, ModifyFilterRequest,
         },
         groups::{
             create_group, delete_group, get_group, get_groups, modify_group, GetGroupsOpts,
             GroupOpts,
         },
-        hosts::{create_host, delete_host, get_host, get_hosts, modify_host, GetHostsOpts},
-        notes::{create_note, delete_note, get_notes, modify_note, GetNotesOpts},
-        nvts::{get_nvt, get_nvt_families, get_nvts, GetNvtsOpts, GetScanConfigNvtsRequest},
+        hosts::{
+            CreateHostRequest, DeleteHostRequest, GetHostRequest, GetHostsOpts, GetHostsRequest,
+            ModifyHostRequest,
+        },
+        notes::{
+            CreateNoteRequest, DeleteNoteRequest, GetNotesOpts, GetNotesRequest, ModifyNoteRequest,
+        },
+        nvts::{
+            GetNvtFamiliesRequest, GetNvtRequest, GetNvtsOpts, GetNvtsRequest,
+            GetScanConfigNvtsRequest,
+        },
         oci_image_targets::{
             clone_oci_image_target, create_oci_image_target, delete_oci_image_target,
             get_oci_image_target, get_oci_image_targets, modify_oci_image_target,
             CreateOciImageTargetOpts, GetOciImageTargetsOpts, ModifyOciImageTargetOpts,
         },
         operating_systems::{
-            delete_operating_system, get_operating_system, get_operating_systems,
-            modify_operating_system, GetOperatingSystemsOpts,
+            DeleteOperatingSystemAssetRequest, GetOperatingSystemAssetRequest,
+            GetOperatingSystemAssetsRequest, GetOperatingSystemsOpts,
+            ModifyOperatingSystemAssetRequest,
         },
         overrides::{
-            create_override, delete_override, get_overrides, modify_override, GetOverridesOpts,
+            CreateOverrideRequest, DeleteOverrideRequest, GetOverridesOpts, GetOverridesRequest,
+            ModifyOverrideRequest,
         },
         permissions::{
             create_permission, delete_permission, get_permission, get_permissions,
@@ -101,7 +112,7 @@ use gvm_gmp::{
             CreatePortListRequest, DeletePortListRequest, GetPortListRequest, GetPortListsOpts,
             GetPortListsRequest, ModifyPortListOpts, ModifyPortListRequest, PortListOpts,
         },
-        report_formats::{get_report_format, get_report_formats, GetReportFormatsOpts},
+        report_formats::{GetReportFormatRequest, GetReportFormatsOpts, GetReportFormatsRequest},
         reports::{
             DeleteReportRequest, GetReportApplicationsRequest, GetReportClosedCvesRequest,
             GetReportCvesRequest, GetReportErrorsRequest,
@@ -110,7 +121,7 @@ use gvm_gmp::{
             GetReportTlsCertificatesRequest, GetReportVulnsRequest, GetReportsOpts,
             GetReportsRequest,
         },
-        results::{get_result, get_results, GetResultsOpts, GetResultsRequest},
+        results::{GetResultRequest, GetResultsOpts, GetResultsRequest},
         roles::{
             create_role, delete_role, get_role, get_roles, modify_role, GetRolesOpts, RoleOpts,
         },
@@ -127,9 +138,16 @@ use gvm_gmp::{
             create_schedule, delete_schedule, get_schedule, get_schedules, modify_schedule,
             GetSchedulesOpts, ScheduleOpts,
         },
-        secinfo::GetSecInfoOpts,
-        system::{get_timezones, get_vulns, FilteredGetOpts},
-        tags::{clone_tag, create_tag, delete_tag, get_tag, get_tags, modify_tag, GetTagsOpts},
+        secinfo::{
+            GetCertBundAdvisoriesRequest, GetCertBundAdvisoryRequest, GetCpeRequest,
+            GetCpesRequest, GetCveRequest, GetCvesRequest, GetDfnCertAdvisoriesRequest,
+            GetDfnCertAdvisoryRequest, GetSecInfoOpts,
+        },
+        system::{get_timezones, FilteredGetOpts, GetVulnsRequest},
+        tags::{
+            CloneTagRequest, CreateTagRequest, DeleteTagRequest, GetTagRequest, GetTagsOpts,
+            GetTagsRequest, ModifyTagRequest,
+        },
         targets::{
             CloneTargetRequest, CreateTargetOpts, CreateTargetRequest, DeleteTargetRequest,
             GetTargetRequest, GetTargetsOpts, GetTargetsRequest, ModifyTargetOpts,
@@ -146,7 +164,9 @@ use gvm_gmp::{
             StopTaskRequest,
         },
         tickets::{get_ticket, get_tickets, GetTicketsOpts},
-        tls_certificates::{get_tls_certificate, get_tls_certificates, GetTlsCertificatesOpts},
+        tls_certificates::{
+            GetTlsCertificateRequest, GetTlsCertificatesOpts, GetTlsCertificatesRequest,
+        },
         user_settings::{
             get_user_setting, get_user_settings, modify_user_setting, GetUserSettingsOpts,
             ModifyUserSettingOpts,
@@ -163,17 +183,11 @@ use gvm_gmp::{
         },
     },
     responses::{
-        ActionResponse, CreateAlertResponse, CreateFilterResponse, CreateGroupResponse,
-        CreateHostResponse, CreateNoteResponse, CreateOciImageTargetResponse,
-        CreateOverrideResponse, CreatePermissionResponse, CreateRoleResponse,
-        CreateScheduleResponse, CreateTagResponse, CreateUserResponse,
-        CreateWebApplicationTargetResponse, GetAlertsResponse, GetAssetsResponse, GetFeedsResponse,
-        GetFiltersResponse, GetGroupsResponse, GetHostsResponse, GetNotesResponse,
-        GetNvtFamiliesResponse, GetNvtsResponse, GetOciImageTargetsResponse,
-        GetOperatingSystemAssetsResponse, GetOverridesResponse, GetPermissionsResponse,
-        GetReportFormatsResponse, GetResultsResponse, GetRolesResponse, GetSchedulesResponse,
-        GetTagsResponse, GetTicketsResponse, GetTimezonesResponse, GetTlsCertificatesResponse,
-        GetUserSettingsResponse, GetUsersResponse, GetVulnerabilitiesResponse,
+        ActionResponse, CreateAlertResponse, CreateGroupResponse, CreateOciImageTargetResponse,
+        CreatePermissionResponse, CreateRoleResponse, CreateScheduleResponse, CreateUserResponse,
+        CreateWebApplicationTargetResponse, GetAlertsResponse, GetFeedsResponse, GetGroupsResponse,
+        GetOciImageTargetsResponse, GetPermissionsResponse, GetRolesResponse, GetSchedulesResponse,
+        GetTicketsResponse, GetTimezonesResponse, GetUserSettingsResponse, GetUsersResponse,
         GetWebApplicationTargetsResponse, ModifyUserSettingResponse, User as GmpUser,
     },
     CollectionUpdate, CredentialStoreCredentialType, EntityId, GmpRequest,
@@ -446,10 +460,13 @@ impl GvmdAdapter {
             return Ok(None);
         };
 
-        let response = self
-            .call_with_session(session_token, "filters.get", get_filter(filter_id))
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "filters.get",
+                GetFilterRequest::new(filter_id.clone()),
+            )
             .await?;
-        let parsed = GetFiltersResponse::from_response(&response).map_err(map_parse_error)?;
         parsed
             .items
             .into_iter()
