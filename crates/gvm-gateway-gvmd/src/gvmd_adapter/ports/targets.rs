@@ -17,11 +17,11 @@ impl TargetPort for GvmdAdapter {
                     .map_err(|_| GatewayError::InvalidInput("invalid filterId".to_string()))
             })
             .transpose()?;
-        let response = self
-            .call_with_session(
+        let parsed = self
+            .execute_with_session(
                 session_token,
                 "targets.list",
-                get_targets(GetTargetsOpts {
+                GetTargetsRequest::new(GetTargetsOpts {
                     filter_string: self
                         .paginated_filter_resolving_filter_id(
                             session_token,
@@ -39,7 +39,6 @@ impl TargetPort for GvmdAdapter {
                 }),
             )
             .await?;
-        let parsed = GetTargetsResponse::from_response(&response).map_err(map_parse_error)?;
         let items = parsed
             .items
             .into_iter()
@@ -50,11 +49,11 @@ impl TargetPort for GvmdAdapter {
         // Compatibility for backends/mocks that accept pagination terms but do
         // not report totals for later pages; preserve the REST page contract.
         if needs_client_side_pagination_fallback(&items, total, query.page) {
-            let fallback = self
-                .call_with_session(
+            let parsed = self
+                .execute_with_session(
                     session_token,
                     "targets.list",
-                    get_targets(GetTargetsOpts {
+                    GetTargetsRequest::new(GetTargetsOpts {
                         filter_string: self
                             .filter_resolving_filter_id(
                                 session_token,
@@ -70,7 +69,6 @@ impl TargetPort for GvmdAdapter {
                     }),
                 )
                 .await?;
-            let parsed = GetTargetsResponse::from_response(&fallback).map_err(map_parse_error)?;
             let items = parsed
                 .items
                 .into_iter()
@@ -103,8 +101,8 @@ impl TargetPort for GvmdAdapter {
             .transpose()?
             .map(TargetPortSelection::PortList)
             .unwrap_or_else(default_target_ports);
-        let request = create_target(
-            &input.name,
+        let request = CreateTargetRequest::new(
+            input.name,
             CreateTargetOpts {
                 comment: input.comment,
                 hosts,
@@ -143,34 +141,31 @@ impl TargetPort for GvmdAdapter {
             },
         )
         .map_err(|error| GatewayError::InvalidInput(error.to_string()))?;
-        let response = self
-            .call_with_session(session_token, "targets.create", request)
+        let parsed = self
+            .execute_with_session(session_token, "targets.create", request)
             .await?;
-        let parsed = CreateTargetResponse::from_response(&response).map_err(map_parse_error)?;
         Ok(parsed.id.to_string())
     }
 
     async fn clone_target(&self, session_token: &str, id: &str) -> Result<String, GatewayError> {
-        let response = self
-            .call_with_session(
+        let parsed = self
+            .execute_with_session(
                 session_token,
                 "targets.clone",
-                clone_target(&parse_entity_id(id)?),
+                CloneTargetRequest::new(parse_entity_id(id)?),
             )
             .await?;
-        let parsed = CreateTargetResponse::from_response(&response).map_err(map_parse_error)?;
         Ok(parsed.id.to_string())
     }
 
     async fn get_target(&self, session_token: &str, id: &str) -> Result<Target, GatewayError> {
-        let response = self
-            .call_with_session(
+        let parsed = self
+            .execute_with_session(
                 session_token,
                 "targets.get",
-                get_target(&parse_entity_id(id)?),
+                GetTargetRequest::new(parse_entity_id(id)?),
             )
             .await?;
-        let parsed = GetTargetsResponse::from_response(&response).map_err(map_parse_error)?;
         parsed
             .items
             .into_iter()
@@ -198,8 +193,8 @@ impl TargetPort for GvmdAdapter {
                 ));
             }
         };
-        let request = modify_target(
-            &target_id,
+        let request = ModifyTargetRequest::new(
+            target_id,
             ModifyTargetOpts {
                 name: input.name,
                 comment: input.comment,
@@ -253,10 +248,8 @@ impl TargetPort for GvmdAdapter {
             },
         )
         .map_err(|error| GatewayError::InvalidInput(error.to_string()))?;
-        let response = self
-            .call_with_session(session_token, "targets.modify", request)
+        self.execute_with_session(session_token, "targets.modify", request)
             .await?;
-        let _ = ActionResponse::from_response(&response).map_err(map_parse_error)?;
         self.get_target(session_token, id).await
     }
 
@@ -266,14 +259,12 @@ impl TargetPort for GvmdAdapter {
         id: &str,
         ultimate: bool,
     ) -> Result<(), GatewayError> {
-        let response = self
-            .call_with_session(
-                session_token,
-                "targets.delete",
-                delete_target(&parse_entity_id(id)?, ultimate),
-            )
-            .await?;
-        let _ = ActionResponse::from_response(&response).map_err(map_parse_error)?;
+        self.execute_with_session(
+            session_token,
+            "targets.delete",
+            DeleteTargetRequest::new(parse_entity_id(id)?, ultimate),
+        )
+        .await?;
         Ok(())
     }
 
