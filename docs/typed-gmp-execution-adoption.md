@@ -38,14 +38,21 @@ export.
 
 The subsequent bounded families cover tasks and audits; reports and their
 drill-downs; credentials and credential stores; scanners; generic configs,
-scan configs, and policies; and port lists. Architecture tests prevent these
-migrated modules from reintroducing the raw call/parser boundary while other
-families are still being converted.
+scan configs, and policies; port lists; supporting resources and SecInfo;
+alerts and schedules; identity administration; feeds and system discovery;
+agents and agent groups; and specialized targets. Architecture tests prevent
+these migrated modules from reintroducing the raw call/parser boundary.
+
+After those migrations, production code under `src/gvmd_adapter` contains two
+direct `.call(...)` sites, no `call_with_session(...)` helper, and two manual
+`::from_response(...)` pairings. All four remaining markers belong to the two
+ticket reads described below. The generated REST OpenAPI remains at the
+123-path, 200-operation baseline.
 
 ## Intentional raw exceptions
 
 The two ticket reads remain on the raw compatibility path. The public ticket
 surface is intentionally discovery-only, and its lower-level compatibility
-scope is documented in `docs/ticket-surface-scope.md`. Any additional raw call
-remaining after the family migrations must be explicitly inventoried and
-justified before the compatibility helper can be removed.
+scope is documented in `docs/ticket-surface-scope.md`. An architecture test
+keeps the production raw-call and manual-parser inventory fixed at those two
+operations.
