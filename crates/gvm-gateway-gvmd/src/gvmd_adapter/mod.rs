@@ -11,7 +11,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use gvm_client::{GetReportDetailsOpts, GetReportExportOpts, GmpClient};
+use gvm_client::{GetReportDetailsOpts, GetReportExportOpts, GmpClient, GvmError};
 use gvm_connection::UnixSocketConnection;
 use gvm_gateway_domain::{
     Alert, AlertPage, AlertPort, AlertQuery, AssetQuery, AuthPort, CertBundAdvisory,
@@ -101,10 +101,14 @@ use gvm_gmp::{
         },
         report_formats::{get_report_format, get_report_formats, GetReportFormatsOpts},
         reports::{
-            delete_report, get_reports, GetReportExportRequest as GmpGetReportExportRequest,
-            GetReportsOpts,
+            DeleteReportRequest, GetReportApplicationsRequest, GetReportClosedCvesRequest,
+            GetReportCvesRequest, GetReportErrorsRequest,
+            GetReportExportRequest as GmpGetReportExportRequest, GetReportHostsRequest,
+            GetReportOperatingSystemsRequest, GetReportPortsRequest,
+            GetReportTlsCertificatesRequest, GetReportVulnsRequest, GetReportsOpts,
+            GetReportsRequest,
         },
-        results::{get_result, get_results, GetResultsOpts},
+        results::{get_result, get_results, GetResultsOpts, GetResultsRequest},
         roles::{
             create_role, delete_role, get_role, get_roles, modify_role, GetRolesOpts, RoleOpts,
         },
@@ -130,15 +134,14 @@ use gvm_gmp::{
             ModifyTargetRequest,
         },
         tasks::{
-            clone_task, create_agent_group_task, create_audit, create_import_task,
-            create_oci_image_target_task, create_task, create_web_application_task,
-            delete_audit as delete_audit_cmd, delete_task as delete_task_cmd, get_audits,
-            get_task as get_task_cmd, get_tasks, modify_audit as modify_audit_cmd,
-            modify_task as modify_task_cmd, resume_audit as resume_audit_cmd,
-            resume_task as resume_task_cmd, start_audit as start_audit_cmd,
-            start_task as start_task_cmd, stop_audit as stop_audit_cmd, stop_task as stop_task_cmd,
-            CreateAgentGroupTaskOpts, CreateOciImageTargetTaskOpts, CreateTaskOpts,
-            CreateWebApplicationTaskOpts, GetTasksOpts, ModifyTaskOpts,
+            CloneTaskRequest, CreateAgentGroupTaskOpts, CreateAgentGroupTaskRequest,
+            CreateAuditRequest, CreateImportTaskRequest, CreateOciImageTargetTaskOpts,
+            CreateOciImageTargetTaskRequest, CreateTaskOpts, CreateTaskRequest,
+            CreateWebApplicationTaskOpts, CreateWebApplicationTaskRequest, DeleteAuditRequest,
+            DeleteTaskRequest, GetAuditsRequest, GetTaskRequest, GetTasksOpts, GetTasksRequest,
+            ModifyAuditRequest, ModifyTaskOpts, ModifyTaskRequest, ResumeAuditRequest,
+            ResumeTaskRequest, StartAuditRequest, StartTaskRequest, StopAuditRequest,
+            StopTaskRequest,
         },
         tickets::{get_ticket, get_tickets, GetTicketsOpts},
         tls_certificates::{get_tls_certificate, get_tls_certificates, GetTlsCertificatesOpts},
@@ -162,20 +165,18 @@ use gvm_gmp::{
         CreateFilterResponse, CreateGroupResponse, CreateHostResponse, CreateNoteResponse,
         CreateOciImageTargetResponse, CreateOverrideResponse, CreatePermissionResponse,
         CreatePortListResponse, CreateRoleResponse, CreateScanConfigResponse,
-        CreateScheduleResponse, CreateTagResponse, CreateTaskResponse, CreateUserResponse,
+        CreateScheduleResponse, CreateTagResponse, CreateUserResponse,
         CreateWebApplicationTargetResponse, GetAlertsResponse, GetAssetsResponse,
         GetConfigsResponse, GetCredentialsResponse, GetFeedsResponse, GetFiltersResponse,
         GetGroupsResponse, GetHostsResponse, GetNotesResponse, GetNvtFamiliesResponse,
         GetNvtsResponse, GetOciImageTargetsResponse, GetOperatingSystemAssetsResponse,
         GetOverridesResponse, GetPermissionsResponse, GetPortListsResponse,
-        GetReportApplicationsResponse, GetReportCvesResponse, GetReportFormatsResponse,
-        GetReportHostsResponse, GetReportOperatingSystemsResponse, GetReportPortsResponse,
-        GetReportsResponse, GetResultsResponse, GetRolesResponse, GetScanConfigPreferencesResponse,
-        GetScanConfigsResponse, GetScannersResponse, GetSchedulesResponse, GetTagsResponse,
-        GetTasksResponse, GetTicketsResponse, GetTimezonesResponse, GetTlsCertificatesResponse,
-        GetUserSettingsResponse, GetUsersResponse, GetVulnerabilitiesResponse,
-        GetWebApplicationTargetsResponse, ModifyUserSettingResponse, ResumeTaskResponse,
-        StartTaskResponse, User as GmpUser,
+        GetReportFormatsResponse, GetResultsResponse, GetRolesResponse,
+        GetScanConfigPreferencesResponse, GetScanConfigsResponse, GetScannersResponse,
+        GetSchedulesResponse, GetTagsResponse, GetTicketsResponse, GetTimezonesResponse,
+        GetTlsCertificatesResponse, GetUserSettingsResponse, GetUsersResponse,
+        GetVulnerabilitiesResponse, GetWebApplicationTargetsResponse, ModifyUserSettingResponse,
+        User as GmpUser,
     },
     CollectionUpdate, CredentialStoreCredentialType, EntityId, GmpRequest,
     Pagination as GmpPagination, ScalarUpdate, TargetHost, TargetHosts, TargetPortRange,
@@ -387,6 +388,21 @@ impl GvmdAdapter {
         operation: &'static str,
         request: R,
     ) -> Result<R::Response, GatewayError> {
+        self.execute_with_session_mapped(session_token, operation, request, map_gvm_error)
+            .await
+    }
+
+    async fn execute_with_session_mapped<R, F>(
+        &self,
+        session_token: &str,
+        operation: &'static str,
+        request: R,
+        map_error: F,
+    ) -> Result<R::Response, GatewayError>
+    where
+        R: GmpRequest,
+        F: FnOnce(GvmError) -> GatewayError,
+    {
         let client = self.session_client(session_token)?;
         let span = info_span!(
             "gvmd.request",
@@ -403,7 +419,7 @@ impl GvmdAdapter {
                 .await?
                 .execute(request)
                 .await
-                .map_err(map_gvm_error)?;
+                .map_err(map_error)?;
             tracing::Span::current().record("gvmd_status", field::display("ok"));
             Ok(response)
         }

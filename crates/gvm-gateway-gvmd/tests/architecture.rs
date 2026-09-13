@@ -250,6 +250,19 @@ fn initial_adapter_slice_stays_on_typed_execution() {
     );
 }
 
+#[test]
+fn migrated_task_and_report_families_stay_on_typed_execution() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let ports_dir = manifest_dir.join("src/gvmd_adapter/ports");
+
+    let tasks = fs::read_to_string(ports_dir.join("tasks.rs")).expect("read task adapter module");
+    assert_typed_section(&tasks, "GetTasksRequest::new", "task and audit family");
+
+    let reports =
+        fs::read_to_string(ports_dir.join("reports.rs")).expect("read report adapter module");
+    assert_typed_section(&reports, "GetReportsRequest::new", "report family");
+}
+
 fn section_between<'a>(contents: &'a str, start: &str, end: &str) -> &'a str {
     contents
         .split_once(start)
