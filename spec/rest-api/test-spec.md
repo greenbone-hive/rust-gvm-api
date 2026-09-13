@@ -168,6 +168,11 @@ async fn test_server() -> TestServer {
 | Test | Request | Setup | Expected |
 |------|---------|-------|----------|
 | `list_credential_stores` | `GET /api/v1/credential-stores` | Backend exposes credential store catalog | 200, credential store list |
+| `get_credential_store` | `GET /api/v1/credential-stores/{id}` | Existing store id | 200, store metadata with no preference values |
+| `modify_credential_store` | `PUT /api/v1/credential-stores/{id}` | Bounded connection/preference update | 200, updated metadata; write-only values omitted |
+| `verify_credential_store` | `POST /api/v1/credential-stores/{id}/actions/verify` | Existing configured store | 204 |
+| `create_store_backed_credential` | `POST /api/v1/credentials` | `cs_*` type with vault and host references | 201; no local secret values mixed into command |
+| `modify_store_backed_credential` | `PUT /api/v1/credentials/{id}` | Store reference update | 200; semantic store-backed command used |
 
 ### 3.5b Identity & Access Control
 

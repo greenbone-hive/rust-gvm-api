@@ -33,14 +33,80 @@ impl CredentialPort for GvmdAdapter {
         Ok(parsed
             .items
             .into_iter()
-            .map(|store| CredentialStore {
-                id: store.id,
-                name: store.name,
-                provider: store.type_,
-                default: None,
-                writable: None,
-            })
+            .map(credential_store_from_gmp)
             .collect())
+    }
+
+    async fn get_credential_store(
+        &self,
+        session_token: &str,
+        id: &str,
+    ) -> Result<CredentialStore, GatewayError> {
+        let client = self.session_client(session_token)?;
+        ensure_credential_stores_supported(&client)?;
+        let mut guard = client.lock().await?;
+        let parsed = guard
+            .get_credential_store(&parse_entity_id(id)?, Some(true))
+            .await
+            .map_err(map_credential_store_error)?;
+        parsed
+            .items
+            .into_iter()
+            .next()
+            .map(credential_store_from_gmp)
+            .ok_or_else(|| GatewayError::NotFound(format!("credential store {id} not found")))
+    }
+
+    async fn modify_credential_store(
+        &self,
+        session_token: &str,
+        id: &str,
+        input: ModifyCredentialStoreInput,
+    ) -> Result<CredentialStore, GatewayError> {
+        let client = self.session_client(session_token)?;
+        ensure_credential_stores_supported(&client)?;
+        let response = client
+            .lock()
+            .await?
+            .call(modify_credential_store(
+                &parse_entity_id(id)?,
+                ModifyCredentialStoreOpts {
+                    active: input.active,
+                    host: input.host,
+                    path: input.path,
+                    port: input.port,
+                    comment: input.comment,
+                    preferences: input
+                        .preferences
+                        .into_iter()
+                        .map(|preference| CredentialStorePreference {
+                            name: preference.name,
+                            value: preference.value,
+                        })
+                        .collect(),
+                },
+            ))
+            .await
+            .map_err(map_gvm_error)?;
+        let _ = ActionResponse::from_response(&response).map_err(map_parse_error)?;
+        drop(client);
+        self.get_credential_store(session_token, id).await
+    }
+
+    async fn verify_credential_store(
+        &self,
+        session_token: &str,
+        id: &str,
+    ) -> Result<(), GatewayError> {
+        let client = self.session_client(session_token)?;
+        ensure_credential_stores_supported(&client)?;
+        client
+            .lock()
+            .await?
+            .verify_credential_store(&parse_entity_id(id)?)
+            .await
+            .map_err(map_credential_store_error)?;
+        Ok(())
     }
 
     async fn list_credentials(
@@ -98,6 +164,63 @@ impl CredentialPort for GvmdAdapter {
         input: CreateCredentialInput,
     ) -> Result<String, GatewayError> {
         let client = self.session_client(session_token)?;
+        let store_type = parse_credential_store_type(&input.credential_type);
+        if store_type.is_none()
+            && (input.credential_store_id.is_some()
+                || input.vault_id.is_some()
+                || input.host_identifier.is_some())
+        {
+            return Err(GatewayError::InvalidInput(
+                "credential-store fields require a credential type with the `cs_` prefix"
+                    .to_string(),
+            ));
+        }
+        if let Some(credential_type) = store_type {
+            ensure_credential_stores_supported(&client)?;
+            ensure_no_local_secret_fields(
+                input.login.as_ref(),
+                input.password.as_ref(),
+                input.private_key.as_ref(),
+                input.certificate.as_ref(),
+                input.community.as_ref(),
+                input.auth_algorithm.as_ref(),
+                input.privacy_algorithm.as_ref(),
+                input.privacy_password.as_ref(),
+            )?;
+            let vault_id = input.vault_id.as_deref().ok_or_else(|| {
+                GatewayError::InvalidInput(
+                    "vaultId is required for a credential-store-backed credential".to_string(),
+                )
+            })?;
+            let host_identifier = input.host_identifier.as_deref().ok_or_else(|| {
+                GatewayError::InvalidInput(
+                    "hostIdentifier is required for a credential-store-backed credential"
+                        .to_string(),
+                )
+            })?;
+            let response = client
+                .lock()
+                .await?
+                .call(create_credential_store_credential(
+                    &input.name,
+                    credential_type,
+                    vault_id,
+                    host_identifier,
+                    CredentialStoreCredentialOpts {
+                        comment: input.comment,
+                        credential_store_id: input
+                            .credential_store_id
+                            .as_deref()
+                            .map(parse_entity_id)
+                            .transpose()?,
+                    },
+                ))
+                .await
+                .map_err(map_gvm_error)?;
+            let parsed =
+                CreateCredentialResponse::from_response(&response).map_err(map_parse_error)?;
+            return Ok(parsed.id.to_string());
+        }
         let response = client
             .lock()
             .await?
@@ -165,6 +288,44 @@ impl CredentialPort for GvmdAdapter {
         input: ModifyCredentialInput,
     ) -> Result<Credential, GatewayError> {
         let client = self.session_client(session_token)?;
+        let modifies_store_reference = input.credential_store_id.is_some()
+            || input.vault_id.is_some()
+            || input.host_identifier.is_some();
+        if modifies_store_reference {
+            ensure_credential_stores_supported(&client)?;
+            ensure_no_local_secret_fields(
+                input.login.as_ref(),
+                input.password.as_ref(),
+                input.private_key.as_ref(),
+                input.certificate.as_ref(),
+                input.community.as_ref(),
+                input.auth_algorithm.as_ref(),
+                input.privacy_algorithm.as_ref(),
+                input.privacy_password.as_ref(),
+            )?;
+            let response = client
+                .lock()
+                .await?
+                .call(modify_credential_store_credential(
+                    &parse_entity_id(id)?,
+                    ModifyCredentialStoreCredentialOpts {
+                        name: input.name,
+                        comment: input.comment,
+                        credential_store_id: input
+                            .credential_store_id
+                            .as_deref()
+                            .map(parse_entity_id)
+                            .transpose()?,
+                        vault_id: input.vault_id,
+                        host_identifier: input.host_identifier,
+                    },
+                ))
+                .await
+                .map_err(map_gvm_error)?;
+            let _ = ActionResponse::from_response(&response).map_err(map_parse_error)?;
+            drop(client);
+            return self.get_credential(session_token, id).await;
+        }
         let response = client
             .lock()
             .await?
@@ -220,6 +381,74 @@ impl CredentialPort for GvmdAdapter {
         let _ = ActionResponse::from_response(&response).map_err(map_parse_error)?;
         Ok(())
     }
+}
+
+fn credential_store_from_gmp(store: gvm_gmp::responses::CredentialStore) -> CredentialStore {
+    CredentialStore {
+        id: store.id,
+        name: store.name,
+        provider: store.type_,
+        default: None,
+        writable: None,
+    }
+}
+
+fn ensure_credential_stores_supported(
+    client: &crate::gvmd_adapter::session::SessionClient,
+) -> Result<(), GatewayError> {
+    if client.credential_store_capability() == CredentialStoreCapability::Unsupported {
+        return Err(unsupported_credential_store_error());
+    }
+    Ok(())
+}
+
+fn map_credential_store_error(error: gvm_client::GvmError) -> GatewayError {
+    if credential_store_capability_unavailable(&error) {
+        unsupported_credential_store_error()
+    } else {
+        map_gvm_error(error)
+    }
+}
+
+fn parse_credential_store_type(value: &str) -> Option<CredentialStoreCredentialType> {
+    match value {
+        "cs_cc" => Some(CredentialStoreCredentialType::ClientCertificate),
+        "cs_pw" => Some(CredentialStoreCredentialType::PasswordOnly),
+        "cs_pgp" => Some(CredentialStoreCredentialType::PgpEncryptionKey),
+        "cs_smime" => Some(CredentialStoreCredentialType::SmimeCertificate),
+        "cs_snmp" => Some(CredentialStoreCredentialType::Snmp),
+        "cs_up" => Some(CredentialStoreCredentialType::UsernamePassword),
+        "cs_usk" => Some(CredentialStoreCredentialType::UsernameSshKey),
+        _ => None,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn ensure_no_local_secret_fields(
+    login: Option<&String>,
+    password: Option<&String>,
+    private_key: Option<&String>,
+    certificate: Option<&String>,
+    community: Option<&String>,
+    auth_algorithm: Option<&String>,
+    privacy_algorithm: Option<&String>,
+    privacy_password: Option<&String>,
+) -> Result<(), GatewayError> {
+    if login.is_some()
+        || password.is_some()
+        || private_key.is_some()
+        || certificate.is_some()
+        || community.is_some()
+        || auth_algorithm.is_some()
+        || privacy_algorithm.is_some()
+        || privacy_password.is_some()
+    {
+        return Err(GatewayError::InvalidInput(
+            "credential-store references cannot be combined with local credential values"
+                .to_string(),
+        ));
+    }
+    Ok(())
 }
 
 pub(in crate::gvmd_adapter) async fn probe_credential_store_capability(

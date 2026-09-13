@@ -5,9 +5,11 @@ use serde_json::json;
 
 use super::{
     credential_json_body_error, CreateCredentialRequest, CredentialResponse,
-    CredentialStoreResponse, CredentialType, ModifyCredentialRequest,
+    CredentialStorePreferenceRequest, CredentialStoreResponse, CredentialType,
+    ModifyCredentialRequest, ModifyCredentialStoreRequest,
 };
-use gvm_gateway_domain::{Credential, CredentialStore, GatewayError};
+use crate::handler::ValidateInto;
+use gvm_gateway_domain::{Credential, CredentialStore, GatewayError, ModifyCredentialStoreInput};
 
 fn credential_with_type(credential_type: &str) -> Credential {
     Credential {
@@ -66,6 +68,9 @@ fn credential_request_debug_redacts_secrets() {
         auth_algorithm: Some("sha1".to_string()),
         privacy_algorithm: Some("aes".to_string()),
         privacy_password: Some("create-privacy-secret".to_string()),
+        credential_store_id: None,
+        vault_id: Some("create-vault-secret".to_string()),
+        host_identifier: Some("create-host-secret".to_string()),
     };
     let modify = ModifyCredentialRequest {
         name: Some("Credential".to_string()),
@@ -78,6 +83,9 @@ fn credential_request_debug_redacts_secrets() {
         auth_algorithm: Some("sha1".to_string()),
         privacy_algorithm: Some("aes".to_string()),
         privacy_password: Some("modify-privacy-secret".to_string()),
+        credential_store_id: None,
+        vault_id: Some("modify-vault-secret".to_string()),
+        host_identifier: Some("modify-host-secret".to_string()),
     };
 
     let debug = format!("{create:?}\n{modify:?}");
@@ -88,10 +96,14 @@ fn credential_request_debug_redacts_secrets() {
     assert!(!debug.contains("create-private-key-secret"));
     assert!(!debug.contains("create-community-secret"));
     assert!(!debug.contains("create-privacy-secret"));
+    assert!(!debug.contains("create-vault-secret"));
+    assert!(!debug.contains("create-host-secret"));
     assert!(!debug.contains("modify-password-secret"));
     assert!(!debug.contains("modify-private-key-secret"));
     assert!(!debug.contains("modify-community-secret"));
     assert!(!debug.contains("modify-privacy-secret"));
+    assert!(!debug.contains("modify-vault-secret"));
+    assert!(!debug.contains("modify-host-secret"));
 }
 
 #[test]
@@ -137,6 +149,9 @@ fn credential_requests_preserve_supported_secret_and_type_fields() {
         auth_algorithm: Some("sha1".to_string()),
         privacy_algorithm: Some("aes".to_string()),
         privacy_password: Some("privacy-secret".to_string()),
+        credential_store_id: None,
+        vault_id: None,
+        host_identifier: None,
     }
     .validate()
     .expect("credential create request should preserve supported secrets");
@@ -151,6 +166,9 @@ fn credential_requests_preserve_supported_secret_and_type_fields() {
         auth_algorithm: Some("sha1".to_string()),
         privacy_algorithm: Some("aes".to_string()),
         privacy_password: Some("privacy-secret".to_string()),
+        credential_store_id: None,
+        vault_id: None,
+        host_identifier: None,
     }
     .validate();
 
@@ -184,4 +202,58 @@ fn credential_store_response_omits_unknown_backend_metadata() {
     assert!(value.get("id").is_none());
     assert!(value.get("default").is_none());
     assert!(value.get("writable").is_none());
+}
+
+#[test]
+fn store_backed_credential_create_requires_vault_references_and_rejects_local_secrets() {
+    let accepted: CreateCredentialRequest = serde_json::from_value(json!({
+        "name": "Vault credential",
+        "type": "cs_up",
+        "credentialStoreId": "123e4567-e89b-12d3-a456-426614174000",
+        "vaultId": "secret/data/service",
+        "hostIdentifier": "production"
+    }))
+    .expect("store-backed request should deserialize");
+    let input = accepted
+        .validate()
+        .expect("complete vault references should validate");
+    assert_eq!(input.credential_type, "cs_up");
+    assert_eq!(input.vault_id.as_deref(), Some("secret/data/service"));
+
+    let mixed: CreateCredentialRequest = serde_json::from_value(json!({
+        "name": "Unsafe mixed credential",
+        "type": "cs_up",
+        "vaultId": "secret/data/service",
+        "hostIdentifier": "production",
+        "password": "must-not-be-forwarded"
+    }))
+    .expect("mixed request should deserialize before semantic validation");
+    assert!(matches!(
+        mixed.validate(),
+        Err(GatewayError::InvalidInput(_))
+    ));
+}
+
+#[test]
+fn credential_store_preference_debug_and_domain_input_redact_values() {
+    let request = ModifyCredentialStoreRequest {
+        active: Some(true),
+        host: Some("vault.internal".to_string()),
+        path: Some("/v1".to_string()),
+        port: Some(8200),
+        comment: Some("Vault".to_string()),
+        preferences: vec![CredentialStorePreferenceRequest {
+            name: "token".to_string(),
+            value: "preference-secret".to_string(),
+        }],
+    };
+    let debug = format!("{request:?}");
+    assert!(!debug.contains("preference-secret"));
+
+    let input: ModifyCredentialStoreInput = request
+        .validate_into()
+        .expect("bounded preference should validate");
+    let debug = format!("{input:?}");
+    assert!(!debug.contains("preference-secret"));
+    assert_eq!(input.preferences[0].name, "token");
 }

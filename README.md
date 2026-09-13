@@ -3,6 +3,10 @@
 [![CI](https://github.com/greenbone-hive/rust-gvm-api/actions/workflows/ci.yml/badge.svg)](https://github.com/greenbone-hive/rust-gvm-api/actions/workflows/ci.yml)
 [![Security](https://github.com/greenbone-hive/rust-gvm-api/actions/workflows/security.yml/badge.svg)](https://github.com/greenbone-hive/rust-gvm-api/actions/workflows/security.yml)
 
+> [!WARNING]
+> **Technology Preview:** This code is provided as a Technology Preview only.
+> All APIs are still subject to change and must not be considered stable.
+
 > [!NOTE]
 > **Releases** use a PR-gated GitHub Actions flow. Run the "Prepare Release"
 > workflow with the target version, label the generated PR `release`, and merge

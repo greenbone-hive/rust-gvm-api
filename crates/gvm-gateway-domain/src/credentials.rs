@@ -54,6 +54,56 @@ pub struct CredentialStore {
     pub writable: Option<bool>,
 }
 
+/// Write-only credential-store preference update.
+#[derive(Clone, Eq, PartialEq)]
+pub struct CredentialStorePreferenceInput {
+    /// Preference name.
+    pub name: String,
+    /// Preference value. Never returned by the public API or debug output.
+    pub value: String,
+}
+
+impl fmt::Debug for CredentialStorePreferenceInput {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("CredentialStorePreferenceInput")
+            .field("name", &self.name)
+            .field("value", &"<redacted>")
+            .finish()
+    }
+}
+
+/// Credential-store update command.
+#[derive(Clone, Default, Eq, PartialEq)]
+pub struct ModifyCredentialStoreInput {
+    /// Whether the store is active.
+    pub active: Option<bool>,
+    /// Backend host.
+    pub host: Option<String>,
+    /// Backend path.
+    pub path: Option<String>,
+    /// Backend port.
+    pub port: Option<u16>,
+    /// Optional comment.
+    pub comment: Option<String>,
+    /// Write-only preference updates.
+    pub preferences: Vec<CredentialStorePreferenceInput>,
+}
+
+impl fmt::Debug for ModifyCredentialStoreInput {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ModifyCredentialStoreInput")
+            .field("active", &self.active)
+            .field("host", &self.host)
+            .field("path", &self.path)
+            .field("port", &self.port)
+            .field("comment", &self.comment)
+            .field("preferences", &self.preferences)
+            .finish()
+    }
+}
+
 /// Credential list query options.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CredentialQuery {
@@ -92,6 +142,12 @@ pub struct CreateCredentialInput {
     pub privacy_algorithm: Option<String>,
     /// Optional SNMP privacy password.
     pub privacy_password: Option<String>,
+    /// Optional credential-store identifier for store-backed credentials.
+    pub credential_store_id: Option<String>,
+    /// Optional external vault identifier for store-backed credentials.
+    pub vault_id: Option<String>,
+    /// Optional external host identifier for store-backed credentials.
+    pub host_identifier: Option<String>,
 }
 
 /// Credential update command.
@@ -117,6 +173,12 @@ pub struct ModifyCredentialInput {
     pub privacy_algorithm: Option<String>,
     /// Optional SNMP privacy password.
     pub privacy_password: Option<String>,
+    /// Optional credential-store identifier for store-backed credentials.
+    pub credential_store_id: Option<String>,
+    /// Optional external vault identifier for store-backed credentials.
+    pub vault_id: Option<String>,
+    /// Optional external host identifier for store-backed credentials.
+    pub host_identifier: Option<String>,
 }
 
 impl fmt::Debug for CreateCredentialInput {
@@ -136,6 +198,12 @@ impl fmt::Debug for CreateCredentialInput {
             .field(
                 "privacy_password",
                 &hide_optional_value(&self.privacy_password),
+            )
+            .field("credential_store_id", &self.credential_store_id)
+            .field("vault_id", &hide_optional_value(&self.vault_id))
+            .field(
+                "host_identifier",
+                &hide_optional_value(&self.host_identifier),
             )
             .finish()
     }
@@ -157,6 +225,12 @@ impl fmt::Debug for ModifyCredentialInput {
             .field(
                 "privacy_password",
                 &hide_optional_value(&self.privacy_password),
+            )
+            .field("credential_store_id", &self.credential_store_id)
+            .field("vault_id", &hide_optional_value(&self.vault_id))
+            .field(
+                "host_identifier",
+                &hide_optional_value(&self.host_identifier),
             )
             .finish()
     }

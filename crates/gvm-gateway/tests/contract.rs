@@ -14,12 +14,13 @@ use gvm_gateway_domain::{
     Alert, AlertPage, AlertPort, AlertQuery, CreateAlertInput, CreateCredentialInput,
     CreateTargetInput, CreateTaskInput, Credential, CredentialPage, CredentialPort,
     CredentialQuery, CredentialStore, GatewayError, GetReportOpts, ModifyAlertInput,
-    ModifyCredentialInput, ModifyTargetInput, ModifyTaskInput, Pagination, Report,
-    ReportApplicationPage, ReportClosedCvePage, ReportCvePage, ReportErrorPage, ReportExport,
-    ReportExportRequest, ReportHostPage, ReportOperatingSystemPage, ReportPage, ReportPort,
-    ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResourceRef, ResultPage, ResultQuery,
-    ScanResult, SessionLimits, SessionManager, Target, TargetPage, TargetPort, TargetQuery, Task,
-    TaskAction, TaskObservers, TaskPage, TaskPort, TaskQuery, TlsCertificatePage,
+    ModifyCredentialInput, ModifyCredentialStoreInput, ModifyTargetInput, ModifyTaskInput,
+    Pagination, Report, ReportApplicationPage, ReportClosedCvePage, ReportCvePage, ReportErrorPage,
+    ReportExport, ReportExportRequest, ReportHostPage, ReportOperatingSystemPage, ReportPage,
+    ReportPort, ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResourceRef, ResultPage,
+    ResultQuery, ScanResult, SessionLimits, SessionManager, Target, TargetPage, TargetPort,
+    TargetQuery, Task, TaskAction, TaskObservers, TaskPage, TaskPort, TaskQuery,
+    TlsCertificatePage,
 };
 use gvm_gateway_gvmd::StaticGvmdAdapter;
 use gvm_gateway_rest::{
@@ -1249,6 +1250,27 @@ struct CredentialStoreErrorPort(GatewayError);
 #[async_trait]
 impl CredentialPort for CredentialStoreErrorPort {
     async fn list_credential_stores(&self, _: &str) -> Result<Vec<CredentialStore>, GatewayError> {
+        Err(self.0.clone())
+    }
+
+    async fn get_credential_store(
+        &self,
+        _: &str,
+        _: &str,
+    ) -> Result<CredentialStore, GatewayError> {
+        Err(self.0.clone())
+    }
+
+    async fn modify_credential_store(
+        &self,
+        _: &str,
+        _: &str,
+        _: ModifyCredentialStoreInput,
+    ) -> Result<CredentialStore, GatewayError> {
+        Err(self.0.clone())
+    }
+
+    async fn verify_credential_store(&self, _: &str, _: &str) -> Result<(), GatewayError> {
         Err(self.0.clone())
     }
 

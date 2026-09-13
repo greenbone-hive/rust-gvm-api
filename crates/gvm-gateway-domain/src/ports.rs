@@ -14,27 +14,29 @@ use crate::{
     CreateOciImageTargetInput, CreateOverrideInput, CreatePermissionInput, CreatePortListInput,
     CreateRoleInput, CreateScanConfigInput, CreateScheduleInput, CreateTagInput, CreateTargetInput,
     CreateTaskInput, CreateUserInput, CreateWebApplicationTargetInput, Credential, CredentialPage,
-    CredentialQuery, CredentialStore, Cve, CvePage, DfnCertAdvisory, DfnCertAdvisoryPage, Feed,
-    Filter, FilterPage, GatewayError, GenericAsset, GenericAssetPage, GenericConfig,
+    CredentialQuery, CredentialStore, Cve, CvePage, DfnCertAdvisory, DfnCertAdvisoryPage, FeedList,
+    FeedQuery, Filter, FilterPage, GatewayError, GenericAsset, GenericAssetPage, GenericConfig,
     GenericConfigPage, GenericConfigQuery, GetReportOpts, Group, GroupPage, Host, HostPage,
     IdentityQuery, ModifyAgentControlScanConfigInput, ModifyAgentGroupInput, ModifyAgentInput,
-    ModifyAlertInput, ModifyAssetInput, ModifyCredentialInput, ModifyFilterInput, ModifyGroupInput,
-    ModifyHostInput, ModifyNoteInput, ModifyOciImageTargetInput, ModifyOperatingSystemInput,
-    ModifyOverrideInput, ModifyPermissionInput, ModifyPortListInput, ModifyRoleInput,
-    ModifyScanConfigInput, ModifyScheduleInput, ModifyTagInput, ModifyTargetInput, ModifyTaskInput,
-    ModifyUserInput, ModifyUserSettingInput, ModifyWebApplicationTargetInput, Note, NotePage, Nvt,
-    NvtFamilyPage, NvtPage, NvtQuery, OciImageTarget, OciImageTargetPage, OperatingSystem,
-    OperatingSystemPage, Override, OverridePage, Permission, PermissionPage, PortList,
-    PortListPage, PortListQuery, ReadinessStatus, Report, ReportApplicationPage,
-    ReportClosedCvePage, ReportCvePage, ReportErrorPage, ReportExport, ReportExportRequest,
-    ReportFormat, ReportFormatPage, ReportHostPage, ReportOperatingSystemPage, ReportPage,
-    ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResultPage, ResultQuery, Role, RolePage,
-    ScanConfig, ScanConfigPage, ScanConfigQuery, ScanResult, Scanner, ScannerPage, ScannerQuery,
-    Schedule, SchedulePage, ScheduleQuery, SpecializedTargetQuery, SupportingResourceQuery, Tag,
-    TagPage, Target, TargetPage, TargetQuery, Task, TaskAction, TaskPage, TaskQuery, Ticket,
-    TicketPage, Timezone, TlsCertificateAsset, TlsCertificateAssetPage, TlsCertificatePage, User,
-    UserPage, UserSetting, UserSettingList, UserSettingQuery, VulnerabilityPage,
-    WebApplicationTarget, WebApplicationTargetPage,
+    ModifyAlertInput, ModifyAssetInput, ModifyCredentialInput, ModifyCredentialStoreInput,
+    ModifyFilterInput, ModifyGroupInput, ModifyHostInput, ModifyNoteInput,
+    ModifyOciImageTargetInput, ModifyOperatingSystemInput, ModifyOverrideInput,
+    ModifyPermissionInput, ModifyPortListInput, ModifyRoleInput, ModifyScanConfigInput,
+    ModifyScheduleInput, ModifyTagInput, ModifyTargetInput, ModifyTaskInput, ModifyUserInput,
+    ModifyUserSettingInput, ModifyWebApplicationTargetInput, Note, NotePage, Nvt, NvtFamilyPage,
+    NvtPage, NvtQuery, OciImageTarget, OciImageTargetPage, OperatingSystem, OperatingSystemPage,
+    Override, OverridePage, Permission, PermissionPage, PortList, PortListPage, PortListQuery,
+    ReadinessStatus, Report, ReportApplicationPage, ReportClosedCvePage, ReportCvePage,
+    ReportErrorPage, ReportExport, ReportExportRequest, ReportFormat, ReportFormatPage,
+    ReportHostPage, ReportOperatingSystemPage, ReportPage, ReportPortPage, ReportQuery,
+    ReportVulnerabilityPage, ResultPage, ResultQuery, Role, RolePage, ScanConfig,
+    ScanConfigNvtPage, ScanConfigNvtQuery, ScanConfigPage, ScanConfigPreference,
+    ScanConfigPreferenceQuery, ScanConfigQuery, ScanResult, Scanner, ScannerPage, ScannerQuery,
+    Schedule, SchedulePage, ScheduleQuery, SetScanConfigFamilySelectionInput,
+    SpecializedTargetQuery, SupportingResourceQuery, Tag, TagPage, Target, TargetPage, TargetQuery,
+    Task, TaskAction, TaskPage, TaskQuery, Ticket, TicketPage, Timezone, TlsCertificateAsset,
+    TlsCertificateAssetPage, TlsCertificatePage, User, UserPage, UserSetting, UserSettingList,
+    UserSettingQuery, VulnerabilityPage, WebApplicationTarget, WebApplicationTargetPage,
 };
 
 /// Port for system information needed by the gateway.
@@ -154,6 +156,28 @@ pub trait CredentialPort: Send + Sync + 'static {
         session_token: &str,
     ) -> Result<Vec<CredentialStore>, GatewayError>;
 
+    /// Fetch one backend credential store.
+    async fn get_credential_store(
+        &self,
+        session_token: &str,
+        id: &str,
+    ) -> Result<CredentialStore, GatewayError>;
+
+    /// Modify one backend credential store.
+    async fn modify_credential_store(
+        &self,
+        session_token: &str,
+        id: &str,
+        input: ModifyCredentialStoreInput,
+    ) -> Result<CredentialStore, GatewayError>;
+
+    /// Verify one backend credential store connection.
+    async fn verify_credential_store(
+        &self,
+        session_token: &str,
+        id: &str,
+    ) -> Result<(), GatewayError>;
+
     /// List credentials for the session.
     async fn list_credentials(
         &self,
@@ -233,7 +257,11 @@ pub trait PortListPort: Send + Sync + 'static {
 #[async_trait]
 pub trait FeedPort: Send + Sync + 'static {
     /// List feed status for the session.
-    async fn list_feeds(&self, session_token: &str) -> Result<Vec<Feed>, GatewayError>;
+    async fn list_feeds(
+        &self,
+        session_token: &str,
+        query: &FeedQuery,
+    ) -> Result<FeedList, GatewayError>;
 }
 
 /// Port for identity and access-control operations.
@@ -590,6 +618,66 @@ pub trait ScanConfigPort: Send + Sync + 'static {
         session_token: &str,
         id: &str,
         ultimate: bool,
+    ) -> Result<(), GatewayError>;
+
+    /// List NVTs selected by a scan configuration.
+    async fn list_scan_config_nvts(
+        &self,
+        session_token: &str,
+        id: &str,
+        query: &ScanConfigNvtQuery,
+    ) -> Result<ScanConfigNvtPage, GatewayError>;
+
+    /// Fetch one selected NVT.
+    async fn get_scan_config_nvt(
+        &self,
+        session_token: &str,
+        id: &str,
+        oid: &str,
+    ) -> Result<Nvt, GatewayError>;
+
+    /// List scanner or NVT preferences resolved for a scan configuration.
+    async fn list_scan_config_preferences(
+        &self,
+        session_token: &str,
+        id: &str,
+        query: &ScanConfigPreferenceQuery,
+    ) -> Result<Vec<ScanConfigPreference>, GatewayError>;
+
+    /// Fetch one scanner or NVT preference.
+    async fn get_scan_config_preference(
+        &self,
+        session_token: &str,
+        id: &str,
+        name: &str,
+        query: &ScanConfigPreferenceQuery,
+    ) -> Result<ScanConfigPreference, GatewayError>;
+
+    /// Replace the selected NVTs for one family.
+    async fn set_scan_config_nvt_selection(
+        &self,
+        session_token: &str,
+        id: &str,
+        family: &str,
+        nvt_oids: Vec<String>,
+    ) -> Result<(), GatewayError>;
+
+    /// Replace scan-config family selection atomically.
+    async fn set_scan_config_family_selection(
+        &self,
+        session_token: &str,
+        id: &str,
+        input: SetScanConfigFamilySelectionInput,
+    ) -> Result<(), GatewayError>;
+
+    /// Set or reset a scanner or NVT preference.
+    async fn set_scan_config_preference(
+        &self,
+        session_token: &str,
+        id: &str,
+        name: &str,
+        nvt_oid: Option<String>,
+        value: Option<String>,
     ) -> Result<(), GatewayError>;
 
     /// List policies (compliance scan configs) for the session.

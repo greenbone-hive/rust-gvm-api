@@ -330,6 +330,13 @@ components:
         - snmpv3
         - up
         - usk
+        - cs_cc
+        - cs_pw
+        - cs_pgp
+        - cs_smime
+        - cs_snmp
+        - cs_up
+        - cs_usk
       description: |
         Credential type:
         - `cc` — Client certificate
@@ -338,3 +345,10 @@ components:
         - `snmpv3` — SNMP v3
         - `up` — Username + password
         - `usk` — Username + SSH key
+        - `cs_cc` — Credential-store client certificate
+        - `cs_pw` — Credential-store password only
+        - `cs_pgp` — Credential-store PGP encryption key
+        - `cs_smime` — Credential-store S/MIME certificate
+        - `cs_snmp` — Credential-store SNMP credential
+        - `cs_up` — Credential-store username + password
+        - `cs_usk` — Credential-store username + SSH key

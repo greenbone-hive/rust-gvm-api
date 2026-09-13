@@ -749,6 +749,7 @@ async fn gvmd_adapter_create_credential_forwards_certificate_and_community_field
                 auth_algorithm: None,
                 privacy_algorithm: None,
                 privacy_password: None,
+                ..Default::default()
             },
         )
         .await;
@@ -985,6 +986,67 @@ async fn gvmd_adapter_modify_scan_config_forwards_rename() {
     assert!(xml.contains("<name>Renamed Config</name>"));
     assert!(xml.contains("<usage_type>scan</usage_type>"));
 
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_scan_config_selection_uses_typed_modify_shapes() {
+    let (adapter, server, token) = create_mock_adapter().await;
+    let config_id = "550e8400-e29b-41d4-a716-446655440123";
+
+    let _ = adapter
+        .set_scan_config_nvt_selection(
+            &token,
+            config_id,
+            "Web Servers",
+            vec!["1.3.6.1.4.1".to_string()],
+        )
+        .await;
+    let _ = adapter
+        .set_scan_config_family_selection(
+            &token,
+            config_id,
+            SetScanConfigFamilySelectionInput {
+                families: vec![ScanConfigFamilySelection {
+                    name: "Web Servers".to_string(),
+                    growing: true,
+                    all: false,
+                }],
+                auto_add_new_families: true,
+            },
+        )
+        .await;
+    let _ = adapter
+        .set_scan_config_preference(
+            &token,
+            config_id,
+            "Timeout",
+            Some("1.3.6.1.4.1".to_string()),
+            Some("10".to_string()),
+        )
+        .await;
+
+    let commands = server
+        .command_history()
+        .into_iter()
+        .filter(|record| record.command_name() == "modify_config")
+        .map(|record| String::from_utf8(record.raw_xml().to_vec()).expect("XML command"))
+        .collect::<Vec<_>>();
+    assert!(commands.iter().any(|xml| {
+        xml.contains("<nvt_selection>")
+            && xml.contains("<family>Web Servers</family>")
+            && xml.contains("oid=\"1.3.6.1.4.1\"")
+    }));
+    assert!(commands.iter().any(|xml| {
+        xml.contains("<family_selection>")
+            && xml.contains("<growing>1</growing>")
+            && xml.contains("<all>0</all>")
+    }));
+    assert!(commands.iter().any(|xml| {
+        xml.contains("<preference>")
+            && xml.contains("<nvt oid=\"1.3.6.1.4.1\"")
+            && xml.contains("<value>MTA=</value>")
+    }));
     server.shutdown().await;
 }
 
@@ -2344,6 +2406,110 @@ async fn gvmd_adapter_list_credential_stores_uses_typed_backend_response() {
 }
 
 #[tokio::test]
+async fn gvmd_adapter_credential_store_item_update_and_verify_use_typed_commands() {
+    let (adapter, server, token) = create_mock_adapter_v22_8().await;
+    server.clear_history();
+    let id = "123e4567-e89b-12d3-a456-426614174000";
+
+    let store = adapter
+        .get_credential_store(&token, id)
+        .await
+        .expect("credential store item response");
+    assert_eq!(store.name, "Local credential store");
+
+    adapter
+        .modify_credential_store(
+            &token,
+            id,
+            ModifyCredentialStoreInput {
+                active: Some(true),
+                host: Some("vault.internal".to_string()),
+                path: Some("/v1".to_string()),
+                port: Some(8200),
+                comment: Some("Vault".to_string()),
+                preferences: vec![CredentialStorePreferenceInput {
+                    name: "token".to_string(),
+                    value: "write-only-token".to_string(),
+                }],
+            },
+        )
+        .await
+        .expect("credential store update");
+    adapter
+        .verify_credential_store(&token, id)
+        .await
+        .expect("credential store verification");
+
+    let history = server.command_history();
+    let modify = history
+        .iter()
+        .find(|record| record.command_name() == "modify_credential_store")
+        .expect("modify command should be recorded");
+    let xml = String::from_utf8(modify.raw_xml().to_vec()).expect("xml command");
+    assert!(xml.contains("credential_store_id=\"123e4567-e89b-12d3-a456-426614174000\""));
+    assert!(xml.contains("<host>vault.internal</host>"));
+    assert!(xml.contains("<name>token</name>"));
+    assert!(xml.contains("<value>write-only-token</value>"));
+    assert!(history
+        .iter()
+        .any(|record| record.command_name() == "verify_credential_store"));
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_store_backed_credential_create_and_update_forward_vault_references() {
+    let (adapter, server, token) = create_mock_adapter_v22_8().await;
+    server.clear_history();
+
+    let credential_id = adapter
+        .create_credential(
+            &token,
+            CreateCredentialInput {
+                name: "Vault credential".to_string(),
+                credential_type: "cs_up".to_string(),
+                credential_store_id: Some("123e4567-e89b-12d3-a456-426614174000".to_string()),
+                vault_id: Some("secret/data/service".to_string()),
+                host_identifier: Some("production".to_string()),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("store-backed credential create");
+    adapter
+        .modify_credential(
+            &token,
+            &credential_id,
+            ModifyCredentialInput {
+                vault_id: Some("secret/data/service-v2".to_string()),
+                host_identifier: Some("staging".to_string()),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("store-backed credential update");
+
+    let history = server.command_history();
+    let create = history
+        .iter()
+        .find(|record| record.command_name() == "create_credential")
+        .expect("create command should be recorded");
+    let create_xml = String::from_utf8(create.raw_xml().to_vec()).expect("xml command");
+    assert!(create_xml.contains("<type>cs_up</type>"));
+    assert!(create_xml.contains("<vault_id>secret/data/service</vault_id>"));
+    assert!(create_xml.contains("<host_identifier>production</host_identifier>"));
+    let modify = history
+        .iter()
+        .find(|record| record.command_name() == "modify_credential")
+        .expect("modify command should be recorded");
+    let modify_xml = String::from_utf8(modify.raw_xml().to_vec()).expect("xml command");
+    assert!(modify_xml.contains("<vault_id>secret/data/service-v2</vault_id>"));
+    assert!(modify_xml.contains("<host_identifier>staging</host_identifier>"));
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn gvmd_adapter_list_credential_stores_returns_not_implemented_on_v22_7() {
     let (adapter, server, token) = create_mock_adapter().await;
     server.clear_history();
@@ -3395,6 +3561,39 @@ async fn gvmd_adapter_create_task_emits_each_typed_target_variant() {
     let xml = recorded_xml(&server, "create_task");
     assert!(xml.contains("<target id=\"0\""));
     assert!(!xml.contains("<scanner"));
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_feed_filter_uses_typed_command_and_preserves_access_flags() {
+    let (adapter, server, token) = create_mock_adapter().await;
+    server.clear_history();
+
+    let feeds = adapter
+        .list_feeds(
+            &token,
+            &FeedQuery {
+                feed_type: Some("NVT".to_string()),
+            },
+        )
+        .await
+        .expect("filtered feed list");
+
+    let xml = recorded_xml(&server, "get_feeds");
+    assert!(xml.contains("type=\"NVT\""));
+    assert!(feeds.data.iter().all(|feed| feed.feed_type == "NVT"));
+
+    let error = adapter
+        .list_feeds(
+            &token,
+            &FeedQuery {
+                feed_type: Some("FUTURE".to_string()),
+            },
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, GatewayError::InvalidInput(message) if message.contains("FUTURE")));
 
     server.shutdown().await;
 }

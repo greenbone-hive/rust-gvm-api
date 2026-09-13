@@ -13,7 +13,9 @@ use axum::{
 };
 use gvm_gateway_app::GatewayService;
 use gvm_gateway_domain::{
-    CreateScanConfigInput, GatewayError, ModifyScanConfigInput, ScanConfigQuery,
+    CreateScanConfigInput, GatewayError, ModifyScanConfigInput, ScanConfigFamilySelection,
+    ScanConfigNvtQuery, ScanConfigPreference, ScanConfigPreferenceQuery, ScanConfigQuery,
+    SetScanConfigFamilySelectionInput,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -22,12 +24,15 @@ use uuid::Uuid;
 use crate::{
     dto::{parse_uuid, PaginationResponse, ResourceCreatedResponse},
     handler::{
-        create_resource, delete_resource, delete_resource_without_ultimate, get_resource,
-        list_resource, update_resource, ValidateInto,
+        create_resource, delete_resource, delete_resource_without_ultimate, gateway_error,
+        get_resource, list_resource, no_content, ok_json as response_ok_json, parse_json_body_with,
+        update_resource, ValidateInto,
     },
     open_enum::open_u32_enum,
     openapi::{created_json, ok_json, problem_response, ResourceIdPathDoc, ScanConfigListQueryDoc},
-    query::{parse_collection_query, DeleteResourceQueryParams},
+    query::{decoded_query_pairs, parse_collection_query, DeleteResourceQueryParams},
+    router::bearer_token,
+    supporting_resources::{NvtListResponse, NvtResponse},
     targets::validate_uuid,
 };
 
@@ -198,6 +203,209 @@ impl ValidateInto<ModifyScanConfigInput> for ModifyScanConfigRequest {
     }
 }
 
+#[derive(Clone, Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
+struct ScanConfigNvtQueryDoc {
+    family: Option<String>,
+    #[serde(default = "default_page_doc")]
+    #[schemars(default = "default_page_doc")]
+    #[schemars(range(min = 1))]
+    page: Option<u32>,
+    #[serde(default = "default_per_page_doc")]
+    #[schemars(default = "default_per_page_doc")]
+    #[schemars(range(min = 1, max = 1000))]
+    per_page: Option<u32>,
+}
+
+fn default_page_doc() -> Option<u32> {
+    Some(1)
+}
+
+fn default_per_page_doc() -> Option<u32> {
+    Some(25)
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
+struct ScanConfigPreferenceQueryDoc {
+    nvt_oid: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema)]
+#[allow(dead_code)]
+struct ScanConfigNvtPathDoc {
+    id: Uuid,
+    oid: String,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema)]
+#[allow(dead_code)]
+struct ScanConfigPreferencePathDoc {
+    id: Uuid,
+    name: String,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema)]
+#[allow(dead_code)]
+struct ScanConfigFamilyPathDoc {
+    id: Uuid,
+    family: String,
+}
+
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[schemars(rename = "ScanConfigPreference")]
+struct ScanConfigPreferenceResponse {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    nvt: Option<ScanConfigPreferenceNvtResponse>,
+    name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    id: Option<String>,
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    preference_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    value: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    alternatives: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    default: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+struct ScanConfigPreferenceNvtResponse {
+    oid: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+}
+
+impl From<ScanConfigPreference> for ScanConfigPreferenceResponse {
+    fn from(preference: ScanConfigPreference) -> Self {
+        Self {
+            nvt: preference.nvt.map(|nvt| ScanConfigPreferenceNvtResponse {
+                oid: nvt.oid,
+                name: nvt.name,
+            }),
+            name: preference.name,
+            id: preference.id,
+            preference_type: preference.preference_type,
+            value: preference.value,
+            alternatives: preference.alternatives,
+            default: preference.default,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[schemars(rename = "ScanConfigPreferenceList")]
+struct ScanConfigPreferenceListResponse {
+    data: Vec<ScanConfigPreferenceResponse>,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct SetNvtSelectionRequest {
+    #[schemars(length(max = 10000))]
+    nvt_oids: Vec<NvtOidRequest>,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema)]
+#[serde(transparent)]
+struct NvtOidRequest(#[schemars(length(max = 255))] String);
+
+#[derive(Clone, Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct SetFamilySelectionRequest {
+    #[schemars(length(max = 1000))]
+    families: Vec<FamilySelectionRequest>,
+    #[serde(default)]
+    auto_add_new_families: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct FamilySelectionRequest {
+    #[schemars(length(max = 512))]
+    name: String,
+    growing: bool,
+    all: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct SetPreferenceRequest {
+    #[schemars(length(max = 255))]
+    nvt_oid: Option<String>,
+    #[schemars(length(max = 65536))]
+    value: Option<String>,
+}
+
+fn parse_scan_config_nvt_query(query: &str) -> Result<ScanConfigNvtQuery, GatewayError> {
+    let mut family = None;
+    let mut page = 1;
+    let mut per_page = 25;
+    for (key, value) in decoded_query_pairs(query) {
+        match key.as_ref() {
+            "family" => family = Some(require_bounded("family", value.into_owned(), 512)?),
+            "page" => {
+                page = value.parse().map_err(|_| {
+                    GatewayError::InvalidInput("page must be a positive integer".to_string())
+                })?;
+            }
+            "perPage" | "per_page" => {
+                per_page = value.parse().map_err(|_| {
+                    GatewayError::InvalidInput("perPage must be a positive integer".to_string())
+                })?;
+            }
+            _ => {}
+        }
+    }
+    if page == 0 || per_page == 0 || per_page > 1000 {
+        return Err(GatewayError::InvalidInput(
+            "page must be at least 1 and perPage between 1 and 1000".to_string(),
+        ));
+    }
+    Ok(ScanConfigNvtQuery {
+        family,
+        page,
+        per_page,
+    })
+}
+
+fn parse_preference_query(query: &str) -> Result<ScanConfigPreferenceQuery, GatewayError> {
+    let mut nvt_oid = None;
+    for (key, value) in decoded_query_pairs(query) {
+        if key == "nvtOid" {
+            nvt_oid = Some(require_oid("nvtOid", value.into_owned())?);
+        }
+    }
+    Ok(ScanConfigPreferenceQuery { nvt_oid })
+}
+
+fn require_bounded(field: &str, value: String, max: usize) -> Result<String, GatewayError> {
+    if value.trim().is_empty() || value.len() > max {
+        return Err(GatewayError::InvalidInput(format!(
+            "{field} must contain between 1 and {max} bytes"
+        )));
+    }
+    Ok(value)
+}
+
+fn require_oid(field: &str, value: String) -> Result<String, GatewayError> {
+    if value.is_empty()
+        || value.len() > 255
+        || value.split('.').any(str::is_empty)
+        || value
+            .bytes()
+            .any(|byte| !byte.is_ascii_digit() && byte != b'.')
+    {
+        return Err(GatewayError::InvalidInput(format!(
+            "{field} must be a dotted numeric OID"
+        )));
+    }
+    Ok(value)
+}
+
 /// List scan configs handler.
 pub async fn list_scan_configs(
     State(service): State<GatewayService>,
@@ -303,6 +511,285 @@ pub async fn delete_scan_config(
     .await
 }
 
+/// List NVTs selected by a scan configuration.
+pub async fn list_scan_config_nvts(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    uri: OriginalUri,
+) -> Response {
+    let instance = uri.path().to_string();
+    if let Err(error) = validate_uuid("id", &id) {
+        return gateway_error(error, instance);
+    }
+    let query = match parse_scan_config_nvt_query(uri.query().unwrap_or("")) {
+        Ok(query) => query,
+        Err(error) => return gateway_error(error, instance),
+    };
+    let session = match bearer_token(&headers) {
+        Ok(session) => session,
+        Err(error) => return gateway_error(error, instance),
+    };
+    match service.list_scan_config_nvts(&session, &id, query).await {
+        Ok(page) => response_ok_json(NvtListResponse::from(gvm_gateway_domain::NvtPage {
+            data: page.data,
+            pagination: page.pagination,
+        })),
+        Err(error) => gateway_error(error, instance),
+    }
+}
+
+/// Fetch one NVT selected by a scan configuration.
+pub async fn get_scan_config_nvt(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    Path((id, oid)): Path<(String, String)>,
+    uri: OriginalUri,
+) -> Response {
+    let instance = uri.path().to_string();
+    if let Err(error) = validate_uuid("id", &id) {
+        return gateway_error(error, instance);
+    }
+    let oid = match require_oid("oid", oid) {
+        Ok(oid) => oid,
+        Err(error) => return gateway_error(error, instance),
+    };
+    let session = match bearer_token(&headers) {
+        Ok(session) => session,
+        Err(error) => return gateway_error(error, instance),
+    };
+    match service.get_scan_config_nvt(&session, &id, &oid).await {
+        Ok(nvt) => response_ok_json(NvtResponse::from(nvt)),
+        Err(error) => gateway_error(error, instance),
+    }
+}
+
+/// List scanner or NVT preferences for a scan configuration.
+pub async fn list_scan_config_preferences(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    uri: OriginalUri,
+) -> Response {
+    let instance = uri.path().to_string();
+    if let Err(error) = validate_uuid("id", &id) {
+        return gateway_error(error, instance);
+    }
+    let query = match parse_preference_query(uri.query().unwrap_or("")) {
+        Ok(query) => query,
+        Err(error) => return gateway_error(error, instance),
+    };
+    let session = match bearer_token(&headers) {
+        Ok(session) => session,
+        Err(error) => return gateway_error(error, instance),
+    };
+    match service
+        .list_scan_config_preferences(&session, &id, query)
+        .await
+    {
+        Ok(preferences) => response_ok_json(ScanConfigPreferenceListResponse {
+            data: preferences
+                .into_iter()
+                .map(ScanConfigPreferenceResponse::from)
+                .collect(),
+        }),
+        Err(error) => gateway_error(error, instance),
+    }
+}
+
+/// Fetch one scanner or NVT preference for a scan configuration.
+pub async fn get_scan_config_preference(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    Path((id, name)): Path<(String, String)>,
+    uri: OriginalUri,
+) -> Response {
+    let instance = uri.path().to_string();
+    if let Err(error) = validate_uuid("id", &id) {
+        return gateway_error(error, instance);
+    }
+    let name = match require_bounded("name", name, 512) {
+        Ok(name) => name,
+        Err(error) => return gateway_error(error, instance),
+    };
+    let query = match parse_preference_query(uri.query().unwrap_or("")) {
+        Ok(query) => query,
+        Err(error) => return gateway_error(error, instance),
+    };
+    let session = match bearer_token(&headers) {
+        Ok(session) => session,
+        Err(error) => return gateway_error(error, instance),
+    };
+    match service
+        .get_scan_config_preference(&session, &id, &name, query)
+        .await
+    {
+        Ok(preference) => response_ok_json(ScanConfigPreferenceResponse::from(preference)),
+        Err(error) => gateway_error(error, instance),
+    }
+}
+
+/// Replace one family's selected NVTs.
+pub async fn set_scan_config_nvt_selection(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    Path((id, family)): Path<(String, String)>,
+    uri: OriginalUri,
+    body: Bytes,
+) -> Response {
+    let instance = uri.path().to_string();
+    if let Err(error) = validate_uuid("id", &id) {
+        return gateway_error(error, instance);
+    }
+    let family = match require_bounded("family", family, 512) {
+        Ok(family) => family,
+        Err(error) => return gateway_error(error, instance),
+    };
+    let request = match parse_json_body_with::<SetNvtSelectionRequest, _>(&body, |_| {
+        GatewayError::InvalidInput("request body must be a valid NVT selection".to_string())
+    }) {
+        Ok(request) => request,
+        Err(error) => return gateway_error(error, instance),
+    };
+    if request.nvt_oids.len() > 10_000
+        || request
+            .nvt_oids
+            .iter()
+            .any(|oid| require_oid("nvtOids", oid.0.clone()).is_err())
+    {
+        return gateway_error(
+            GatewayError::InvalidInput(
+                "nvtOids must contain at most 10000 non-empty OIDs".to_string(),
+            ),
+            instance,
+        );
+    }
+    let session = match bearer_token(&headers) {
+        Ok(session) => session,
+        Err(error) => return gateway_error(error, instance),
+    };
+    match service
+        .set_scan_config_nvt_selection(
+            &session,
+            &id,
+            &family,
+            request.nvt_oids.into_iter().map(|oid| oid.0).collect(),
+        )
+        .await
+    {
+        Ok(()) => no_content(),
+        Err(error) => gateway_error(error, instance),
+    }
+}
+
+/// Replace family selection atomically.
+pub async fn set_scan_config_family_selection(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    uri: OriginalUri,
+    body: Bytes,
+) -> Response {
+    let instance = uri.path().to_string();
+    if let Err(error) = validate_uuid("id", &id) {
+        return gateway_error(error, instance);
+    }
+    let request = match parse_json_body_with::<SetFamilySelectionRequest, _>(&body, |_| {
+        GatewayError::InvalidInput("request body must be a valid family selection".to_string())
+    }) {
+        Ok(request) => request,
+        Err(error) => return gateway_error(error, instance),
+    };
+    if request.families.len() > 1_000
+        || request
+            .families
+            .iter()
+            .any(|family| family.name.trim().is_empty() || family.name.len() > 512)
+    {
+        return gateway_error(
+            GatewayError::InvalidInput(
+                "families must contain at most 1000 non-empty family names".to_string(),
+            ),
+            instance,
+        );
+    }
+    let input = SetScanConfigFamilySelectionInput {
+        families: request
+            .families
+            .into_iter()
+            .map(|family| ScanConfigFamilySelection {
+                name: family.name,
+                growing: family.growing,
+                all: family.all,
+            })
+            .collect(),
+        auto_add_new_families: request.auto_add_new_families,
+    };
+    let session = match bearer_token(&headers) {
+        Ok(session) => session,
+        Err(error) => return gateway_error(error, instance),
+    };
+    match service
+        .set_scan_config_family_selection(&session, &id, input)
+        .await
+    {
+        Ok(()) => no_content(),
+        Err(error) => gateway_error(error, instance),
+    }
+}
+
+/// Set or reset a scanner or NVT preference.
+pub async fn set_scan_config_preference(
+    State(service): State<GatewayService>,
+    headers: HeaderMap,
+    Path((id, name)): Path<(String, String)>,
+    uri: OriginalUri,
+    body: Bytes,
+) -> Response {
+    let instance = uri.path().to_string();
+    if let Err(error) = validate_uuid("id", &id) {
+        return gateway_error(error, instance);
+    }
+    let name = match require_bounded("name", name, 512) {
+        Ok(name) => name,
+        Err(error) => return gateway_error(error, instance),
+    };
+    let request = match parse_json_body_with::<SetPreferenceRequest, _>(&body, |_| {
+        GatewayError::InvalidInput("request body must be a valid preference update".to_string())
+    }) {
+        Ok(request) => request,
+        Err(error) => return gateway_error(error, instance),
+    };
+    if request
+        .nvt_oid
+        .as_ref()
+        .is_some_and(|oid| require_oid("nvtOid", oid.clone()).is_err())
+        || request
+            .value
+            .as_ref()
+            .is_some_and(|value| value.len() > 65_536)
+    {
+        return gateway_error(
+            GatewayError::InvalidInput(
+                "nvtOid must be non-empty and preference values are limited to 65536 bytes"
+                    .to_string(),
+            ),
+            instance,
+        );
+    }
+    let session = match bearer_token(&headers) {
+        Ok(session) => session,
+        Err(error) => return gateway_error(error, instance),
+    };
+    match service
+        .set_scan_config_preference(&session, &id, &name, request.nvt_oid, request.value)
+        .await
+    {
+        Ok(()) => no_content(),
+        Err(error) => gateway_error(error, instance),
+    }
+}
+
 // ============================================================================
 // OpenAPI transforms
 // ============================================================================
@@ -384,6 +871,120 @@ pub(crate) fn delete_scan_config_docs(op: TransformOperation<'_>) -> TransformOp
 
     let op = problem_response::<401>(op, "Authentication required or session expired");
     problem_response::<404>(op, "Resource not found")
+}
+
+pub(crate) fn list_scan_config_nvts_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    let op = op
+        .id("getScanConfigNvts")
+        .tag("Scan Configs")
+        .summary("List selected NVTs")
+        .description("Returns NVTs selected by this scan configuration.")
+        .security_requirement("bearerAuth")
+        .input::<(Path<ResourceIdPathDoc>, Query<ScanConfigNvtQueryDoc>)>()
+        .response_with::<200, Json<NvtListResponse>, _>(ok_json("Selected NVTs"));
+    let op = problem_response::<400>(op, "Invalid query");
+    let op = problem_response::<401>(op, "Authentication required or session expired");
+    problem_response::<404>(op, "Scan config not found")
+}
+
+pub(crate) fn get_scan_config_nvt_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    let op = op
+        .id("getScanConfigNvt")
+        .tag("Scan Configs")
+        .summary("Get a selected NVT")
+        .security_requirement("bearerAuth")
+        .input::<Path<ScanConfigNvtPathDoc>>()
+        .response_with::<200, Json<NvtResponse>, _>(ok_json("Selected NVT"));
+    let op = problem_response::<400>(op, "Invalid identifier");
+    let op = problem_response::<401>(op, "Authentication required or session expired");
+    problem_response::<404>(op, "NVT is not selected")
+}
+
+pub(crate) fn list_scan_config_preferences_docs(
+    op: TransformOperation<'_>,
+) -> TransformOperation<'_> {
+    let op = op
+        .id("getScanConfigPreferences")
+        .tag("Scan Configs")
+        .summary("List configured preferences")
+        .description("Lists scanner preferences, or NVT preferences when `nvtOid` is supplied.")
+        .security_requirement("bearerAuth")
+        .input::<(Path<ResourceIdPathDoc>, Query<ScanConfigPreferenceQueryDoc>)>()
+        .response_with::<200, Json<ScanConfigPreferenceListResponse>, _>(ok_json(
+            "Configured preferences",
+        ));
+    let op = problem_response::<400>(op, "Invalid query");
+    let op = problem_response::<401>(op, "Authentication required or session expired");
+    problem_response::<404>(op, "Scan config not found")
+}
+
+pub(crate) fn get_scan_config_preference_docs(
+    op: TransformOperation<'_>,
+) -> TransformOperation<'_> {
+    let op = op
+        .id("getScanConfigPreference")
+        .tag("Scan Configs")
+        .summary("Get a configured preference")
+        .security_requirement("bearerAuth")
+        .input::<(
+            Path<ScanConfigPreferencePathDoc>,
+            Query<ScanConfigPreferenceQueryDoc>,
+        )>()
+        .response_with::<200, Json<ScanConfigPreferenceResponse>, _>(ok_json(
+            "Configured preference",
+        ));
+    let op = problem_response::<400>(op, "Invalid query or identifier");
+    let op = problem_response::<401>(op, "Authentication required or session expired");
+    problem_response::<404>(op, "Preference not found")
+}
+
+pub(crate) fn set_scan_config_nvt_selection_docs(
+    op: TransformOperation<'_>,
+) -> TransformOperation<'_> {
+    let op = op
+        .id("setScanConfigNvtSelection")
+        .tag("Scan Configs")
+        .summary("Replace a family's NVT selection")
+        .security_requirement("bearerAuth")
+        .input::<(Path<ScanConfigFamilyPathDoc>, Json<SetNvtSelectionRequest>)>()
+        .response_with::<204, (), _>(|response| response.description("NVT selection replaced"));
+    let op = problem_response::<400>(op, "Invalid selection");
+    let op = problem_response::<401>(op, "Authentication required or session expired");
+    problem_response::<404>(op, "Scan config not found")
+}
+
+pub(crate) fn set_scan_config_family_selection_docs(
+    op: TransformOperation<'_>,
+) -> TransformOperation<'_> {
+    let op = op
+        .id("setScanConfigFamilySelection")
+        .tag("Scan Configs")
+        .summary("Replace family selection")
+        .security_requirement("bearerAuth")
+        .input::<(Path<ResourceIdPathDoc>, Json<SetFamilySelectionRequest>)>()
+        .response_with::<204, (), _>(|response| response.description("Family selection replaced"));
+    let op = problem_response::<400>(op, "Invalid selection");
+    let op = problem_response::<401>(op, "Authentication required or session expired");
+    problem_response::<404>(op, "Scan config not found")
+}
+
+pub(crate) fn set_scan_config_preference_docs(
+    op: TransformOperation<'_>,
+) -> TransformOperation<'_> {
+    let op = op
+        .id("setScanConfigPreference")
+        .tag("Scan Configs")
+        .summary("Set or reset a configured preference")
+        .description("Omit `value` to reset an NVT or scanner preference to its default.")
+        .security_requirement("bearerAuth")
+        .input::<(
+            Path<ScanConfigPreferencePathDoc>,
+            Json<SetPreferenceRequest>,
+        )>()
+        .response_with::<204, (), _>(|response| response.description("Preference updated"));
+    let op = problem_response::<400>(op, "Invalid preference update");
+    let op = problem_response::<401>(op, "Authentication required or session expired");
+    problem_response::<404>(op, "Scan config not found")
 }
 
 // ============================================================================

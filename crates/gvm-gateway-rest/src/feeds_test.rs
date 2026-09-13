@@ -3,8 +3,8 @@
 
 use serde_json::json;
 
-use super::{FeedResponse, FeedType};
-use gvm_gateway_domain::Feed;
+use super::{FeedListQuery, FeedListResponse, FeedResponse, FeedType};
+use gvm_gateway_domain::{Feed, FeedList, GatewayError};
 
 fn feed_with_type(feed_type: &str) -> Feed {
     Feed {
@@ -12,6 +12,9 @@ fn feed_with_type(feed_type: &str) -> Feed {
         name: "Feed".to_string(),
         version: "202606100000".to_string(),
         description: None,
+        status: None,
+        sync_error: None,
+        sync_timestamp: None,
         currently_syncing: false,
     }
 }
@@ -40,4 +43,42 @@ fn feed_response_preserves_known_and_unknown_types() {
 
     assert_eq!(known["type"], json!("NVT"));
     assert_eq!(unknown["type"], json!("COMMUNITY_DATA"));
+}
+
+#[test]
+fn feed_response_preserves_status_timestamp_error_and_access_state() {
+    let response = FeedListResponse::from(FeedList {
+        data: vec![Feed {
+            status: Some("current".to_string()),
+            sync_error: Some("lock unavailable".to_string()),
+            sync_timestamp: Some("2026-08-30T19:00:00Z".to_string()),
+            currently_syncing: true,
+            ..feed_with_type("NVT")
+        }],
+        feed_owner_configured: true,
+        feed_roles_configured: false,
+        feed_resources_access: true,
+    });
+
+    let json = serde_json::to_value(response).unwrap();
+    assert_eq!(json["data"][0]["status"], "current");
+    assert_eq!(json["data"][0]["syncError"], "lock unavailable");
+    assert_eq!(json["data"][0]["syncTimestamp"], "2026-08-30T19:00:00Z");
+    assert_eq!(json["data"][0]["currentlySyncing"], true);
+    assert_eq!(json["feedOwnerConfigured"], true);
+    assert_eq!(json["feedRolesConfigured"], false);
+    assert_eq!(json["feedResourcesAccess"], true);
+}
+
+#[test]
+fn feed_query_accepts_one_known_type_and_rejects_unknown_inputs() {
+    let query = FeedListQuery::try_from_query_string("type=GVMD_DATA").unwrap();
+    assert_eq!(query.feed_type.unwrap().as_str(), "GVMD_DATA");
+
+    for raw in ["type=FUTURE", "type=NVT&type=SCAP", "filter=name%3DFeed"] {
+        assert!(matches!(
+            FeedListQuery::try_from_query_string(raw),
+            Err(GatewayError::InvalidInput(_))
+        ));
+    }
 }

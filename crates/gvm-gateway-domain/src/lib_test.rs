@@ -172,6 +172,9 @@ fn credential_command_debug_redacts_secrets() {
         auth_algorithm: Some("sha1".to_string()),
         privacy_algorithm: Some("aes".to_string()),
         privacy_password: Some("create-privacy-secret".to_string()),
+        credential_store_id: None,
+        vault_id: Some("create-vault-secret".to_string()),
+        host_identifier: Some("create-host-secret".to_string()),
     };
     let modify = ModifyCredentialInput {
         name: Some("Credential".to_string()),
@@ -184,6 +187,9 @@ fn credential_command_debug_redacts_secrets() {
         auth_algorithm: Some("sha1".to_string()),
         privacy_algorithm: Some("aes".to_string()),
         privacy_password: Some("modify-privacy-secret".to_string()),
+        credential_store_id: None,
+        vault_id: Some("modify-vault-secret".to_string()),
+        host_identifier: Some("modify-host-secret".to_string()),
     };
 
     let debug = format!("{create:?}\n{modify:?}");
@@ -194,10 +200,14 @@ fn credential_command_debug_redacts_secrets() {
     assert!(!debug.contains("create-private-key-secret"));
     assert!(!debug.contains("create-community-secret"));
     assert!(!debug.contains("create-privacy-secret"));
+    assert!(!debug.contains("create-vault-secret"));
+    assert!(!debug.contains("create-host-secret"));
     assert!(!debug.contains("modify-password-secret"));
     assert!(!debug.contains("modify-private-key-secret"));
     assert!(!debug.contains("modify-community-secret"));
     assert!(!debug.contains("modify-privacy-secret"));
+    assert!(!debug.contains("modify-vault-secret"));
+    assert!(!debug.contains("modify-host-secret"));
 }
 
 /// TargetQuery defaults preserve the existing zero-value pagination behavior.

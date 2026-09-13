@@ -251,6 +251,18 @@ paths:
     $ref: './scan-configs.yaml#/paths/~1scan-configs'
   /scan-configs/{id}:
     $ref: './scan-configs.yaml#/paths/~1scan-configs~1{id}'
+  /scan-configs/{id}/nvts:
+    $ref: './scan-configs.yaml#/paths/~1scan-configs~1{id}~1nvts'
+  /scan-configs/{id}/nvts/{oid}:
+    $ref: './scan-configs.yaml#/paths/~1scan-configs~1{id}~1nvts~1{oid}'
+  /scan-configs/{id}/preferences:
+    $ref: './scan-configs.yaml#/paths/~1scan-configs~1{id}~1preferences'
+  /scan-configs/{id}/preferences/{name}:
+    $ref: './scan-configs.yaml#/paths/~1scan-configs~1{id}~1preferences~1{name}'
+  /scan-configs/{id}/families/{family}/nvts:
+    $ref: './scan-configs.yaml#/paths/~1scan-configs~1{id}~1families~1{family}~1nvts'
+  /scan-configs/{id}/family-selection:
+    $ref: './scan-configs.yaml#/paths/~1scan-configs~1{id}~1family-selection'
   /policies:
     $ref: './policies.yaml#/paths/~1policies'
   /policies/{id}:
@@ -273,6 +285,10 @@ paths:
     $ref: './schedules.yaml#/paths/~1schedules~1{id}'
   /credential-stores:
     $ref: './credentials.yaml#/paths/~1credential-stores'
+  /credential-stores/{id}:
+    $ref: './credentials.yaml#/paths/~1credential-stores~1{id}'
+  /credential-stores/{id}/actions/verify:
+    $ref: './credentials.yaml#/paths/~1credential-stores~1{id}~1actions~1verify'
   /credentials:
     $ref: './credentials.yaml#/paths/~1credentials'
   /credentials/{id}:

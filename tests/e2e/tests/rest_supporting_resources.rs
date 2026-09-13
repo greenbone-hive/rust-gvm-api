@@ -541,12 +541,12 @@ async fn assert_port_list_catalog(harness: &E2eHarness, token: &str) -> Result<(
 }
 
 async fn assert_feed_catalog(harness: &E2eHarness, token: &str) -> Result<()> {
-    let feeds = harness.list_feeds(token).await?;
+    let catalog = harness.list_feeds(token, None).await?;
     assert!(
-        !feeds.is_empty(),
+        !catalog.data.is_empty(),
         "feed status did not return any feed entries"
     );
-    for feed in feeds {
+    for feed in &catalog.data {
         assert!(
             !feed.feed_type.trim().is_empty(),
             "feed entry returned an empty type"
@@ -554,6 +554,19 @@ async fn assert_feed_catalog(harness: &E2eHarness, token: &str) -> Result<()> {
         assert!(
             !feed.name.trim().is_empty(),
             "feed entry returned an empty name"
+        );
+    }
+
+    if let Some(feed_type) = catalog
+        .data
+        .iter()
+        .map(|feed| feed.feed_type.as_str())
+        .find(|feed_type| matches!(*feed_type, "NVT" | "CERT" | "SCAP" | "GVMD_DATA"))
+    {
+        let filtered = harness.list_feeds(token, Some(feed_type)).await?;
+        assert!(
+            filtered.data.iter().all(|feed| feed.feed_type == feed_type),
+            "feed type filter returned a different feed family"
         );
     }
     Ok(())

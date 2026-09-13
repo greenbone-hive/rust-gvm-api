@@ -605,12 +605,19 @@ fn remaining_open_enum_conversions_preserve_backend_values() {
                     <type>COMMUNITY_DATA</type>
                     <name>Community Feed</name>
                     <version>202606100000</version>
+                    <status>current</status>
+                    <sync_not_available><error>Feed lock unavailable</error></sync_not_available>
+                    <currently_syncing><timestamp>2026-08-30T19:00:00Z</timestamp></currently_syncing>
                 </feed>
             </get_feeds_response>"#,
     ))
     .expect("feeds parse");
     let feed = feed_from_gmp(feeds.items.into_iter().next().unwrap());
     assert_eq!(feed.feed_type, "COMMUNITY_DATA");
+    assert_eq!(feed.status.as_deref(), Some("current"));
+    assert_eq!(feed.sync_error.as_deref(), Some("Feed lock unavailable"));
+    assert_eq!(feed.sync_timestamp.as_deref(), Some("2026-08-30T19:00:00Z"));
+    assert!(feed.currently_syncing);
 
     let alerts = GetAlertsResponse::from_response(&GmpResponse::from(
         r#"<get_alerts_response status="200" status_text="OK">
