@@ -20,15 +20,14 @@ impl CredentialPort for GvmdAdapter {
             return Err(unsupported_credential_store_error());
         }
 
-        let mut guard = client.lock().await?;
-        let parsed = match guard.get_credential_stores().await {
-            Ok(parsed) => parsed,
-            Err(error) if credential_store_capability_unavailable(&error) => {
-                return Err(unsupported_credential_store_error());
-            }
-            Err(error) => return Err(map_gvm_error(error)),
-        };
-        drop(guard);
+        let parsed = self
+            .execute_with_session_mapped(
+                session_token,
+                "credential_stores.list",
+                GetCredentialStoresRequest::new(GetCredentialStoresOpts::default()),
+                map_credential_store_error,
+            )
+            .await?;
 
         Ok(parsed
             .items
@@ -44,11 +43,14 @@ impl CredentialPort for GvmdAdapter {
     ) -> Result<CredentialStore, GatewayError> {
         let client = self.session_client(session_token)?;
         ensure_credential_stores_supported(&client)?;
-        let mut guard = client.lock().await?;
-        let parsed = guard
-            .get_credential_store(&parse_entity_id(id)?, Some(true))
-            .await
-            .map_err(map_credential_store_error)?;
+        let parsed = self
+            .execute_with_session_mapped(
+                session_token,
+                "credential_stores.get",
+                GetCredentialStoreRequest::new(parse_entity_id(id)?, Some(true)),
+                map_credential_store_error,
+            )
+            .await?;
         parsed
             .items
             .into_iter()
@@ -65,11 +67,11 @@ impl CredentialPort for GvmdAdapter {
     ) -> Result<CredentialStore, GatewayError> {
         let client = self.session_client(session_token)?;
         ensure_credential_stores_supported(&client)?;
-        let response = client
-            .lock()
-            .await?
-            .call(modify_credential_store(
-                &parse_entity_id(id)?,
+        self.execute_with_session_mapped(
+            session_token,
+            "credential_stores.modify",
+            ModifyCredentialStoreRequest::new(
+                parse_entity_id(id)?,
                 ModifyCredentialStoreOpts {
                     active: input.active,
                     host: input.host,
@@ -85,11 +87,10 @@ impl CredentialPort for GvmdAdapter {
                         })
                         .collect(),
                 },
-            ))
-            .await
-            .map_err(map_gvm_error)?;
-        let _ = ActionResponse::from_response(&response).map_err(map_parse_error)?;
-        drop(client);
+            ),
+            map_credential_store_error,
+        )
+        .await?;
         self.get_credential_store(session_token, id).await
     }
 
@@ -100,12 +101,13 @@ impl CredentialPort for GvmdAdapter {
     ) -> Result<(), GatewayError> {
         let client = self.session_client(session_token)?;
         ensure_credential_stores_supported(&client)?;
-        client
-            .lock()
-            .await?
-            .verify_credential_store(&parse_entity_id(id)?)
-            .await
-            .map_err(map_credential_store_error)?;
+        self.execute_with_session_mapped(
+            session_token,
+            "credential_stores.verify",
+            VerifyCredentialStoreRequest::new(parse_entity_id(id)?),
+            map_credential_store_error,
+        )
+        .await?;
         Ok(())
     }
 
@@ -114,7 +116,6 @@ impl CredentialPort for GvmdAdapter {
         session_token: &str,
         query: &CredentialQuery,
     ) -> Result<CredentialPage, GatewayError> {
-        let client = self.session_client(session_token)?;
         let filter_id = query
             .filter_id
             .as_deref()
@@ -134,18 +135,18 @@ impl CredentialPort for GvmdAdapter {
                 &[],
             )
             .await?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_credentials(GetCredentialsOpts {
-                filter_string,
-                filter_id: None,
-                trash: None,
-                details: Some(true),
-            }))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetCredentialsResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "credentials.list",
+                GetCredentialsRequest::new(GetCredentialsOpts {
+                    filter_string,
+                    filter_id: None,
+                    trash: None,
+                    details: Some(true),
+                }),
+            )
+            .await?;
         let items = parsed
             .items
             .into_iter()
@@ -198,65 +199,65 @@ impl CredentialPort for GvmdAdapter {
                         .to_string(),
                 )
             })?;
-            let response = client
-                .lock()
-                .await?
-                .call(create_credential_store_credential(
-                    &input.name,
-                    credential_type,
-                    vault_id,
-                    host_identifier,
-                    CredentialStoreCredentialOpts {
-                        comment: input.comment,
-                        credential_store_id: input
-                            .credential_store_id
-                            .as_deref()
-                            .map(parse_entity_id)
-                            .transpose()?,
-                    },
-                ))
-                .await
-                .map_err(map_gvm_error)?;
-            let parsed =
-                CreateCredentialResponse::from_response(&response).map_err(map_parse_error)?;
+            let parsed = self
+                .execute_with_session_mapped(
+                    session_token,
+                    "credentials.create_store_backed",
+                    CreateCredentialStoreCredentialRequest::new(
+                        input.name,
+                        credential_type,
+                        vault_id,
+                        host_identifier,
+                        CredentialStoreCredentialOpts {
+                            comment: input.comment,
+                            credential_store_id: input
+                                .credential_store_id
+                                .as_deref()
+                                .map(parse_entity_id)
+                                .transpose()?,
+                        },
+                    ),
+                    map_credential_store_error,
+                )
+                .await?;
             return Ok(parsed.id.to_string());
         }
-        let response = client
-            .lock()
-            .await?
-            .call(create_credential(
-                &input.name,
-                CredentialOpts {
-                    comment: input.comment,
-                    credential_type: Some(parse_credential_type(&input.credential_type)?),
-                    login: input.login,
-                    password: input.password,
-                    private_key: input.private_key,
-                    key_phrase: None,
-                    public_key: None,
-                    certificate: input.certificate,
-                    community: input.community,
-                    auth_algorithm: input
-                        .auth_algorithm
-                        .as_deref()
-                        .map(parse_snmp_auth_algorithm)
-                        .transpose()?,
-                    privacy_password: input.privacy_password,
-                    privacy_algorithm: input
-                        .privacy_algorithm
-                        .as_deref()
-                        .map(parse_snmp_privacy_algorithm)
-                        .transpose()?,
-                    allow_insecure: None,
-                    kdc: None,
-                    kdcs: vec![],
-                    realm: None,
-                    ..Default::default()
-                },
-            ))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = CreateCredentialResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "credentials.create",
+                CreateCredentialRequest::new(
+                    input.name,
+                    CredentialOpts {
+                        comment: input.comment,
+                        credential_type: Some(parse_credential_type(&input.credential_type)?),
+                        login: input.login,
+                        password: input.password,
+                        private_key: input.private_key,
+                        key_phrase: None,
+                        public_key: None,
+                        certificate: input.certificate,
+                        community: input.community,
+                        auth_algorithm: input
+                            .auth_algorithm
+                            .as_deref()
+                            .map(parse_snmp_auth_algorithm)
+                            .transpose()?,
+                        privacy_password: input.privacy_password,
+                        privacy_algorithm: input
+                            .privacy_algorithm
+                            .as_deref()
+                            .map(parse_snmp_privacy_algorithm)
+                            .transpose()?,
+                        allow_insecure: None,
+                        kdc: None,
+                        kdcs: vec![],
+                        realm: None,
+                        ..Default::default()
+                    },
+                ),
+            )
+            .await?;
         Ok(parsed.id.to_string())
     }
 
@@ -265,14 +266,13 @@ impl CredentialPort for GvmdAdapter {
         session_token: &str,
         id: &str,
     ) -> Result<Credential, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_credential(&parse_entity_id(id)?))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetCredentialsResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "credentials.get",
+                GetCredentialRequest::new(parse_entity_id(id)?),
+            )
+            .await?;
         parsed
             .items
             .into_iter()
@@ -303,11 +303,11 @@ impl CredentialPort for GvmdAdapter {
                 input.privacy_algorithm.as_ref(),
                 input.privacy_password.as_ref(),
             )?;
-            let response = client
-                .lock()
-                .await?
-                .call(modify_credential_store_credential(
-                    &parse_entity_id(id)?,
+            self.execute_with_session_mapped(
+                session_token,
+                "credentials.modify_store_backed",
+                ModifyCredentialStoreCredentialRequest::new(
+                    parse_entity_id(id)?,
                     ModifyCredentialStoreCredentialOpts {
                         name: input.name,
                         comment: input.comment,
@@ -319,18 +319,17 @@ impl CredentialPort for GvmdAdapter {
                         vault_id: input.vault_id,
                         host_identifier: input.host_identifier,
                     },
-                ))
-                .await
-                .map_err(map_gvm_error)?;
-            let _ = ActionResponse::from_response(&response).map_err(map_parse_error)?;
-            drop(client);
+                ),
+                map_credential_store_error,
+            )
+            .await?;
             return self.get_credential(session_token, id).await;
         }
-        let response = client
-            .lock()
-            .await?
-            .call(modify_credential(
-                &parse_entity_id(id)?,
+        self.execute_with_session(
+            session_token,
+            "credentials.modify",
+            ModifyCredentialRequest::new(
+                parse_entity_id(id)?,
                 ModifyCredentialOpts {
                     name: input.name,
                     comment: input.comment,
@@ -357,11 +356,9 @@ impl CredentialPort for GvmdAdapter {
                     kdcs: vec![],
                     realm: None,
                 },
-            ))
-            .await
-            .map_err(map_gvm_error)?;
-        let _ = ActionResponse::from_response(&response).map_err(map_parse_error)?;
-        drop(client);
+            ),
+        )
+        .await?;
         self.get_credential(session_token, id).await
     }
 
@@ -371,14 +368,12 @@ impl CredentialPort for GvmdAdapter {
         id: &str,
         ultimate: bool,
     ) -> Result<(), GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(delete_credential(&parse_entity_id(id)?, ultimate))
-            .await
-            .map_err(map_gvm_error)?;
-        let _ = ActionResponse::from_response(&response).map_err(map_parse_error)?;
+        self.execute_with_session(
+            session_token,
+            "credentials.delete",
+            DeleteCredentialRequest::new(parse_entity_id(id)?, ultimate),
+        )
+        .await?;
         Ok(())
     }
 }
@@ -454,7 +449,12 @@ fn ensure_no_local_secret_fields(
 pub(in crate::gvmd_adapter) async fn probe_credential_store_capability(
     client: &mut GmpClient<UnixSocketConnection>,
 ) -> Result<CredentialStoreProbeOutcome, gvm_client::GvmError> {
-    match client.get_credential_stores().await {
+    match client
+        .execute(GetCredentialStoresRequest::new(
+            GetCredentialStoresOpts::default(),
+        ))
+        .await
+    {
         Ok(_) => Ok(CredentialStoreProbeOutcome {
             capability: CredentialStoreCapability::Supported,
             requires_reconnect: false,

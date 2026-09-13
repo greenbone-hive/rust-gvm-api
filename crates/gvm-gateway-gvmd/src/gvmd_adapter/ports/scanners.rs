@@ -9,7 +9,6 @@ impl ScannerPort for GvmdAdapter {
         session_token: &str,
         query: &ScannerQuery,
     ) -> Result<ScannerPage, GatewayError> {
-        let client = self.session_client(session_token)?;
         let filter_id = query
             .filter_id
             .as_deref()
@@ -29,18 +28,18 @@ impl ScannerPort for GvmdAdapter {
                 &[],
             )
             .await?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_scanners(GetScannersOpts {
-                filter_string,
-                filter_id: None,
-                trash: None,
-                details: Some(true),
-            }))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetScannersResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "scanners.list",
+                GetScannersRequest::new(GetScannersOpts {
+                    filter_string,
+                    filter_id: None,
+                    trash: None,
+                    details: Some(true),
+                }),
+            )
+            .await?;
         let items = parsed
             .items
             .into_iter()
@@ -55,14 +54,13 @@ impl ScannerPort for GvmdAdapter {
     }
 
     async fn get_scanner(&self, session_token: &str, id: &str) -> Result<Scanner, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_scanner(&parse_entity_id(id)?))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetScannersResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "scanners.get",
+                GetScannerRequest::new(parse_entity_id(id)?),
+            )
+            .await?;
         parsed
             .items
             .into_iter()

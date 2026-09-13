@@ -263,6 +263,35 @@ fn migrated_task_and_report_families_stay_on_typed_execution() {
     assert_typed_section(&reports, "GetReportsRequest::new", "report family");
 }
 
+#[test]
+fn migrated_security_and_config_families_stay_on_typed_execution() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let ports_dir = manifest_dir.join("src/gvmd_adapter/ports");
+
+    for (file, request, description) in [
+        (
+            "credentials.rs",
+            "GetCredentialsRequest::new",
+            "credential family",
+        ),
+        ("scanners.rs", "GetScannersRequest::new", "scanner family"),
+        (
+            "scan_configs.rs",
+            "GetScanConfigsRequest::new",
+            "config and policy family",
+        ),
+        (
+            "port_lists.rs",
+            "GetPortListsRequest::new",
+            "port-list family",
+        ),
+    ] {
+        let contents = fs::read_to_string(ports_dir.join(file))
+            .unwrap_or_else(|error| panic!("read {description} adapter module: {error}"));
+        assert_typed_section(&contents, request, description);
+    }
+}
+
 fn section_between<'a>(contents: &'a str, start: &str, end: &str) -> &'a str {
     contents
         .split_once(start)
