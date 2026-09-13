@@ -333,6 +333,51 @@ fn migrated_identity_families_stay_on_typed_execution() {
 }
 
 #[test]
+fn remaining_adapter_families_and_raw_call_inventory_stay_typed() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let adapter_dir = manifest_dir.join("src/gvmd_adapter");
+    let ports_dir = adapter_dir.join("ports");
+
+    for (file, request, description) in [
+        ("feeds.rs", "GetFeedsRequest::new", "feed family"),
+        ("system.rs", "GetTimezonesRequest::new", "system family"),
+        ("agents.rs", "GetAgentsRequest::new", "agent family"),
+    ] {
+        let contents = fs::read_to_string(ports_dir.join(file))
+            .unwrap_or_else(|error| panic!("read {description} adapter module: {error}"));
+        assert_typed_section(&contents, request, description);
+    }
+
+    let targets =
+        fs::read_to_string(ports_dir.join("targets.rs")).expect("read target adapter module");
+    assert!(
+        targets.contains("GetOciImageTargetsRequest::new")
+            && targets.contains("GetWebApplicationTargetsRequest::new"),
+        "specialized target families must construct semantic requests"
+    );
+    assert_typed_section(&targets, "execute_with_session", "all target families");
+
+    let mut raw_calls = 0;
+    let mut manual_parsers = 0;
+    let mut raw_helpers = 0;
+    for file in rust_files(&adapter_dir) {
+        let contents = fs::read_to_string(file).expect("read production adapter source");
+        raw_calls += contents.matches(".call(").count();
+        manual_parsers += contents.matches("::from_response(").count();
+        raw_helpers += contents.matches("call_with_session").count();
+    }
+    assert_eq!(raw_calls, 2, "only the two ticket reads may remain raw");
+    assert_eq!(
+        manual_parsers, 2,
+        "only the two ticket reads may manually parse responses"
+    );
+    assert_eq!(
+        raw_helpers, 0,
+        "the obsolete raw session helper must stay removed"
+    );
+}
+
+#[test]
 fn migrated_supporting_resource_families_stay_on_typed_execution() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let ports_dir = manifest_dir.join("src/gvmd_adapter/ports");
