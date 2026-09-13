@@ -70,7 +70,7 @@ use gvm_gmp::{
             ModifyCredentialStoreCredentialRequest, ModifyCredentialStoreOpts,
             ModifyCredentialStoreRequest, VerifyCredentialStoreRequest,
         },
-        feed::{get_feed, get_feeds},
+        feed::{GetFeedRequest, GetFeedsRequest},
         filters::{
             CloneFilterRequest, CreateFilterRequest, DeleteFilterRequest, GetFilterRequest,
             GetFiltersOpts, GetFiltersRequest, ModifyFilterRequest,
@@ -91,9 +91,9 @@ use gvm_gmp::{
             GetScanConfigNvtsRequest,
         },
         oci_image_targets::{
-            clone_oci_image_target, create_oci_image_target, delete_oci_image_target,
-            get_oci_image_target, get_oci_image_targets, modify_oci_image_target,
-            CreateOciImageTargetOpts, GetOciImageTargetsOpts, ModifyOciImageTargetOpts,
+            CloneOciImageTargetRequest, CreateOciImageTargetOpts, CreateOciImageTargetRequest,
+            DeleteOciImageTargetRequest, GetOciImageTargetRequest, GetOciImageTargetsOpts,
+            GetOciImageTargetsRequest, ModifyOciImageTargetOpts, ModifyOciImageTargetRequest,
         },
         operating_systems::{
             DeleteOperatingSystemAssetRequest, GetOperatingSystemAssetRequest,
@@ -144,7 +144,7 @@ use gvm_gmp::{
             GetCpesRequest, GetCveRequest, GetCvesRequest, GetDfnCertAdvisoriesRequest,
             GetDfnCertAdvisoryRequest, GetSecInfoOpts,
         },
-        system::{get_timezones, FilteredGetOpts, GetVulnsRequest},
+        system::{FilteredGetOpts, GetTimezonesRequest, GetVulnsRequest},
         tags::{
             CloneTagRequest, CreateTagRequest, DeleteTagRequest, GetTagRequest, GetTagsOpts,
             GetTagsRequest, ModifyTagRequest,
@@ -177,22 +177,18 @@ use gvm_gmp::{
             ModifyUserOpts, ModifyUserRequest, UserHostAccess, UserOpts,
         },
         web_application_targets::{
-            clone_web_application_target, create_web_application_target,
-            delete_web_application_target, get_web_application_target, get_web_application_targets,
-            modify_web_application_target, CreateWebApplicationTargetOpts,
-            GetWebApplicationTargetsOpts, ModifyWebApplicationTargetOpts,
+            CloneWebApplicationTargetRequest, CreateWebApplicationTargetOpts,
+            CreateWebApplicationTargetRequest, DeleteWebApplicationTargetRequest,
+            GetWebApplicationTargetRequest, GetWebApplicationTargetsOpts,
+            GetWebApplicationTargetsRequest, ModifyWebApplicationTargetOpts,
+            ModifyWebApplicationTargetRequest,
         },
     },
-    responses::{
-        ActionResponse, CreateOciImageTargetResponse, CreateWebApplicationTargetResponse,
-        GetFeedsResponse, GetOciImageTargetsResponse, GetTicketsResponse, GetTimezonesResponse,
-        GetWebApplicationTargetsResponse, User as GmpUser,
-    },
+    responses::{GetTicketsResponse, User as GmpUser},
     CollectionUpdate, CredentialStoreCredentialType, EntityId, GmpRequest,
     Pagination as GmpPagination, ScalarUpdate, TargetHost, TargetHosts, TargetPortRange,
     TargetPortSelection,
 };
-use gvm_protocol::{Request, Response};
 use tracing::{field, info_span, Instrument};
 
 mod filters;
@@ -360,36 +356,6 @@ impl GvmdAdapter {
             .get(&SessionTokenDigest::from_token(session_token))
             .cloned()
             .ok_or_else(|| GatewayError::SessionInvalidated("missing gvmd session".to_string()))
-    }
-
-    async fn call_with_session<R: Request>(
-        &self,
-        session_token: &str,
-        operation: &'static str,
-        request: R,
-    ) -> Result<Response, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let span = info_span!(
-            "gvmd.request",
-            otel_name = "gvmd.request",
-            session_id = %safe_session_id(session_token),
-            gvmd_operation = operation,
-            gvmd_endpoint = %self.socket_path.display(),
-            gvmd_status = field::Empty,
-        );
-
-        async move {
-            let response = client
-                .lock()
-                .await?
-                .call(request)
-                .await
-                .map_err(map_gvm_error)?;
-            tracing::Span::current().record("gvmd_status", field::display("ok"));
-            Ok(response)
-        }
-        .instrument(span)
-        .await
     }
 
     async fn execute_with_session<R: GmpRequest>(

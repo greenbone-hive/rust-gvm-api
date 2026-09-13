@@ -22,14 +22,9 @@ impl SystemPort for GvmdAdapter {
     }
 
     async fn list_timezones(&self, session_token: &str) -> Result<Vec<Timezone>, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_timezones())
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetTimezonesResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(session_token, "timezones.list", GetTimezonesRequest::new())
+            .await?;
 
         Ok(parsed.items.into_iter().map(timezone_from_gmp).collect())
     }
