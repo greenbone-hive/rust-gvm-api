@@ -292,6 +292,59 @@ fn migrated_security_and_config_families_stay_on_typed_execution() {
     }
 }
 
+#[test]
+fn migrated_supporting_resource_families_stay_on_typed_execution() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let ports_dir = manifest_dir.join("src/gvmd_adapter/ports");
+    let supporting = fs::read_to_string(ports_dir.join("supporting_resources.rs"))
+        .expect("read supporting-resource adapter module");
+
+    for request in [
+        "GetAssetsRequest::new",
+        "GetHostsRequest::new",
+        "GetOperatingSystemAssetsRequest::new",
+        "GetTlsCertificatesRequest::new",
+        "GetReportFormatsRequest::new",
+        "GetFiltersRequest::new",
+        "GetTagsRequest::new",
+        "GetNotesRequest::new",
+        "GetOverridesRequest::new",
+        "GetNvtsRequest::new",
+        "GetVulnsRequest::new",
+        "GetCvesRequest::new",
+    ] {
+        assert!(
+            supporting.contains(request),
+            "supporting-resource operations must use semantic request {request}"
+        );
+    }
+    assert!(
+        !supporting.contains("call_with_session"),
+        "supporting resources must not use the raw session helper"
+    );
+    assert_eq!(
+        supporting.matches(".call(").count(),
+        2,
+        "only the two documented ticket operations may use raw calls"
+    );
+    assert_eq!(
+        supporting
+            .matches("GetTicketsResponse::from_response")
+            .count(),
+        2,
+        "only the two documented ticket operations may parse raw responses"
+    );
+    assert!(
+        supporting.contains("rust-gvm does not expose semantic ticket requests yet")
+            && supporting.contains("rust-gvm does not expose a semantic ticket detail request yet"),
+        "the remaining raw ticket operations must stay explicitly documented"
+    );
+
+    let results =
+        fs::read_to_string(ports_dir.join("results.rs")).expect("read result adapter module");
+    assert_typed_section(&results, "GetResultsRequest::new", "result family");
+}
+
 fn section_between<'a>(contents: &'a str, start: &str, end: &str) -> &'a str {
     contents
         .split_once(start)

@@ -44,7 +44,6 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         query: &AssetQuery,
     ) -> Result<GenericAssetPage, GatewayError> {
-        let client = self.session_client(session_token)?;
         let filter_id = query
             .filter_id
             .as_deref()
@@ -64,21 +63,21 @@ impl SupportingResourcePort for GvmdAdapter {
                 &[],
             )
             .await?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_assets(GetAssetsOpts {
-                asset_id: None,
-                asset_type: None,
-                type_: Some(parse_asset_type(&query.asset_type)),
-                filter_string,
-                filter_id: None,
-                trash: None,
-                details: Some(true),
-            }))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetAssetsResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "assets.list",
+                GetAssetsRequest::new(GetAssetsOpts {
+                    asset_id: None,
+                    asset_type: None,
+                    type_: Some(parse_asset_type(&query.asset_type)),
+                    filter_string,
+                    filter_id: None,
+                    trash: None,
+                    details: Some(true),
+                }),
+            )
+            .await?;
         let mut items = parsed
             .items
             .into_iter()
@@ -104,22 +103,13 @@ impl SupportingResourcePort for GvmdAdapter {
         id: &str,
         asset_type: &str,
     ) -> Result<GenericAsset, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_assets(GetAssetsOpts {
-                asset_id: Some(parse_entity_id(id)?),
-                asset_type: None,
-                type_: Some(parse_asset_type(asset_type)),
-                filter_string: None,
-                filter_id: None,
-                trash: None,
-                details: Some(true),
-            }))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetAssetsResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "assets.get",
+                GetAssetRequest::new(parse_entity_id(id)?, parse_asset_type(asset_type)),
+            )
+            .await?;
         parsed
             .items
             .into_iter()
@@ -136,37 +126,29 @@ impl SupportingResourcePort for GvmdAdapter {
         asset_type: &str,
         input: ModifyAssetInput,
     ) -> Result<GenericAsset, GatewayError> {
-        let client = self.session_client(session_token)?;
         let asset_id = parse_entity_id(id)?;
-        let response = client
-            .lock()
-            .await?
-            .call(modify_asset(
-                &asset_id,
+        self.execute_with_session(
+            session_token,
+            "assets.modify",
+            ModifyAssetRequest::new(
+                asset_id,
                 ModifyAssetOpts {
                     comment: input.comment,
                     value: None,
                 },
-            ))
-            .await
-            .map_err(map_gvm_error)?;
-        ActionResponse::from_response(&response).map_err(map_parse_error)?;
-        drop(client);
+            ),
+        )
+        .await?;
         self.get_asset(session_token, id, asset_type).await
     }
 
     async fn delete_asset(&self, session_token: &str, id: &str) -> Result<(), GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(delete_asset(
-                &parse_entity_id(id)?,
-                DeleteAssetOpts::default(),
-            ))
-            .await
-            .map_err(map_gvm_error)?;
-        ActionResponse::from_response(&response).map_err(map_parse_error)?;
+        self.execute_with_session(
+            session_token,
+            "assets.delete",
+            DeleteAssetRequest::new(parse_entity_id(id)?, DeleteAssetOpts::default()),
+        )
+        .await?;
         Ok(())
     }
 
@@ -175,7 +157,6 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         query: &SupportingResourceQuery,
     ) -> Result<HostPage, GatewayError> {
-        let client = self.session_client(session_token)?;
         let filter_id = query
             .filter_id
             .as_deref()
@@ -195,18 +176,18 @@ impl SupportingResourcePort for GvmdAdapter {
                 &[],
             )
             .await?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_hosts(GetHostsOpts {
-                filter_string,
-                filter_id: None,
-                trash: None,
-                details: Some(true),
-            }))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetHostsResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "hosts.list",
+                GetHostsRequest::new(GetHostsOpts {
+                    filter_string,
+                    filter_id: None,
+                    trash: None,
+                    details: Some(true),
+                }),
+            )
+            .await?;
         let mut items = parsed
             .items
             .into_iter()
@@ -227,14 +208,13 @@ impl SupportingResourcePort for GvmdAdapter {
     }
 
     async fn get_host(&self, session_token: &str, id: &str) -> Result<Host, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_host(&parse_entity_id(id)?))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetHostsResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "hosts.get",
+                GetHostRequest::new(parse_entity_id(id)?),
+            )
+            .await?;
         parsed
             .items
             .into_iter()
@@ -248,7 +228,6 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         query: &SupportingResourceQuery,
     ) -> Result<OperatingSystemPage, GatewayError> {
-        let client = self.session_client(session_token)?;
         let filter_id = query
             .filter_id
             .as_deref()
@@ -268,18 +247,17 @@ impl SupportingResourcePort for GvmdAdapter {
                 &[],
             )
             .await?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_operating_systems(GetOperatingSystemsOpts {
-                filter_string,
-                filter_id: None,
-                details: Some(true),
-            }))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed =
-            GetOperatingSystemAssetsResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "operating_systems.list",
+                GetOperatingSystemAssetsRequest::new(GetOperatingSystemsOpts {
+                    filter_string,
+                    filter_id: None,
+                    details: Some(true),
+                }),
+            )
+            .await?;
         let items = parsed
             .items
             .into_iter()
@@ -297,15 +275,13 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         id: &str,
     ) -> Result<OperatingSystem, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_operating_system(&parse_entity_id(id)?, Some(true)))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed =
-            GetOperatingSystemAssetsResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "operating_systems.get",
+                GetOperatingSystemAssetRequest::new(parse_entity_id(id)?, Some(true)),
+            )
+            .await?;
         parsed
             .items
             .into_iter()
@@ -319,7 +295,6 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         query: &SupportingResourceQuery,
     ) -> Result<TlsCertificateAssetPage, GatewayError> {
-        let client = self.session_client(session_token)?;
         let filter_id = query
             .filter_id
             .as_deref()
@@ -339,19 +314,18 @@ impl SupportingResourcePort for GvmdAdapter {
                 &[],
             )
             .await?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_tls_certificates(GetTlsCertificatesOpts {
-                filter_string,
-                filter_id: None,
-                trash: None,
-                details: Some(true),
-            }))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed =
-            GetTlsCertificatesResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "tls_certificates.list",
+                GetTlsCertificatesRequest::new(GetTlsCertificatesOpts {
+                    filter_string,
+                    filter_id: None,
+                    trash: None,
+                    details: Some(true),
+                }),
+            )
+            .await?;
         let items = parsed
             .items
             .into_iter()
@@ -369,15 +343,13 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         id: &str,
     ) -> Result<TlsCertificateAsset, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_tls_certificate(&parse_entity_id(id)?))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed =
-            GetTlsCertificatesResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "tls_certificates.get",
+                GetTlsCertificateRequest::new(parse_entity_id(id)?),
+            )
+            .await?;
         parsed
             .items
             .into_iter()
@@ -391,14 +363,13 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         input: CreateHostInput,
     ) -> Result<String, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(create_host(host_opts_from_create_input(input)))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = CreateHostResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "hosts.create",
+                CreateHostRequest::new(host_opts_from_create_input(input)),
+            )
+            .await?;
         Ok(parsed.id.to_string())
     }
 
@@ -408,15 +379,13 @@ impl SupportingResourcePort for GvmdAdapter {
         id: &str,
         input: ModifyHostInput,
     ) -> Result<Host, GatewayError> {
-        let client = self.session_client(session_token)?;
         let host_id = parse_entity_id(id)?;
-        let response = client
-            .lock()
-            .await?
-            .call(modify_host(&host_id, host_opts_from_modify_input(input)))
-            .await
-            .map_err(map_gvm_error)?;
-        ActionResponse::from_response(&response).map_err(map_parse_error)?;
+        self.execute_with_session(
+            session_token,
+            "hosts.modify",
+            ModifyHostRequest::new(host_id, host_opts_from_modify_input(input)),
+        )
+        .await?;
         self.get_host(session_token, id).await
     }
 
@@ -426,32 +395,25 @@ impl SupportingResourcePort for GvmdAdapter {
         id: &str,
         input: ModifyOperatingSystemInput,
     ) -> Result<OperatingSystem, GatewayError> {
-        let client = self.session_client(session_token)?;
         let operating_system_id = parse_entity_id(id)?;
-        let response = client
-            .lock()
-            .await?
-            .call(modify_operating_system(
-                &operating_system_id,
-                input.comment.as_deref(),
-            ))
-            .await
-            .map_err(map_gvm_error)?;
-        ActionResponse::from_response(&response).map_err(map_parse_error)?;
+        self.execute_with_session(
+            session_token,
+            "operating_systems.modify",
+            ModifyOperatingSystemAssetRequest::new(operating_system_id, input.comment),
+        )
+        .await?;
         self.get_operating_system(session_token, id).await
     }
 
     async fn delete_host(&self, session_token: &str, id: &str) -> Result<(), GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            // The gvmd host-asset delete command ignores an ultimate flag, so a
-            // plain delete is always issued.
-            .call(delete_host(&parse_entity_id(id)?, false))
-            .await
-            .map_err(map_gvm_error)?;
-        ActionResponse::from_response(&response).map_err(map_parse_error)?;
+        // The gvmd host-asset delete command ignores an ultimate flag, so a
+        // plain delete is always issued.
+        self.execute_with_session(
+            session_token,
+            "hosts.delete",
+            DeleteHostRequest::new(parse_entity_id(id)?, false),
+        )
+        .await?;
         Ok(())
     }
 
@@ -460,13 +422,11 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         id: &str,
     ) -> Result<(), GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(delete_operating_system(&parse_entity_id(id)?))
-            .await
-            .map_err(|error| match error {
+        self.execute_with_session_mapped(
+            session_token,
+            "operating_systems.delete",
+            DeleteOperatingSystemAssetRequest::new(parse_entity_id(id)?),
+            |error| match error {
                 // The typed OS delete command has no client-controlled option
                 // beyond its already validated ID. gvmd uses status 400 when
                 // the asset is still in use, which is a resource conflict at
@@ -474,10 +434,15 @@ impl SupportingResourcePort for GvmdAdapter {
                 gvm_client::GvmError::Server {
                     status: 400,
                     message,
-                } => GatewayError::Conflict(message),
+                }
+                | gvm_client::GvmError::Parse(gvm_gmp::responses::ParseError::ServerError {
+                    status: 400,
+                    message,
+                }) => GatewayError::Conflict(message),
                 other => map_gvm_error(other),
-            })?;
-        ActionResponse::from_response(&response).map_err(map_parse_error)?;
+            },
+        )
+        .await?;
         Ok(())
     }
 
@@ -486,7 +451,6 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         query: &SupportingResourceQuery,
     ) -> Result<ReportFormatPage, GatewayError> {
-        let client = self.session_client(session_token)?;
         let filter_id = query
             .filter_id
             .as_deref()
@@ -506,18 +470,18 @@ impl SupportingResourcePort for GvmdAdapter {
                 &[],
             )
             .await?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_report_formats(GetReportFormatsOpts {
-                filter_string,
-                filter_id: None,
-                trash: None,
-                details: Some(true),
-            }))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetReportFormatsResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "report_formats.list",
+                GetReportFormatsRequest::new(GetReportFormatsOpts {
+                    filter_string,
+                    filter_id: None,
+                    trash: None,
+                    details: Some(true),
+                }),
+            )
+            .await?;
         let items = parsed
             .items
             .into_iter()
@@ -535,14 +499,13 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         id: &str,
     ) -> Result<ReportFormat, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_report_format(&parse_entity_id(id)?))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetReportFormatsResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "report_formats.get",
+                GetReportFormatRequest::new(parse_entity_id(id)?),
+            )
+            .await?;
         parsed
             .items
             .into_iter()
@@ -556,7 +519,6 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         query: &SupportingResourceQuery,
     ) -> Result<FilterPage, GatewayError> {
-        let client = self.session_client(session_token)?;
         let filter_id = query
             .filter_id
             .as_deref()
@@ -576,18 +538,18 @@ impl SupportingResourcePort for GvmdAdapter {
                 &[],
             )
             .await?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_filters(GetFiltersOpts {
-                filter_string,
-                filter_id: None,
-                trash: None,
-                details: Some(true),
-            }))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetFiltersResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "filters.list",
+                GetFiltersRequest::new(GetFiltersOpts {
+                    filter_string,
+                    filter_id: None,
+                    trash: None,
+                    details: Some(true),
+                }),
+            )
+            .await?;
         let items = parsed
             .items
             .into_iter()
@@ -601,14 +563,13 @@ impl SupportingResourcePort for GvmdAdapter {
     }
 
     async fn get_filter(&self, session_token: &str, id: &str) -> Result<Filter, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_filter(&parse_entity_id(id)?))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetFiltersResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "filters.get",
+                GetFilterRequest::new(parse_entity_id(id)?),
+            )
+            .await?;
         parsed
             .items
             .into_iter()
@@ -622,16 +583,15 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         input: CreateFilterInput,
     ) -> Result<String, GatewayError> {
-        let client = self.session_client(session_token)?;
         let name = input.name.clone();
         let opts = filter_opts_from_create_input(input)?;
-        let response = client
-            .lock()
-            .await?
-            .call(create_filter(&name, opts))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = CreateFilterResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "filters.create",
+                CreateFilterRequest::new(name, opts),
+            )
+            .await?;
         Ok(parsed.id.to_string())
     }
 
@@ -641,18 +601,13 @@ impl SupportingResourcePort for GvmdAdapter {
         id: &str,
         input: ModifyFilterInput,
     ) -> Result<Filter, GatewayError> {
-        let client = self.session_client(session_token)?;
         let filter_id = parse_entity_id(id)?;
-        let response = client
-            .lock()
-            .await?
-            .call(modify_filter(
-                &filter_id,
-                filter_opts_from_modify_input(input)?,
-            ))
-            .await
-            .map_err(map_gvm_error)?;
-        ActionResponse::from_response(&response).map_err(map_parse_error)?;
+        self.execute_with_session(
+            session_token,
+            "filters.modify",
+            ModifyFilterRequest::new(filter_id, filter_opts_from_modify_input(input)?),
+        )
+        .await?;
         self.get_filter(session_token, id).await
     }
 
@@ -662,26 +617,23 @@ impl SupportingResourcePort for GvmdAdapter {
         id: &str,
         ultimate: bool,
     ) -> Result<(), GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(delete_filter(&parse_entity_id(id)?, ultimate))
-            .await
-            .map_err(map_gvm_error)?;
-        ActionResponse::from_response(&response).map_err(map_parse_error)?;
+        self.execute_with_session(
+            session_token,
+            "filters.delete",
+            DeleteFilterRequest::new(parse_entity_id(id)?, ultimate),
+        )
+        .await?;
         Ok(())
     }
 
     async fn clone_filter(&self, session_token: &str, id: &str) -> Result<String, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(clone_filter(&parse_entity_id(id)?))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = CreateFilterResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "filters.clone",
+                CloneFilterRequest::new(parse_entity_id(id)?),
+            )
+            .await?;
         Ok(parsed.id.to_string())
     }
 
@@ -690,7 +642,6 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         query: &SupportingResourceQuery,
     ) -> Result<TagPage, GatewayError> {
-        let client = self.session_client(session_token)?;
         let filter_id = query
             .filter_id
             .as_deref()
@@ -710,18 +661,18 @@ impl SupportingResourcePort for GvmdAdapter {
                 &[],
             )
             .await?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_tags(GetTagsOpts {
-                filter_string,
-                filter_id: None,
-                trash: None,
-                details: Some(true),
-            }))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetTagsResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "tags.list",
+                GetTagsRequest::new(GetTagsOpts {
+                    filter_string,
+                    filter_id: None,
+                    trash: None,
+                    details: Some(true),
+                }),
+            )
+            .await?;
         let items = parsed
             .items
             .into_iter()
@@ -735,14 +686,13 @@ impl SupportingResourcePort for GvmdAdapter {
     }
 
     async fn get_tag(&self, session_token: &str, id: &str) -> Result<Tag, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_tag(&parse_entity_id(id)?))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetTagsResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "tags.get",
+                GetTagRequest::new(parse_entity_id(id)?),
+            )
+            .await?;
         parsed
             .items
             .into_iter()
@@ -756,16 +706,15 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         input: CreateTagInput,
     ) -> Result<String, GatewayError> {
-        let client = self.session_client(session_token)?;
         let name = input.name.clone();
         let opts = tag_opts_from_create_input(input)?;
-        let response = client
-            .lock()
-            .await?
-            .call(create_tag(&name, opts))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = CreateTagResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "tags.create",
+                CreateTagRequest::new(name, opts),
+            )
+            .await?;
         Ok(parsed.id.to_string())
     }
 
@@ -775,15 +724,13 @@ impl SupportingResourcePort for GvmdAdapter {
         id: &str,
         input: ModifyTagInput,
     ) -> Result<Tag, GatewayError> {
-        let client = self.session_client(session_token)?;
         let tag_id = parse_entity_id(id)?;
-        let response = client
-            .lock()
-            .await?
-            .call(modify_tag(&tag_id, tag_opts_from_modify_input(input)?))
-            .await
-            .map_err(map_gvm_error)?;
-        ActionResponse::from_response(&response).map_err(map_parse_error)?;
+        self.execute_with_session(
+            session_token,
+            "tags.modify",
+            ModifyTagRequest::new(tag_id, tag_opts_from_modify_input(input)?),
+        )
+        .await?;
         self.get_tag(session_token, id).await
     }
 
@@ -793,26 +740,23 @@ impl SupportingResourcePort for GvmdAdapter {
         id: &str,
         ultimate: bool,
     ) -> Result<(), GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(delete_tag(&parse_entity_id(id)?, ultimate))
-            .await
-            .map_err(map_gvm_error)?;
-        ActionResponse::from_response(&response).map_err(map_parse_error)?;
+        self.execute_with_session(
+            session_token,
+            "tags.delete",
+            DeleteTagRequest::new(parse_entity_id(id)?, ultimate),
+        )
+        .await?;
         Ok(())
     }
 
     async fn clone_tag(&self, session_token: &str, id: &str) -> Result<String, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(clone_tag(&parse_entity_id(id)?))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = CreateTagResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "tags.clone",
+                CloneTagRequest::new(parse_entity_id(id)?),
+            )
+            .await?;
         Ok(parsed.id.to_string())
     }
 
@@ -821,6 +765,7 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         query: &SupportingResourceQuery,
     ) -> Result<TicketPage, GatewayError> {
+        // rust-gvm does not expose semantic ticket requests yet.
         let client = self.session_client(session_token)?;
         let filter_id = query
             .filter_id
@@ -866,6 +811,7 @@ impl SupportingResourcePort for GvmdAdapter {
     }
 
     async fn get_ticket(&self, session_token: &str, id: &str) -> Result<Ticket, GatewayError> {
+        // rust-gvm does not expose a semantic ticket detail request yet.
         let client = self.session_client(session_token)?;
         let response = client
             .lock()
@@ -887,7 +833,6 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         query: &SupportingResourceQuery,
     ) -> Result<NotePage, GatewayError> {
-        let client = self.session_client(session_token)?;
         let filter_id = query
             .filter_id
             .as_deref()
@@ -907,19 +852,19 @@ impl SupportingResourcePort for GvmdAdapter {
                 &[],
             )
             .await?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_notes(GetNotesOpts {
-                filter_string,
-                filter_id: None,
-                trash: None,
-                details: Some(true),
-                result: Some(true),
-            }))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetNotesResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "notes.list",
+                GetNotesRequest::new(GetNotesOpts {
+                    filter_string,
+                    filter_id: None,
+                    trash: None,
+                    details: Some(true),
+                    result: Some(true),
+                }),
+            )
+            .await?;
         let items = parsed.items;
         let total = gvmd_total(parsed.counts.filtered, parsed.counts.total, items.len());
         let data = items.into_iter().map(note_from_gmp).collect();
@@ -930,22 +875,21 @@ impl SupportingResourcePort for GvmdAdapter {
     }
 
     async fn get_note(&self, session_token: &str, id: &str) -> Result<Note, GatewayError> {
-        let client = self.session_client(session_token)?;
         let note_id = parse_entity_id(id)?;
         let uuid_filter = format!("uuid={}", note_id.as_str());
-        let response = client
-            .lock()
-            .await?
-            .call(get_notes(GetNotesOpts {
-                filter_string: paginated_filter(Some(&uuid_filter), None, 1, 1)?,
-                filter_id: None,
-                trash: None,
-                details: Some(true),
-                result: Some(true),
-            }))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetNotesResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "notes.get",
+                GetNotesRequest::new(GetNotesOpts {
+                    filter_string: paginated_filter(Some(&uuid_filter), None, 1, 1)?,
+                    filter_id: None,
+                    trash: None,
+                    details: Some(true),
+                    result: Some(true),
+                }),
+            )
+            .await?;
         parsed
             .items
             .into_iter()
@@ -959,16 +903,15 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         input: CreateNoteInput,
     ) -> Result<String, GatewayError> {
-        let client = self.session_client(session_token)?;
         let nvt_oid = input.nvt_oid.clone();
         let opts = note_opts_from_create_input(input)?;
-        let response = client
-            .lock()
-            .await?
-            .call(create_note(&nvt_oid, opts))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = CreateNoteResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "notes.create",
+                CreateNoteRequest::new(nvt_oid, opts),
+            )
+            .await?;
         Ok(parsed.id.to_string())
     }
 
@@ -978,15 +921,13 @@ impl SupportingResourcePort for GvmdAdapter {
         id: &str,
         input: ModifyNoteInput,
     ) -> Result<Note, GatewayError> {
-        let client = self.session_client(session_token)?;
         let note_id = parse_entity_id(id)?;
-        let response = client
-            .lock()
-            .await?
-            .call(modify_note(&note_id, note_opts_from_modify_input(input)?))
-            .await
-            .map_err(map_gvm_error)?;
-        ActionResponse::from_response(&response).map_err(map_parse_error)?;
+        self.execute_with_session(
+            session_token,
+            "notes.modify",
+            ModifyNoteRequest::new(note_id, note_opts_from_modify_input(input)?),
+        )
+        .await?;
         self.get_note(session_token, id).await
     }
 
@@ -996,14 +937,12 @@ impl SupportingResourcePort for GvmdAdapter {
         id: &str,
         ultimate: bool,
     ) -> Result<(), GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(delete_note(&parse_entity_id(id)?, ultimate))
-            .await
-            .map_err(map_gvm_error)?;
-        ActionResponse::from_response(&response).map_err(map_parse_error)?;
+        self.execute_with_session(
+            session_token,
+            "notes.delete",
+            DeleteNoteRequest::new(parse_entity_id(id)?, ultimate),
+        )
+        .await?;
         Ok(())
     }
 
@@ -1012,7 +951,6 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         query: &SupportingResourceQuery,
     ) -> Result<OverridePage, GatewayError> {
-        let client = self.session_client(session_token)?;
         let filter_id = query
             .filter_id
             .as_deref()
@@ -1032,19 +970,19 @@ impl SupportingResourcePort for GvmdAdapter {
                 &[],
             )
             .await?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_overrides(GetOverridesOpts {
-                filter_string,
-                filter_id: None,
-                trash: None,
-                details: Some(true),
-                result: Some(true),
-            }))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetOverridesResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "overrides.list",
+                GetOverridesRequest::new(GetOverridesOpts {
+                    filter_string,
+                    filter_id: None,
+                    trash: None,
+                    details: Some(true),
+                    result: Some(true),
+                }),
+            )
+            .await?;
         let items = parsed.items;
         let total = gvmd_total(parsed.counts.filtered, parsed.counts.total, items.len());
         let data = items.into_iter().map(override_from_gmp).collect();
@@ -1055,22 +993,21 @@ impl SupportingResourcePort for GvmdAdapter {
     }
 
     async fn get_override(&self, session_token: &str, id: &str) -> Result<Override, GatewayError> {
-        let client = self.session_client(session_token)?;
         let override_id = parse_entity_id(id)?;
         let uuid_filter = format!("uuid={}", override_id.as_str());
-        let response = client
-            .lock()
-            .await?
-            .call(get_overrides(GetOverridesOpts {
-                filter_string: paginated_filter(Some(&uuid_filter), None, 1, 1)?,
-                filter_id: None,
-                trash: None,
-                details: Some(true),
-                result: Some(true),
-            }))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetOverridesResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "overrides.get",
+                GetOverridesRequest::new(GetOverridesOpts {
+                    filter_string: paginated_filter(Some(&uuid_filter), None, 1, 1)?,
+                    filter_id: None,
+                    trash: None,
+                    details: Some(true),
+                    result: Some(true),
+                }),
+            )
+            .await?;
         parsed
             .items
             .into_iter()
@@ -1084,16 +1021,15 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         input: CreateOverrideInput,
     ) -> Result<String, GatewayError> {
-        let client = self.session_client(session_token)?;
         let nvt_oid = input.nvt_oid.clone();
         let opts = override_opts_from_create_input(input)?;
-        let response = client
-            .lock()
-            .await?
-            .call(create_override(&nvt_oid, opts))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = CreateOverrideResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "overrides.create",
+                CreateOverrideRequest::new(nvt_oid, opts),
+            )
+            .await?;
         Ok(parsed.id.to_string())
     }
 
@@ -1103,18 +1039,13 @@ impl SupportingResourcePort for GvmdAdapter {
         id: &str,
         input: ModifyOverrideInput,
     ) -> Result<Override, GatewayError> {
-        let client = self.session_client(session_token)?;
         let override_id = parse_entity_id(id)?;
-        let response = client
-            .lock()
-            .await?
-            .call(modify_override(
-                &override_id,
-                override_opts_from_modify_input(input)?,
-            ))
-            .await
-            .map_err(map_gvm_error)?;
-        ActionResponse::from_response(&response).map_err(map_parse_error)?;
+        self.execute_with_session(
+            session_token,
+            "overrides.modify",
+            ModifyOverrideRequest::new(override_id, override_opts_from_modify_input(input)?),
+        )
+        .await?;
         self.get_override(session_token, id).await
     }
 
@@ -1124,14 +1055,12 @@ impl SupportingResourcePort for GvmdAdapter {
         id: &str,
         ultimate: bool,
     ) -> Result<(), GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(delete_override(&parse_entity_id(id)?, ultimate))
-            .await
-            .map_err(map_gvm_error)?;
-        ActionResponse::from_response(&response).map_err(map_parse_error)?;
+        self.execute_with_session(
+            session_token,
+            "overrides.delete",
+            DeleteOverrideRequest::new(parse_entity_id(id)?, ultimate),
+        )
+        .await?;
         Ok(())
     }
 
@@ -1140,7 +1069,6 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         query: &NvtQuery,
     ) -> Result<NvtPage, GatewayError> {
-        let client = self.session_client(session_token)?;
         let filter_id = query
             .filter_id
             .as_deref()
@@ -1160,13 +1088,13 @@ impl SupportingResourcePort for GvmdAdapter {
                 &[],
             )
             .await?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_nvts(nvt_opts(query, filter_string)?))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetNvtsResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "nvts.list",
+                GetNvtsRequest::new(nvt_opts(query, filter_string)?),
+            )
+            .await?;
         let mut items = parsed
             .items
             .into_iter()
@@ -1182,11 +1110,11 @@ impl SupportingResourcePort for GvmdAdapter {
         if needs_client_side_pagination_fallback(&items, total, query.page)
             || backend_ignored_pagination(&items, query.per_page)
         {
-            let fallback = self
-                .call_with_session(
+            let parsed = self
+                .execute_with_session(
                     session_token,
                     "nvts.list",
-                    get_nvts(nvt_opts(
+                    GetNvtsRequest::new(nvt_opts(
                         query,
                         self.filter_resolving_filter_id(
                             session_token,
@@ -1199,7 +1127,6 @@ impl SupportingResourcePort for GvmdAdapter {
                     )?),
                 )
                 .await?;
-            let parsed = GetNvtsResponse::from_response(&fallback).map_err(map_parse_error)?;
             let mut items = parsed
                 .items
                 .into_iter()
@@ -1225,14 +1152,9 @@ impl SupportingResourcePort for GvmdAdapter {
     }
 
     async fn get_nvt(&self, session_token: &str, oid: &str) -> Result<Nvt, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_nvt(oid))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetNvtsResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(session_token, "nvts.get", GetNvtRequest::new(oid))
+            .await?;
         parsed
             .items
             .into_iter()
@@ -1247,14 +1169,13 @@ impl SupportingResourcePort for GvmdAdapter {
         page: u32,
         per_page: u32,
     ) -> Result<NvtFamilyPage, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_nvt_families())
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetNvtFamiliesResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "nvt_families.list",
+                GetNvtFamiliesRequest::new(),
+            )
+            .await?;
         let mut items = parsed
             .items
             .into_iter()
@@ -1273,7 +1194,6 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         query: &SupportingResourceQuery,
     ) -> Result<VulnerabilityPage, GatewayError> {
-        let client = self.session_client(session_token)?;
         let filter_id = query
             .filter_id
             .as_deref()
@@ -1293,17 +1213,16 @@ impl SupportingResourcePort for GvmdAdapter {
                 &[],
             )
             .await?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_vulns(FilteredGetOpts {
-                filter_string,
-                filter_id: None,
-            }))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed =
-            GetVulnerabilitiesResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "vulnerabilities.list",
+                GetVulnsRequest::new(FilteredGetOpts {
+                    filter_string,
+                    filter_id: None,
+                }),
+            )
+            .await?;
         let items = parsed
             .items
             .into_iter()
@@ -1321,7 +1240,6 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         query: &SupportingResourceQuery,
     ) -> Result<CvePage, GatewayError> {
-        let client = self.session_client(session_token)?;
         let filter_id = query
             .filter_id
             .as_deref()
@@ -1341,16 +1259,17 @@ impl SupportingResourcePort for GvmdAdapter {
                 &[],
             )
             .await?;
-        let parsed = client
-            .lock()
-            .await?
-            .get_cves(GetSecInfoOpts {
-                filter: filter_string,
-                filter_id: None,
-                details: None,
-            })
-            .await
-            .map_err(map_gvm_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "cves.list",
+                GetCvesRequest::new(GetSecInfoOpts {
+                    filter: filter_string,
+                    filter_id: None,
+                    details: None,
+                }),
+            )
+            .await?;
         let total = gvmd_total(
             parsed.counts.filtered,
             parsed.counts.total,
@@ -1363,13 +1282,9 @@ impl SupportingResourcePort for GvmdAdapter {
     }
 
     async fn get_cve(&self, session_token: &str, id: &str) -> Result<Cve, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let parsed = client
-            .lock()
-            .await?
-            .get_cve(id)
-            .await
-            .map_err(map_gvm_error)?;
+        let parsed = self
+            .execute_with_session(session_token, "cves.get", GetCveRequest::new(id))
+            .await?;
         parsed
             .items
             .into_iter()
@@ -1383,7 +1298,6 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         query: &SupportingResourceQuery,
     ) -> Result<CpePage, GatewayError> {
-        let client = self.session_client(session_token)?;
         let filter_id = query
             .filter_id
             .as_deref()
@@ -1403,16 +1317,17 @@ impl SupportingResourcePort for GvmdAdapter {
                 &[],
             )
             .await?;
-        let parsed = client
-            .lock()
-            .await?
-            .get_cpes(GetSecInfoOpts {
-                filter: filter_string,
-                filter_id: None,
-                details: None,
-            })
-            .await
-            .map_err(map_gvm_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "cpes.list",
+                GetCpesRequest::new(GetSecInfoOpts {
+                    filter: filter_string,
+                    filter_id: None,
+                    details: None,
+                }),
+            )
+            .await?;
         let total = gvmd_total(
             parsed.counts.filtered,
             parsed.counts.total,
@@ -1425,13 +1340,9 @@ impl SupportingResourcePort for GvmdAdapter {
     }
 
     async fn get_cpe(&self, session_token: &str, id: &str) -> Result<Cpe, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let parsed = client
-            .lock()
-            .await?
-            .get_cpe(id)
-            .await
-            .map_err(map_gvm_error)?;
+        let parsed = self
+            .execute_with_session(session_token, "cpes.get", GetCpeRequest::new(id))
+            .await?;
         parsed
             .items
             .into_iter()
@@ -1445,7 +1356,6 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         query: &SupportingResourceQuery,
     ) -> Result<CertBundAdvisoryPage, GatewayError> {
-        let client = self.session_client(session_token)?;
         let filter_id = query
             .filter_id
             .as_deref()
@@ -1465,16 +1375,17 @@ impl SupportingResourcePort for GvmdAdapter {
                 &[],
             )
             .await?;
-        let parsed = client
-            .lock()
-            .await?
-            .get_cert_bund_advisories(GetSecInfoOpts {
-                filter: filter_string,
-                filter_id: None,
-                details: None,
-            })
-            .await
-            .map_err(map_gvm_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "cert_bund_advisories.list",
+                GetCertBundAdvisoriesRequest::new(GetSecInfoOpts {
+                    filter: filter_string,
+                    filter_id: None,
+                    details: None,
+                }),
+            )
+            .await?;
         let total = gvmd_total(
             parsed.counts.filtered,
             parsed.counts.total,
@@ -1495,13 +1406,13 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         id: &str,
     ) -> Result<CertBundAdvisory, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let parsed = client
-            .lock()
-            .await?
-            .get_cert_bund_advisory(id)
-            .await
-            .map_err(map_gvm_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "cert_bund_advisories.get",
+                GetCertBundAdvisoryRequest::new(id),
+            )
+            .await?;
         parsed
             .items
             .into_iter()
@@ -1515,7 +1426,6 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         query: &SupportingResourceQuery,
     ) -> Result<DfnCertAdvisoryPage, GatewayError> {
-        let client = self.session_client(session_token)?;
         let filter_id = query
             .filter_id
             .as_deref()
@@ -1535,16 +1445,17 @@ impl SupportingResourcePort for GvmdAdapter {
                 &[],
             )
             .await?;
-        let parsed = client
-            .lock()
-            .await?
-            .get_dfn_cert_advisories(GetSecInfoOpts {
-                filter: filter_string,
-                filter_id: None,
-                details: None,
-            })
-            .await
-            .map_err(map_gvm_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "dfn_cert_advisories.list",
+                GetDfnCertAdvisoriesRequest::new(GetSecInfoOpts {
+                    filter: filter_string,
+                    filter_id: None,
+                    details: None,
+                }),
+            )
+            .await?;
         let total = gvmd_total(
             parsed.counts.filtered,
             parsed.counts.total,
@@ -1565,13 +1476,13 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         id: &str,
     ) -> Result<DfnCertAdvisory, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let parsed = client
-            .lock()
-            .await?
-            .get_dfn_cert_advisory(id)
-            .await
-            .map_err(map_gvm_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "dfn_cert_advisories.get",
+                GetDfnCertAdvisoryRequest::new(id),
+            )
+            .await?;
         parsed
             .items
             .into_iter()
