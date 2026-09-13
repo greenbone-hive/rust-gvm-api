@@ -312,6 +312,27 @@ fn migrated_automation_families_stay_on_typed_execution() {
 }
 
 #[test]
+fn migrated_identity_families_stay_on_typed_execution() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let identity = fs::read_to_string(manifest_dir.join("src/gvmd_adapter/ports/identity.rs"))
+        .expect("read identity adapter module");
+
+    for request in [
+        "GetUsersRequest::new",
+        "GetGroupsRequest::new",
+        "GetRolesRequest::new",
+        "GetPermissionsRequest::new",
+        "GetUserSettingsRequest::new",
+    ] {
+        assert!(
+            identity.contains(request),
+            "identity operations must use semantic request {request}"
+        );
+    }
+    assert_typed_section(&identity, "execute_with_session", "identity families");
+}
+
+#[test]
 fn migrated_supporting_resource_families_stay_on_typed_execution() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let ports_dir = manifest_dir.join("src/gvmd_adapter/ports");
