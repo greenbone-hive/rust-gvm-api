@@ -29,7 +29,6 @@ async fn rest_supporting_catalogs_list_and_read_resources() -> Result<()> {
         assert_dfn_cert_advisory_catalog(&harness, &session.token).await?;
         assert_filter_catalog(&harness, &session.token).await?;
         assert_tag_catalog(&harness, &session.token).await?;
-        assert_ticket_catalog(&harness, &session.token).await?;
         assert_note_catalog(&harness, &session.token).await?;
         assert_override_catalog(&harness, &session.token).await?;
         assert_nvt_catalog(&harness, &session.token).await?;
@@ -784,29 +783,6 @@ async fn assert_tag_catalog(harness: &E2eHarness, token: &str) -> Result<()> {
         &selected.name,
     );
     assert_eq!(fetched.value, selected.value, "tag value drifted on read");
-    Ok(())
-}
-
-async fn assert_ticket_catalog(harness: &E2eHarness, token: &str) -> Result<()> {
-    let tickets = harness.list_tickets(token).await?;
-    assert_pagination_shape("tickets", &tickets);
-    let Some(selected) = tickets.data.first() else {
-        eprintln!("ticket catalog is empty; skipping item read assertion");
-        return Ok(());
-    };
-
-    let fetched = harness.get_ticket(token, &selected.id).await?;
-    assert_named_resource_matches(
-        "ticket",
-        &fetched.id,
-        &fetched.name,
-        &selected.id,
-        &selected.name,
-    );
-    assert_eq!(
-        fetched.status, selected.status,
-        "ticket status drifted on read"
-    );
     Ok(())
 }
 

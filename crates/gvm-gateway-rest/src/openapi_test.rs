@@ -55,6 +55,42 @@ fn generated_openapi_matches_curated_spec() {
 }
 
 #[test]
+fn generated_and_curated_openapi_exclude_the_removed_ticket_surface() {
+    // Issue #500 removes the contract instead of retaining a compatibility
+    // operation, so paths, operation ids, tags, and schemas must all disappear.
+    for (name, document) in [("generated", build_openapi()), ("curated", root_spec())] {
+        assert!(
+            document["paths"].get("/tickets").is_none(),
+            "{name} ticket list path remains"
+        );
+        assert!(
+            document["paths"].get("/tickets/{id}").is_none(),
+            "{name} ticket detail path remains"
+        );
+
+        let serialized = serde_json::to_string(&document).expect("serialize OpenAPI document");
+        for removed in ["getTickets", "getTicket", "TicketStatus", "TicketList"] {
+            assert!(
+                !serialized.contains(removed),
+                "{name} OpenAPI still contains removed ticket symbol {removed}"
+            );
+        }
+        assert!(
+            document["components"]["schemas"].get("Ticket").is_none(),
+            "{name} Ticket schema remains"
+        );
+        assert!(
+            document["tags"]
+                .as_array()
+                .expect("OpenAPI tags array")
+                .iter()
+                .all(|tag| tag["name"] != "Tickets"),
+            "{name} Tickets tag remains"
+        );
+    }
+}
+
+#[test]
 fn generated_openapi_preserves_key_schema_fields() {
     let generated = build_openapi();
 
@@ -376,12 +412,6 @@ fn generated_openapi_documents_open_enum_fields_as_non_exhaustive() {
         &schemas["ScanConfigType"],
         json!([0, 1]),
         "ScanConfigType",
-    );
-    assert_open_enum_schema(
-        schemas,
-        &schemas["TicketStatus"],
-        json!(["Open", "Fixed", "Closed"]),
-        "TicketStatus",
     );
     assert_open_enum_schema(
         schemas,

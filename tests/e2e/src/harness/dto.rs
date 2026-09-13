@@ -243,23 +243,6 @@ pub struct TagResource {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-pub struct Ticket {
-    pub id: String,
-    pub name: String,
-    pub status: Option<String>,
-    #[serde(rename = "assignedTo")]
-    pub assigned_to: Option<ResourceRef>,
-    pub result: Option<ResourceRef>,
-    pub task: Option<ResourceRef>,
-    #[serde(rename = "openNote")]
-    pub open_note: Option<String>,
-    #[serde(rename = "fixedNote")]
-    pub fixed_note: Option<String>,
-    #[serde(rename = "closedNote")]
-    pub closed_note: Option<String>,
-}
-
-#[derive(Clone, Debug, Deserialize)]
 pub struct NoteResource {
     pub id: String,
     pub name: String,

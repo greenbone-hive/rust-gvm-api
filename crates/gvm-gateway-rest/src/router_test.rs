@@ -499,3 +499,45 @@ async fn unsupported_methods_on_known_paths_return_problem_responses() {
         Some("application/problem+json")
     );
 }
+
+#[tokio::test]
+async fn removed_ticket_routes_use_the_unknown_route_problem_contract() {
+    // The removed routes must not be recognized as authenticated resources or
+    // compatibility tombstones; both shapes use the ordinary 404 fallback.
+    let app = build_router(static_gateway_service());
+
+    for uri in [
+        "/api/v1/tickets",
+        "/api/v1/tickets/123e4567-e89b-12d3-a456-426614174000",
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(uri)
+                    .header(
+                        axum::http::header::AUTHORIZATION,
+                        "Bearer authenticated-session",
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            response
+                .headers()
+                .get(CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok()),
+            Some("application/problem+json")
+        );
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let problem: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(problem["code"], serde_json::json!("not_found"));
+        assert_eq!(problem["instance"], serde_json::json!(uri));
+    }
+}

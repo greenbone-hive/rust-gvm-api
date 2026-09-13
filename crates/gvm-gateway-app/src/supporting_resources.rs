@@ -11,7 +11,7 @@ use gvm_gateway_domain::{
     ModifyNoteInput, ModifyOperatingSystemInput, ModifyOverrideInput, ModifyTagInput, Note,
     NotePage, Nvt, NvtFamilyPage, NvtPage, NvtQuery, OperatingSystem, OperatingSystemPage,
     Override, OverridePage, ReportFormat, ReportFormatPage, SupportingResourceQuery, Tag, TagPage,
-    Ticket, TicketPage, TlsCertificateAsset, TlsCertificateAssetPage, VulnerabilityPage,
+    TlsCertificateAsset, TlsCertificateAssetPage, VulnerabilityPage,
 };
 
 use crate::GatewayService;
@@ -597,44 +597,6 @@ impl GatewayService {
             |session| async move {
                 self.supporting_resources
                     .clone_tag(&session.token, id)
-                    .await
-            },
-        )
-        .await
-    }
-
-    /// Lists tickets for an authenticated session.
-    pub async fn list_tickets(
-        &self,
-        session_token: &str,
-        query: SupportingResourceQuery,
-    ) -> Result<TicketPage, GatewayError> {
-        self.execute_with_resource(
-            "tickets.list",
-            session_token,
-            "list",
-            "ticket",
-            None,
-            |session| async move {
-                self.supporting_resources
-                    .list_tickets(&session.token, &query)
-                    .await
-            },
-        )
-        .await
-    }
-
-    /// Fetches a ticket for an authenticated session.
-    pub async fn get_ticket(&self, session_token: &str, id: &str) -> Result<Ticket, GatewayError> {
-        self.execute_with_resource(
-            "tickets.get",
-            session_token,
-            "read",
-            "ticket",
-            Some(id),
-            |session| async move {
-                self.supporting_resources
-                    .get_ticket(&session.token, id)
                     .await
             },
         )

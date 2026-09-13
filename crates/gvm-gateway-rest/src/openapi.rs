@@ -253,10 +253,6 @@ fn openapi_tags() -> Value {
             "description": "Tag discovery"
         },
         {
-            "name": "Tickets",
-            "description": "Ticket discovery"
-        },
-        {
             "name": "Notes",
             "description": "Note discovery"
         },

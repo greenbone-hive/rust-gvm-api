@@ -41,10 +41,9 @@ use gvm_gateway_domain::{
     ScannerQuery, Schedule, SchedulePage, SchedulePort, ScheduleQuery, SessionTokenDigest,
     SetScanConfigFamilySelectionInput, SpecializedTargetQuery, SupportingResourcePort,
     SupportingResourceQuery, SystemPort, Tag, TagPage, Target, TargetPage, TargetPort, TargetQuery,
-    Task, TaskAction, TaskPage, TaskPort, TaskQuery, Ticket, TicketPage, Timezone,
-    TlsCertificateAsset, TlsCertificateAssetPage, TlsCertificatePage, User, UserPage, UserSetting,
-    UserSettingList, UserSettingQuery, VulnerabilityPage, WebApplicationTarget,
-    WebApplicationTargetPage,
+    Task, TaskAction, TaskPage, TaskPort, TaskQuery, Timezone, TlsCertificateAsset,
+    TlsCertificateAssetPage, TlsCertificatePage, User, UserPage, UserSetting, UserSettingList,
+    UserSettingQuery, VulnerabilityPage, WebApplicationTarget, WebApplicationTargetPage,
 };
 use gvm_gmp::{
     commands::{
@@ -136,7 +135,6 @@ use gvm_gmp::{
             CreateAgentGroupTaskOpts, CreateOciImageTargetTaskOpts, CreateTaskOpts,
             CreateWebApplicationTaskOpts, GetTasksOpts, ModifyTaskOpts,
         },
-        tickets::{get_ticket, get_tickets, GetTicketsOpts},
         tls_certificates::{get_tls_certificate, get_tls_certificates, GetTlsCertificatesOpts},
         user_settings::{
             get_user_setting, get_user_settings, modify_user_setting, GetUserSettingsOpts,
@@ -169,8 +167,8 @@ use gvm_gmp::{
         GetReportOperatingSystemsResponse, GetReportPortsResponse, GetReportsResponse,
         GetResultsResponse, GetRolesResponse, GetScanConfigsResponse, GetScannersResponse,
         GetSchedulesResponse, GetTagsResponse, GetTargetsResponse, GetTasksResponse,
-        GetTicketsResponse, GetTimezonesResponse, GetTlsCertificatesResponse,
-        GetUserSettingsResponse, GetUsersResponse, GetVersionResponse, GetVulnerabilitiesResponse,
+        GetTimezonesResponse, GetTlsCertificatesResponse, GetUserSettingsResponse,
+        GetUsersResponse, GetVersionResponse, GetVulnerabilitiesResponse,
         GetWebApplicationTargetsResponse, ModifyUserSettingResponse, ResumeTaskResponse,
         StartTaskResponse, User as GmpUser,
     },
@@ -205,9 +203,8 @@ use crate::conversions::{
     report_from_gmp, report_host_from_gmp, report_operating_system_from_gmp, report_port_from_gmp,
     result_from_gmp, result_from_report_vulnerability, role_from_gmp, scan_config_from_gmp,
     scanner_from_gmp, schedule_from_gmp, tag_from_gmp, target_from_gmp, task_from_gmp,
-    ticket_from_gmp, timezone_from_gmp, tls_certificate_asset_from_gmp,
-    tls_certificate_from_report_tls_certificate, user_from_gmp, user_setting_from_gmp,
-    vulnerability_from_gmp, web_application_target_from_gmp,
+    timezone_from_gmp, tls_certificate_asset_from_gmp, tls_certificate_from_report_tls_certificate,
+    user_from_gmp, user_setting_from_gmp, vulnerability_from_gmp, web_application_target_from_gmp,
 };
 use filters::{
     backend_ignored_pagination, composed_filter, gvmd_total, needs_client_side_pagination_fallback,

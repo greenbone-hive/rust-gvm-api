@@ -377,24 +377,6 @@ impl E2eHarness {
         .await
     }
 
-    pub async fn list_tickets(&self, token: &str) -> Result<ListResponse<Ticket>> {
-        self.send_json(
-            self.authed(Method::GET, "/api/v1/tickets?perPage=1000", token),
-            StatusCode::OK,
-            "list tickets",
-        )
-        .await
-    }
-
-    pub async fn get_ticket(&self, token: &str, ticket_id: &str) -> Result<Ticket> {
-        self.send_json(
-            self.authed(Method::GET, &format!("/api/v1/tickets/{ticket_id}"), token),
-            StatusCode::OK,
-            "get ticket",
-        )
-        .await
-    }
-
     pub async fn list_notes(&self, token: &str) -> Result<ListResponse<NoteResource>> {
         self.send_json(
             self.authed(Method::GET, "/api/v1/notes?perPage=1000", token),

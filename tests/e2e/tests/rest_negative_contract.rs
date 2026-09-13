@@ -23,6 +23,26 @@ async fn rest_negative_contract_returns_problem_responses() -> Result<()> {
             .context("send unknown-route request")?;
         assert_problem_response(unknown_route, StatusCode::NOT_FOUND, "unknown route").await?;
 
+        // Ticket support is intentionally unpublished: authenticated requests
+        // to both former shapes must use the same unknown-route 404 contract.
+        for path in [
+            "/api/v1/tickets",
+            "/api/v1/tickets/123e4567-e89b-12d3-a456-426614174000",
+        ] {
+            let removed_ticket_route = harness
+                .request(Method::GET, path)
+                .bearer_auth(&session.token)
+                .send()
+                .await
+                .with_context(|| format!("send removed-ticket-route request to {path}"))?;
+            assert_problem_response(
+                removed_ticket_route,
+                StatusCode::NOT_FOUND,
+                "removed ticket route",
+            )
+            .await?;
+        }
+
         let method_not_allowed = harness
             .request(Method::PATCH, "/api/v1/targets")
             .bearer_auth(&session.token)
