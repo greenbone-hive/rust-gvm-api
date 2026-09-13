@@ -184,6 +184,101 @@ fn rust_gvm_components_resolve_to_one_revision() {
     );
 }
 
+#[test]
+fn initial_adapter_slice_stays_on_typed_execution() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let adapter_dir = manifest_dir.join("src/gvmd_adapter");
+
+    let adapter = fs::read_to_string(adapter_dir.join("mod.rs")).expect("read adapter module");
+    let version_probe = section_between(
+        &adapter,
+        "pub async fn probe_version",
+        "/// Open and authenticate a session-bound GMP connection.",
+    );
+    assert_typed_section(
+        version_probe,
+        "GetVersionRequest::new()",
+        "backend version probe",
+    );
+
+    let session = fs::read_to_string(adapter_dir.join("session.rs")).expect("read session module");
+    let authentication = section_between(
+        &session,
+        "pub(super) async fn connect_authenticated_client",
+        "pub(super) type SharedClient",
+    );
+    assert_typed_section(
+        authentication,
+        "AuthenticateRequest::new(username, password)",
+        "session authentication",
+    );
+
+    let targets = fs::read_to_string(adapter_dir.join("ports/targets.rs"))
+        .expect("read target adapter module");
+    let standard_targets = section_between(
+        &targets,
+        "impl TargetPort for GvmdAdapter",
+        "async fn list_oci_image_targets",
+    );
+    for request in [
+        "GetTargetsRequest::new",
+        "GetTargetRequest::new",
+        "CreateTargetRequest::new",
+        "ModifyTargetRequest::new",
+        "DeleteTargetRequest::new",
+        "CloneTargetRequest::new",
+    ] {
+        assert!(
+            standard_targets.contains(request),
+            "standard target operations must use semantic request {request}"
+        );
+    }
+    assert_typed_section(
+        standard_targets,
+        "execute_with_session",
+        "standard target operations",
+    );
+
+    let reports = fs::read_to_string(adapter_dir.join("ports/reports.rs"))
+        .expect("read report adapter module");
+    let report_export =
+        section_between(&reports, "async fn export_report", "async fn delete_report");
+    assert_typed_section(
+        report_export,
+        "GmpGetReportExportRequest::new",
+        "report export",
+    );
+}
+
+fn section_between<'a>(contents: &'a str, start: &str, end: &str) -> &'a str {
+    contents
+        .split_once(start)
+        .unwrap_or_else(|| panic!("missing section start: {start}"))
+        .1
+        .split_once(end)
+        .unwrap_or_else(|| panic!("missing section end: {end}"))
+        .0
+}
+
+fn assert_typed_section(section: &str, semantic_request: &str, description: &str) {
+    assert!(
+        section.contains(semantic_request),
+        "{description} must construct {semantic_request}"
+    );
+    assert!(
+        section.contains(".execute(") || section.contains("execute_with_session"),
+        "{description} must use typed execution"
+    );
+    assert!(
+        !section.contains(".call(") && !section.contains("call_with_session"),
+        "{description} must not use the raw call boundary"
+    );
+    assert!(
+        !section.contains("::from_response("),
+        "{description} must not manually pair a response parser"
+    );
+}
+
 fn find_forbidden_gmp_wire_handling(manifest_dir: &Path, dir: &Path) -> Vec<Finding> {
     let mut findings = Vec::new();
     for file in rust_files(dir) {

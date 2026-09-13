@@ -122,7 +122,6 @@ impl ReportPort for GvmdAdapter {
         report_id: &str,
         request: &ReportExportRequest,
     ) -> Result<ReportExport, GatewayError> {
-        let client = self.session_client(session_token)?;
         let report_id = parse_entity_id(report_id)?;
         let mut opts = GetReportExportOpts::new(parse_entity_id(&request.report_format_id)?);
         opts.report_config_id = request
@@ -137,12 +136,13 @@ impl ReportPort for GvmdAdapter {
             .map(parse_entity_id)
             .transpose()?;
 
-        let export = client
-            .lock()
-            .await?
-            .get_report_export_with_opts(&report_id, opts)
-            .await
-            .map_err(map_gvm_error)?;
+        let export = self
+            .execute_with_session(
+                session_token,
+                "reports.export",
+                GmpGetReportExportRequest::new(report_id, opts),
+            )
+            .await?;
 
         Ok(ReportExport {
             bytes: export.bytes,
