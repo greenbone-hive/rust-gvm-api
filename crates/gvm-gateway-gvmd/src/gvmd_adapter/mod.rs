@@ -76,8 +76,8 @@ use gvm_gmp::{
             GetFiltersOpts, GetFiltersRequest, ModifyFilterRequest,
         },
         groups::{
-            create_group, delete_group, get_group, get_groups, modify_group, GetGroupsOpts,
-            GroupOpts,
+            CreateGroupRequest, DeleteGroupRequest, GetGroupRequest, GetGroupsOpts,
+            GetGroupsRequest, GroupOpts, ModifyGroupRequest,
         },
         hosts::{
             CreateHostRequest, DeleteHostRequest, GetHostRequest, GetHostsOpts, GetHostsRequest,
@@ -105,8 +105,8 @@ use gvm_gmp::{
             ModifyOverrideRequest,
         },
         permissions::{
-            create_permission, delete_permission, get_permission, get_permissions,
-            modify_permission, GetPermissionsOpts, PermissionOpts,
+            CreatePermissionRequest, DeletePermissionRequest, GetPermissionRequest,
+            GetPermissionsOpts, GetPermissionsRequest, ModifyPermissionRequest, PermissionOpts,
         },
         port_lists::{
             CreatePortListRequest, DeletePortListRequest, GetPortListRequest, GetPortListsOpts,
@@ -123,7 +123,8 @@ use gvm_gmp::{
         },
         results::{GetResultRequest, GetResultsOpts, GetResultsRequest},
         roles::{
-            create_role, delete_role, get_role, get_roles, modify_role, GetRolesOpts, RoleOpts,
+            CreateRoleRequest, DeleteRoleRequest, GetRoleRequest, GetRolesOpts, GetRolesRequest,
+            ModifyRoleRequest, RoleOpts,
         },
         scan_configs::{
             ConfigOpts, CreatePolicyRequest, CreateScanConfigRequest, DeletePolicyRequest,
@@ -168,12 +169,12 @@ use gvm_gmp::{
             GetTlsCertificateRequest, GetTlsCertificatesOpts, GetTlsCertificatesRequest,
         },
         user_settings::{
-            get_user_setting, get_user_settings, modify_user_setting, GetUserSettingsOpts,
-            ModifyUserSettingOpts,
+            GetUserSettingRequest, GetUserSettingsOpts, GetUserSettingsRequest,
+            ModifyUserSettingOpts, ModifyUserSettingRequest,
         },
         users::{
-            create_user, delete_user, get_user, get_users, modify_user, GetUsersOpts,
-            ModifyUserOpts, UserHostAccess, UserOpts,
+            CreateUserRequest, DeleteUserRequest, GetUserRequest, GetUsersOpts, GetUsersRequest,
+            ModifyUserOpts, ModifyUserRequest, UserHostAccess, UserOpts,
         },
         web_application_targets::{
             clone_web_application_target, create_web_application_target,
@@ -183,12 +184,9 @@ use gvm_gmp::{
         },
     },
     responses::{
-        ActionResponse, CreateGroupResponse, CreateOciImageTargetResponse,
-        CreatePermissionResponse, CreateRoleResponse, CreateUserResponse,
-        CreateWebApplicationTargetResponse, GetFeedsResponse, GetGroupsResponse,
-        GetOciImageTargetsResponse, GetPermissionsResponse, GetRolesResponse, GetTicketsResponse,
-        GetTimezonesResponse, GetUserSettingsResponse, GetUsersResponse,
-        GetWebApplicationTargetsResponse, ModifyUserSettingResponse, User as GmpUser,
+        ActionResponse, CreateOciImageTargetResponse, CreateWebApplicationTargetResponse,
+        GetFeedsResponse, GetOciImageTargetsResponse, GetTicketsResponse, GetTimezonesResponse,
+        GetWebApplicationTargetsResponse, User as GmpUser,
     },
     CollectionUpdate, CredentialStoreCredentialType, EntityId, GmpRequest,
     Pagination as GmpPagination, ScalarUpdate, TargetHost, TargetHosts, TargetPortRange,
@@ -440,10 +438,13 @@ impl GvmdAdapter {
     }
 
     async fn get_gmp_user(&self, session_token: &str, id: &str) -> Result<GmpUser, GatewayError> {
-        let response = self
-            .call_with_session(session_token, "users.get", get_user(&parse_entity_id(id)?))
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "users.get",
+                GetUserRequest::new(parse_entity_id(id)?),
+            )
             .await?;
-        let parsed = GetUsersResponse::from_response(&response).map_err(map_parse_error)?;
         parsed
             .items
             .into_iter()
