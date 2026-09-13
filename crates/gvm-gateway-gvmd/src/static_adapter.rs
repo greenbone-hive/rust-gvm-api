@@ -36,9 +36,9 @@ use gvm_gateway_domain::{
     SchedulePage, SchedulePort, ScheduleQuery, SetScanConfigFamilySelectionInput,
     SpecializedTargetQuery, SupportingResourcePort, SupportingResourceQuery, SystemPort, Tag,
     TagPage, Target, TargetPage, TargetPort, TargetQuery, Task, TaskAction, TaskPage, TaskPort,
-    TaskQuery, Ticket, TicketPage, Timezone, TlsCertificateAsset, TlsCertificateAssetPage,
-    TlsCertificatePage, User, UserPage, UserSetting, UserSettingList, UserSettingQuery,
-    VulnerabilityPage, WebApplicationTarget, WebApplicationTargetPage,
+    TaskQuery, Timezone, TlsCertificateAsset, TlsCertificateAssetPage, TlsCertificatePage, User,
+    UserPage, UserSetting, UserSettingList, UserSettingQuery, VulnerabilityPage,
+    WebApplicationTarget, WebApplicationTargetPage,
 };
 
 /// Static adapter for system readiness and version information.
@@ -1241,18 +1241,6 @@ impl SupportingResourcePort for StaticGvmdAdapter {
 
     async fn clone_tag(&self, _: &str, _: &str) -> Result<String, GatewayError> {
         unsupported!("static adapter does not support tags")
-    }
-
-    async fn list_tickets(
-        &self,
-        _: &str,
-        _: &SupportingResourceQuery,
-    ) -> Result<TicketPage, GatewayError> {
-        unsupported!("static adapter does not support tickets")
-    }
-
-    async fn get_ticket(&self, _: &str, _: &str) -> Result<Ticket, GatewayError> {
-        unsupported!("static adapter does not support tickets")
     }
 
     async fn list_notes(

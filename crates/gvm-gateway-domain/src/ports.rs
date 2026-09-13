@@ -34,9 +34,9 @@ use crate::{
     ScanConfigPreferenceQuery, ScanConfigQuery, ScanResult, Scanner, ScannerPage, ScannerQuery,
     Schedule, SchedulePage, ScheduleQuery, SetScanConfigFamilySelectionInput,
     SpecializedTargetQuery, SupportingResourceQuery, Tag, TagPage, Target, TargetPage, TargetQuery,
-    Task, TaskAction, TaskPage, TaskQuery, Ticket, TicketPage, Timezone, TlsCertificateAsset,
-    TlsCertificateAssetPage, TlsCertificatePage, User, UserPage, UserSetting, UserSettingList,
-    UserSettingQuery, VulnerabilityPage, WebApplicationTarget, WebApplicationTargetPage,
+    Task, TaskAction, TaskPage, TaskQuery, Timezone, TlsCertificateAsset, TlsCertificateAssetPage,
+    TlsCertificatePage, User, UserPage, UserSetting, UserSettingList, UserSettingQuery,
+    VulnerabilityPage, WebApplicationTarget, WebApplicationTargetPage,
 };
 
 /// Port for system information needed by the gateway.
@@ -1016,16 +1016,6 @@ pub trait SupportingResourcePort: Send + Sync + 'static {
 
     /// Clone a tag by identifier.
     async fn clone_tag(&self, session_token: &str, id: &str) -> Result<String, GatewayError>;
-
-    /// List tickets for the session.
-    async fn list_tickets(
-        &self,
-        session_token: &str,
-        query: &SupportingResourceQuery,
-    ) -> Result<TicketPage, GatewayError>;
-
-    /// Fetch a ticket by identifier.
-    async fn get_ticket(&self, session_token: &str, id: &str) -> Result<Ticket, GatewayError>;
 
     /// List notes for the session.
     async fn list_notes(

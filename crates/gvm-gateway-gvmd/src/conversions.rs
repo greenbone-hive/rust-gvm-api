@@ -18,9 +18,8 @@ use gvm_gateway_domain::{
     ReportApplication, ReportClosedCve, ReportCve, ReportError, ReportFormat, ReportHost,
     ReportOperatingSystem, ReportPortSummary, ReportVulnerability, ResourceRef, ResultCount, Role,
     ScanConfig, ScanResult, Scanner, Schedule, SupportingResourceMeta, Tag, Target, Task,
-    TaskObservers, TaskReportComplianceCount, TaskReportReference, TaskReportResultCount, Ticket,
-    Timezone, TlsCertificate, TlsCertificateAsset, User, UserSetting, Vulnerability,
-    WebApplicationTarget,
+    TaskObservers, TaskReportComplianceCount, TaskReportReference, TaskReportResultCount, Timezone,
+    TlsCertificate, TlsCertificateAsset, User, UserSetting, Vulnerability, WebApplicationTarget,
 };
 use gvm_gmp::{
     commands::{assets::AssetType, configs::ConfigUsageType},
@@ -810,19 +809,6 @@ pub(crate) fn tag_from_gmp(tag: gvm_gmp::responses::Tag) -> Tag {
         resource_type: tag.resource_type,
         resource_count: tag.resource_count,
         active: tag.active,
-    }
-}
-
-pub(crate) fn ticket_from_gmp(ticket: gvm_gmp::responses::Ticket) -> Ticket {
-    Ticket {
-        meta: supporting_meta_from_gmp(ticket.meta),
-        status: ticket.status,
-        assigned_to: ticket.assigned_to.map(resource_ref_from_named_entity),
-        result: ticket.result.map(resource_ref_from_named_entity),
-        task: ticket.task.map(resource_ref_from_named_entity),
-        open_note: ticket.open_note,
-        fixed_note: ticket.fixed_note,
-        closed_note: ticket.closed_note,
     }
 }
 

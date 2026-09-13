@@ -7,6 +7,13 @@
 > **Technology Preview:** This code is provided as a Technology Preview only.
 > All APIs are still subject to change and must not be considered stable.
 
+> [!IMPORTANT]
+> **Breaking Technology Preview change:** GMP ticket discovery is not exposed by
+> `rust-gvm-api`; the former `/api/v1/tickets` routes were removed under
+> [issue #500](https://github.com/greenbone-hive/rust-gvm-api/issues/500).
+> Direct GMP consumers may continue using `rust-gvm`, while gateway integrations
+> should manage tickets through their external ticketing system.
+
 > [!NOTE]
 > **Releases** use a PR-gated GitHub Actions flow. Run the "Prepare Release"
 > workflow with the target version, label the generated PR `release`, and merge

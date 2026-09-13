@@ -235,6 +235,8 @@ async fn test_server() -> TestServer {
 | `create_session_location_header` | Session creation returns `201 Created` + canonical `Location` |
 | `method_not_allowed` | Unsupported method on a published resource returns `405` |
 | `not_found_route` | Unknown route returns `404` |
+| `removed_ticket_collection_not_found` | Authenticated `GET /api/v1/tickets` returns the standard unknown-route `404` problem response |
+| `removed_ticket_item_not_found` | Authenticated `GET /api/v1/tickets/{validUuid}` returns the standard unknown-route `404` problem response |
 | `stop_idle_task` | Illegal action transition returns `409` |
 | `content_type_problem_json` | Problem responses use `application/problem+json` |
 | `generated_openapi_endpoint_exposes_implemented_contract` | Generated OpenAPI stays aligned with curated path/method/response/header contract |
