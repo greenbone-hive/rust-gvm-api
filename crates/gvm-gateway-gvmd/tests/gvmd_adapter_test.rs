@@ -1553,21 +1553,6 @@ async fn gvmd_adapter_direct_lists_emit_backend_pagination_filter() {
     assert_backend_pagination!(
         adapter,
         server,
-        adapter.list_tickets(
-            &token,
-            &SupportingResourceQuery {
-                filter_string: Some("name~Target".to_string()),
-                filter_id: None,
-                page: 2,
-                per_page: 10,
-            }
-        ),
-        "get_tickets",
-        "filter=\"name~Target first=11 rows=10\""
-    );
-    assert_backend_pagination!(
-        adapter,
-        server,
         adapter.list_notes(
             &token,
             &SupportingResourceQuery {

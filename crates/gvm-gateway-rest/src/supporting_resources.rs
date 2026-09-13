@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Greenbone AG
 
-//! Host, report-format, triage, filter, tag, ticket, and NVT DTOs plus REST handlers.
+//! Host, report-format, triage, filter, tag, and NVT DTOs plus REST handlers.
 
 use aide::transform::TransformOperation;
 use axum::{
@@ -29,7 +29,6 @@ use crate::{
         create_resource, created_resource, delete_resource, gateway_error, get_resource,
         list_resource, update_resource, ValidateInto,
     },
-    open_enum::open_string_enum,
     openapi::{created_json, ok_json, problem_response, ResourceIdPathDoc},
     query::{decoded_query_pairs, parse_collection_query, DeleteResourceQueryParams},
     results::NvtRefResponse,
@@ -859,67 +858,6 @@ impl ModifyTagRequest {
 impl ValidateInto<ModifyTagInput> for ModifyTagRequest {
     fn validate_into(self) -> Result<ModifyTagInput, GatewayError> {
         self.validate()
-    }
-}
-
-open_string_enum! {
-    /// Ticket lifecycle status.
-    pub(crate) enum TicketStatus {
-        Open => "Open",
-        Fixed => "Fixed",
-        Closed => "Closed",
-    }
-}
-
-#[derive(Clone, Debug, Serialize, JsonSchema)]
-#[schemars(rename = "Ticket")]
-pub(crate) struct TicketResponse {
-    #[serde(flatten)]
-    meta: SupportingResourceMetaResponse,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    status: Option<TicketStatus>,
-    #[serde(rename = "assignedTo", skip_serializing_if = "Option::is_none")]
-    assigned_to: Option<ResourceRefResponse>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    result: Option<ResourceRefResponse>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    task: Option<ResourceRefResponse>,
-    #[serde(rename = "openNote", skip_serializing_if = "Option::is_none")]
-    open_note: Option<String>,
-    #[serde(rename = "fixedNote", skip_serializing_if = "Option::is_none")]
-    fixed_note: Option<String>,
-    #[serde(rename = "closedNote", skip_serializing_if = "Option::is_none")]
-    closed_note: Option<String>,
-}
-
-impl From<gvm_gateway_domain::Ticket> for TicketResponse {
-    fn from(ticket: gvm_gateway_domain::Ticket) -> Self {
-        Self {
-            meta: SupportingResourceMetaResponse::from(ticket.meta),
-            status: ticket.status.as_deref().map(TicketStatus::parse),
-            assigned_to: ticket.assigned_to.map(ResourceRefResponse::from),
-            result: ticket.result.map(ResourceRefResponse::from),
-            task: ticket.task.map(ResourceRefResponse::from),
-            open_note: ticket.open_note,
-            fixed_note: ticket.fixed_note,
-            closed_note: ticket.closed_note,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, JsonSchema)]
-#[schemars(rename = "TicketList")]
-pub(crate) struct TicketListResponse {
-    data: Vec<TicketResponse>,
-    pagination: PaginationResponse,
-}
-
-impl From<gvm_gateway_domain::TicketPage> for TicketListResponse {
-    fn from(page: gvm_gateway_domain::TicketPage) -> Self {
-        Self {
-            data: page.data.into_iter().map(TicketResponse::from).collect(),
-            pagination: PaginationResponse::from(page.pagination),
-        }
     }
 }
 
@@ -2110,53 +2048,6 @@ pub async fn clone_tag(
     }
 }
 
-/// Lists tickets visible to the authenticated session.
-pub async fn list_tickets(
-    State(service): State<GatewayService>,
-    headers: HeaderMap,
-    uri: OriginalUri,
-) -> Response {
-    let instance = uri.path().to_string();
-    let session = match bearer_token(&headers) {
-        Ok(session) => session,
-        Err(error) => return RestError::from_gateway_error(error, instance).into_response(),
-    };
-    let query = match SupportingListQuery::try_from_query_string(uri.query().unwrap_or("")) {
-        Ok(query) => query,
-        Err(error) => return RestError::from_gateway_error(error, instance).into_response(),
-    };
-
-    match service
-        .list_tickets(&session, supporting_query(query))
-        .await
-    {
-        Ok(page) => (StatusCode::OK, Json(TicketListResponse::from(page))).into_response(),
-        Err(error) => RestError::from_gateway_error(error, instance).into_response(),
-    }
-}
-
-/// Returns a single ticket by id.
-pub async fn get_ticket(
-    State(service): State<GatewayService>,
-    headers: HeaderMap,
-    Path(id): Path<String>,
-    uri: OriginalUri,
-) -> Response {
-    let instance = uri.path().to_string();
-    if let Err(error) = validate_uuid("id", &id) {
-        return RestError::from_gateway_error(error, instance).into_response();
-    }
-    let session = match bearer_token(&headers) {
-        Ok(session) => session,
-        Err(error) => return RestError::from_gateway_error(error, instance).into_response(),
-    };
-
-    match service.get_ticket(&session, &id).await {
-        Ok(item) => (StatusCode::OK, Json(TicketResponse::from(item))).into_response(),
-        Err(error) => RestError::from_gateway_error(error, instance).into_response(),
-    }
-}
-
 /// Lists notes visible to the authenticated session.
 pub async fn list_notes(
     State(service): State<GatewayService>,
@@ -2949,33 +2840,6 @@ pub(crate) fn clone_tag_docs(op: TransformOperation<'_>) -> TransformOperation<'
         .security_requirement("bearerAuth")
         .input::<Path<ResourceIdPathDoc>>()
         .response_with::<201, Json<ResourceCreatedResponse>, _>(created_json("Tag cloned"));
-    let op = problem_response::<400>(op, "Invalid request");
-    let op = problem_response::<401>(op, "Authentication required or session expired");
-    problem_response::<404>(op, "Resource not found")
-}
-
-pub(crate) fn list_tickets_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
-    let op = op
-        .id("getTickets")
-        .tag("Tickets")
-        .summary("List tickets")
-        .description("Returns a paginated list of tickets.")
-        .security_requirement("bearerAuth")
-        .input::<Query<SupportingResourceListQueryParams>>()
-        .response_with::<200, Json<TicketListResponse>, _>(ok_json("Paginated list of tickets"));
-    let op = problem_response::<400>(op, "Invalid request");
-    problem_response::<401>(op, "Authentication required or session expired")
-}
-
-pub(crate) fn get_ticket_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
-    let op = op
-        .id("getTicket")
-        .tag("Tickets")
-        .summary("Get a ticket")
-        .description("Returns the details for a single ticket.")
-        .security_requirement("bearerAuth")
-        .input::<Path<ResourceIdPathDoc>>()
-        .response_with::<200, Json<TicketResponse>, _>(ok_json("Ticket details"));
     let op = problem_response::<400>(op, "Invalid request");
     let op = problem_response::<401>(op, "Authentication required or session expired");
     problem_response::<404>(op, "Resource not found")

@@ -41,10 +41,9 @@ use gvm_gateway_domain::{
     ScannerQuery, Schedule, SchedulePage, SchedulePort, ScheduleQuery, SessionTokenDigest,
     SetScanConfigFamilySelectionInput, SpecializedTargetQuery, SupportingResourcePort,
     SupportingResourceQuery, SystemPort, Tag, TagPage, Target, TargetPage, TargetPort, TargetQuery,
-    Task, TaskAction, TaskPage, TaskPort, TaskQuery, Ticket, TicketPage, Timezone,
-    TlsCertificateAsset, TlsCertificateAssetPage, TlsCertificatePage, User, UserPage, UserSetting,
-    UserSettingList, UserSettingQuery, VulnerabilityPage, WebApplicationTarget,
-    WebApplicationTargetPage,
+    Task, TaskAction, TaskPage, TaskPort, TaskQuery, Timezone, TlsCertificateAsset,
+    TlsCertificateAssetPage, TlsCertificatePage, User, UserPage, UserSetting, UserSettingList,
+    UserSettingQuery, VulnerabilityPage, WebApplicationTarget, WebApplicationTargetPage,
 };
 use gvm_gmp::{
     commands::{
@@ -164,7 +163,6 @@ use gvm_gmp::{
             ResumeTaskRequest, StartAuditRequest, StartTaskRequest, StopAuditRequest,
             StopTaskRequest,
         },
-        tickets::{get_ticket, get_tickets, GetTicketsOpts},
         tls_certificates::{
             GetTlsCertificateRequest, GetTlsCertificatesOpts, GetTlsCertificatesRequest,
         },
@@ -184,7 +182,7 @@ use gvm_gmp::{
             ModifyWebApplicationTargetRequest,
         },
     },
-    responses::{GetTicketsResponse, User as GmpUser},
+    responses::User as GmpUser,
     CollectionUpdate, CredentialStoreCredentialType, EntityId, GmpRequest,
     Pagination as GmpPagination, ScalarUpdate, TargetHost, TargetHosts, TargetPortRange,
     TargetPortSelection,
@@ -205,20 +203,19 @@ mod mod_test;
 use crate::conversions::{
     alert_from_gmp, cert_bund_advisory_from_gmp, cpe_from_gmp, credential_from_gmp, cve_from_gmp,
     dfn_cert_advisory_from_gmp, feed_from_gmp, filter_from_gmp, generic_asset_from_gmp,
-    generic_config_from_gmp, group_from_gmp, host_from_gmp, map_gvm_error, map_parse_error,
-    note_from_gmp, nvt_family_from_gmp, nvt_from_gmp, oci_image_target_from_gmp,
-    operating_system_from_gmp, override_from_gmp, parse_alert_condition, parse_alert_event,
-    parse_alert_method, parse_alive_test, parse_asset_type, parse_config_usage_type,
-    parse_credential_type, parse_entity_id, parse_hosts_ordering, parse_permission_subject_type,
+    generic_config_from_gmp, group_from_gmp, host_from_gmp, map_gvm_error, note_from_gmp,
+    nvt_family_from_gmp, nvt_from_gmp, oci_image_target_from_gmp, operating_system_from_gmp,
+    override_from_gmp, parse_alert_condition, parse_alert_event, parse_alert_method,
+    parse_alive_test, parse_asset_type, parse_config_usage_type, parse_credential_type,
+    parse_entity_id, parse_hosts_ordering, parse_permission_subject_type,
     parse_snmp_auth_algorithm, parse_snmp_privacy_algorithm, parse_user_auth_type,
     permission_from_gmp, port_list_from_gmp, report_application_from_gmp,
     report_closed_cve_from_gmp, report_cve_from_gmp, report_error_from_gmp, report_format_from_gmp,
     report_from_gmp, report_host_from_gmp, report_operating_system_from_gmp, report_port_from_gmp,
     result_from_gmp, result_from_report_vulnerability, role_from_gmp, scan_config_from_gmp,
     scanner_from_gmp, schedule_from_gmp, tag_from_gmp, target_from_gmp, task_from_gmp,
-    ticket_from_gmp, timezone_from_gmp, tls_certificate_asset_from_gmp,
-    tls_certificate_from_report_tls_certificate, user_from_gmp, user_setting_from_gmp,
-    vulnerability_from_gmp, web_application_target_from_gmp,
+    timezone_from_gmp, tls_certificate_asset_from_gmp, tls_certificate_from_report_tls_certificate,
+    user_from_gmp, user_setting_from_gmp, vulnerability_from_gmp, web_application_target_from_gmp,
 };
 use filters::{
     backend_ignored_pagination, composed_filter, gvmd_total, needs_client_side_pagination_fallback,

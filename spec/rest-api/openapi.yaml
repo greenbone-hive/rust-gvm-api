@@ -119,8 +119,6 @@ tags:
     description: Saved filter discovery
   - name: Tags
     description: Tag discovery
-  - name: Tickets
-    description: Ticket discovery
   - name: Notes
     description: Note discovery
   - name: Overrides
@@ -343,10 +341,6 @@ paths:
     $ref: './supporting-resources.yaml#/paths/~1tags~1{id}'
   /tags/{id}/clone:
     $ref: './supporting-resources.yaml#/paths/~1tags~1{id}~1clone'
-  /tickets:
-    $ref: './supporting-resources.yaml#/paths/~1tickets'
-  /tickets/{id}:
-    $ref: './supporting-resources.yaml#/paths/~1tickets~1{id}'
   /notes:
     $ref: './supporting-resources.yaml#/paths/~1notes'
   /notes/{id}:

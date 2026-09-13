@@ -140,18 +140,18 @@ use crate::{
         get_dfn_cert_advisory, get_dfn_cert_advisory_docs, get_filter, get_filter_docs, get_host,
         get_host_docs, get_note, get_note_docs, get_nvt, get_nvt_docs, get_operating_system,
         get_operating_system_docs, get_override, get_override_docs, get_report_format,
-        get_report_format_docs, get_tag, get_tag_docs, get_ticket, get_ticket_docs,
-        get_tls_certificate, get_tls_certificate_docs, list_cert_bund_advisories,
-        list_cert_bund_advisories_docs, list_cpes, list_cpes_docs, list_cves, list_cves_docs,
-        list_dfn_cert_advisories, list_dfn_cert_advisories_docs, list_filters, list_filters_docs,
-        list_hosts, list_hosts_docs, list_notes, list_notes_docs, list_nvt_families,
-        list_nvt_families_docs, list_nvts, list_nvts_docs, list_operating_systems,
-        list_operating_systems_docs, list_overrides, list_overrides_docs, list_report_formats,
-        list_report_formats_docs, list_tags, list_tags_docs, list_tickets, list_tickets_docs,
-        list_tls_certificates, list_tls_certificates_docs, list_vulnerabilities,
-        list_vulnerabilities_docs, modify_operating_system_docs, update_filter, update_filter_docs,
-        update_host, update_host_docs, update_note, update_note_docs, update_operating_system,
-        update_override, update_override_docs, update_tag, update_tag_docs,
+        get_report_format_docs, get_tag, get_tag_docs, get_tls_certificate,
+        get_tls_certificate_docs, list_cert_bund_advisories, list_cert_bund_advisories_docs,
+        list_cpes, list_cpes_docs, list_cves, list_cves_docs, list_dfn_cert_advisories,
+        list_dfn_cert_advisories_docs, list_filters, list_filters_docs, list_hosts,
+        list_hosts_docs, list_notes, list_notes_docs, list_nvt_families, list_nvt_families_docs,
+        list_nvts, list_nvts_docs, list_operating_systems, list_operating_systems_docs,
+        list_overrides, list_overrides_docs, list_report_formats, list_report_formats_docs,
+        list_tags, list_tags_docs, list_tls_certificates, list_tls_certificates_docs,
+        list_vulnerabilities, list_vulnerabilities_docs, modify_operating_system_docs,
+        update_filter, update_filter_docs, update_host, update_host_docs, update_note,
+        update_note_docs, update_operating_system, update_override, update_override_docs,
+        update_tag, update_tag_docs,
     },
     system::{
         health, health_docs, list_timezones, list_timezones_docs, ready, ready_docs, version,
@@ -580,11 +580,6 @@ fn documented_router() -> ApiRouter<GatewayService> {
         .api_route(
             "/api/v1/tags/{id}/clone",
             post_with(clone_tag, clone_tag_docs),
-        )
-        .api_route("/api/v1/tickets", get_with(list_tickets, list_tickets_docs))
-        .api_route(
-            "/api/v1/tickets/{id}",
-            get_with(get_ticket, get_ticket_docs),
         )
         .api_route("/api/v1/notes", get_with(list_notes, list_notes_docs))
         .api_route("/api/v1/notes", post_with(create_note, create_note_docs))

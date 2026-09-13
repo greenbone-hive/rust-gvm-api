@@ -9,7 +9,7 @@ use gvm_gmp::responses::{
     GetPortListsResponse, GetReportClosedCvesResponse, GetReportTlsCertificatesResponse,
     GetReportVulnsResponse, GetReportsResponse, GetResultsResponse, GetScanConfigsResponse,
     GetScannersResponse, GetSchedulesResponse, GetTargetsResponse, GetTasksResponse,
-    GetTicketsResponse, GetUsersResponse,
+    GetUsersResponse,
 };
 use gvm_protocol::Response as GmpResponse;
 
@@ -634,18 +634,6 @@ fn remaining_open_enum_conversions_preserve_backend_values() {
     assert_eq!(alert.event.as_deref(), Some("future_event"));
     assert_eq!(alert.condition.as_deref(), Some("future_condition"));
     assert_eq!(alert.method.as_deref(), Some("future_method"));
-
-    let tickets = GetTicketsResponse::from_response(&GmpResponse::from(
-        r#"<get_tickets_response status="200" status_text="OK">
-                <ticket id="123e4567-e89b-12d3-a456-426614174003">
-                    <name>Ticket</name>
-                    <status>Deferred</status>
-                </ticket>
-            </get_tickets_response>"#,
-    ))
-    .expect("tickets parse");
-    let ticket = ticket_from_gmp(tickets.items.into_iter().next().unwrap());
-    assert_eq!(ticket.status.as_deref(), Some("Deferred"));
 }
 
 #[test]
