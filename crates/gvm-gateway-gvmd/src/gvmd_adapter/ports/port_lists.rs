@@ -9,7 +9,6 @@ impl PortListPort for GvmdAdapter {
         session_token: &str,
         query: &PortListQuery,
     ) -> Result<PortListPage, GatewayError> {
-        let client = self.session_client(session_token)?;
         let filter_id = query
             .filter_id
             .as_deref()
@@ -29,18 +28,18 @@ impl PortListPort for GvmdAdapter {
                 &[],
             )
             .await?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_port_lists(GetPortListsOpts {
-                filter_string,
-                filter_id: None,
-                trash: None,
-                details: Some(true),
-            }))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetPortListsResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "port_lists.list",
+                GetPortListsRequest::new(GetPortListsOpts {
+                    filter_string,
+                    filter_id: None,
+                    trash: None,
+                    details: Some(true),
+                }),
+            )
+            .await?;
         let items = parsed
             .items
             .into_iter()
@@ -58,32 +57,30 @@ impl PortListPort for GvmdAdapter {
         session_token: &str,
         input: CreatePortListInput,
     ) -> Result<String, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(create_port_list(
-                &input.name,
-                PortListOpts {
-                    comment: input.comment,
-                    port_range: input.port_range,
-                },
-            ))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = CreatePortListResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "port_lists.create",
+                CreatePortListRequest::new(
+                    input.name,
+                    PortListOpts {
+                        comment: input.comment,
+                        port_range: input.port_range,
+                    },
+                ),
+            )
+            .await?;
         Ok(parsed.id.to_string())
     }
 
     async fn get_port_list(&self, session_token: &str, id: &str) -> Result<PortList, GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(get_port_list(&parse_entity_id(id)?))
-            .await
-            .map_err(map_gvm_error)?;
-        let parsed = GetPortListsResponse::from_response(&response).map_err(map_parse_error)?;
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "port_lists.get",
+                GetPortListRequest::new(parse_entity_id(id)?),
+            )
+            .await?;
         parsed
             .items
             .into_iter()
@@ -104,21 +101,18 @@ impl PortListPort for GvmdAdapter {
                     .to_string(),
             ));
         }
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(modify_port_list(
-                &parse_entity_id(id)?,
+        self.execute_with_session(
+            session_token,
+            "port_lists.modify",
+            ModifyPortListRequest::new(
+                parse_entity_id(id)?,
                 ModifyPortListOpts {
                     name: input.name,
                     comment: input.comment,
                 },
-            ))
-            .await
-            .map_err(map_gvm_error)?;
-        let _ = ActionResponse::from_response(&response).map_err(map_parse_error)?;
-        drop(client);
+            ),
+        )
+        .await?;
         self.get_port_list(session_token, id).await
     }
 
@@ -128,14 +122,12 @@ impl PortListPort for GvmdAdapter {
         id: &str,
         ultimate: bool,
     ) -> Result<(), GatewayError> {
-        let client = self.session_client(session_token)?;
-        let response = client
-            .lock()
-            .await?
-            .call(delete_port_list(&parse_entity_id(id)?, ultimate))
-            .await
-            .map_err(map_gvm_error)?;
-        let _ = ActionResponse::from_response(&response).map_err(map_parse_error)?;
+        self.execute_with_session(
+            session_token,
+            "port_lists.delete",
+            DeletePortListRequest::new(parse_entity_id(id)?, ultimate),
+        )
+        .await?;
         Ok(())
     }
 }
