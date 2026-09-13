@@ -49,8 +49,8 @@ use gvm_gateway_domain::{
 use gvm_gmp::{
     commands::{
         alerts::{
-            create_alert, delete_alert, get_alert, get_alerts, modify_alert, AlertData, AlertOpts,
-            GetAlertsOpts,
+            AlertData, AlertOpts, CreateAlertRequest, DeleteAlertRequest, GetAlertRequest,
+            GetAlertsOpts, GetAlertsRequest, ModifyAlertRequest,
         },
         assets::{
             DeleteAssetOpts, DeleteAssetRequest, GetAssetRequest, GetAssetsOpts, GetAssetsRequest,
@@ -135,8 +135,8 @@ use gvm_gmp::{
         },
         scanners::{GetScannerRequest, GetScannersOpts, GetScannersRequest},
         schedules::{
-            create_schedule, delete_schedule, get_schedule, get_schedules, modify_schedule,
-            GetSchedulesOpts, ScheduleOpts,
+            CreateScheduleRequest, DeleteScheduleRequest, GetScheduleRequest, GetSchedulesOpts,
+            GetSchedulesRequest, ModifyScheduleRequest, ScheduleOpts,
         },
         secinfo::{
             GetCertBundAdvisoriesRequest, GetCertBundAdvisoryRequest, GetCpeRequest,
@@ -183,11 +183,11 @@ use gvm_gmp::{
         },
     },
     responses::{
-        ActionResponse, CreateAlertResponse, CreateGroupResponse, CreateOciImageTargetResponse,
-        CreatePermissionResponse, CreateRoleResponse, CreateScheduleResponse, CreateUserResponse,
-        CreateWebApplicationTargetResponse, GetAlertsResponse, GetFeedsResponse, GetGroupsResponse,
-        GetOciImageTargetsResponse, GetPermissionsResponse, GetRolesResponse, GetSchedulesResponse,
-        GetTicketsResponse, GetTimezonesResponse, GetUserSettingsResponse, GetUsersResponse,
+        ActionResponse, CreateGroupResponse, CreateOciImageTargetResponse,
+        CreatePermissionResponse, CreateRoleResponse, CreateUserResponse,
+        CreateWebApplicationTargetResponse, GetFeedsResponse, GetGroupsResponse,
+        GetOciImageTargetsResponse, GetPermissionsResponse, GetRolesResponse, GetTicketsResponse,
+        GetTimezonesResponse, GetUserSettingsResponse, GetUsersResponse,
         GetWebApplicationTargetsResponse, ModifyUserSettingResponse, User as GmpUser,
     },
     CollectionUpdate, CredentialStoreCredentialType, EntityId, GmpRequest,
