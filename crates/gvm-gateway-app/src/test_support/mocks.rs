@@ -34,9 +34,9 @@ use gvm_gateway_domain::{
     Scanner, ScannerPage, ScannerPort, ScannerQuery, Schedule, SchedulePage, SchedulePort,
     ScheduleQuery, SetScanConfigFamilySelectionInput, SupportingResourceMeta,
     SupportingResourcePort, SupportingResourceQuery, SystemPort, Tag, TagPage, Target, TargetPage,
-    TargetPort, TargetQuery, Task, TaskAction, TaskPage, TaskPort, TaskQuery, Ticket, TicketPage,
-    Timezone, TlsCertificateAsset, TlsCertificateAssetPage, TlsCertificatePage, User, UserPage,
-    UserSetting, UserSettingList, UserSettingQuery, VulnerabilityPage,
+    TargetPort, TargetQuery, Task, TaskAction, TaskPage, TaskPort, TaskQuery, Timezone,
+    TlsCertificateAsset, TlsCertificateAssetPage, TlsCertificatePage, User, UserPage, UserSetting,
+    UserSettingList, UserSettingQuery, VulnerabilityPage,
 };
 
 /// Mock system port for tests that need deterministic readiness/version responses.
@@ -1678,26 +1678,6 @@ impl SupportingResourcePort for MockSupportingResourcePort {
 
     async fn clone_tag(&self, _: &str, _: &str) -> Result<String, GatewayError> {
         Ok("00000000-0000-0000-0000-0000000000a2".to_string())
-    }
-
-    async fn list_tickets(
-        &self,
-        _: &str,
-        query: &SupportingResourceQuery,
-    ) -> Result<TicketPage, GatewayError> {
-        Ok(TicketPage {
-            data: vec![],
-            pagination: gvm_gateway_domain::Pagination {
-                page: query.page,
-                per_page: query.per_page,
-                total: 0,
-                total_pages: 0,
-            },
-        })
-    }
-
-    async fn get_ticket(&self, _: &str, id: &str) -> Result<Ticket, GatewayError> {
-        Err(GatewayError::NotFound(format!("ticket {id} not found")))
     }
 
     async fn list_notes(

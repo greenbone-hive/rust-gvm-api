@@ -11,8 +11,8 @@ It reflects the design intent captured in [issue #26](https://github.com/greenbo
 - `rust-gvm-api` must not locally construct GMP command XML or normalize GMP wire/display values.
   If a gateway change needs that behavior, the implementation stops and the missing typed support is reported against [`greenbone-hive/rust-gvm`](https://github.com/greenbone-hive/rust-gvm) instead.
 - REST, gRPC, and future MCP are peer incoming adapters over one shared execution core.
-- The public GMP ticket surface is intentionally limited to list/get discovery.
-  Ticket lifecycle expansion is excluded by the
+- `rust-gvm-api` intentionally exposes no GMP ticket surface. Ticket discovery
+  and lifecycle operations are excluded by the
   [GMP ticket surface decision](ticket-surface-scope.md).
 - The domain layer owns session lifecycle rules and invariants, but does not hold live I/O handles.
 - The gvmd outgoing adapter owns live backend connections, session-bound command serialization, and transport concerns.
@@ -123,8 +123,8 @@ That newer transport contract supersedes the older blanket "no plain HTTP" assum
 - The GMP boundary architecture test is an executable guard for the `rust-gvm` ownership rule.
   New local GMP command construction, response parsing, or wire/display-name normalization in `gvm-gateway-gvmd` is a stop-and-report event, not a reason to add another gateway workaround.
 - Shared session/connection behavior changes should stay aligned with issue `#27` or its successor issues.
-- Coverage audits and adapter-parity plans should treat ticket operations beyond
-  the existing list/get surface as a deliberate exclusion, not a missing endpoint.
+- Coverage audits and adapter-parity plans should treat all GMP ticket operations
+  as a deliberate exclusion, not missing endpoints.
 - Specs under `spec/rest-api/` and `spec/grpc-api/` should treat this document as the architectural source of truth.
 - Repo docs must distinguish clearly between:
   - implemented gateway surfaces on `main`

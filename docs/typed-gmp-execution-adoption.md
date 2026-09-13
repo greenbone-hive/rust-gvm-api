@@ -17,7 +17,9 @@ first typed-execution migration:
 
 These source counts are migration indicators, not permanent API contracts. The
 OpenAPI path and operation counts are the compatibility baseline and must not
-change solely because of this internal boundary migration.
+change solely because of this internal boundary migration. Issue
+[#500](https://github.com/greenbone-hive/rust-gvm-api/issues/500) deliberately
+contracts the Technology Preview ticket surface to 121 paths and 198 operations.
 
 ## Migration rules
 
@@ -43,16 +45,15 @@ alerts and schedules; identity administration; feeds and system discovery;
 agents and agent groups; and specialized targets. Architecture tests prevent
 these migrated modules from reintroducing the raw call/parser boundary.
 
-After those migrations, production code under `src/gvmd_adapter` contains two
-direct `.call(...)` sites, no `call_with_session(...)` helper, and two manual
-`::from_response(...)` pairings. All four remaining markers belong to the two
-ticket reads described below. The generated REST OpenAPI remains at the
-123-path, 200-operation baseline.
+After those migrations and the ticket-surface removal, production code under
+`src/gvmd_adapter` contains no direct `.call(...)` sites, no
+`call_with_session(...)` helper, and no manual `::from_response(...)` pairings.
+The generated REST OpenAPI contains 121 paths and 198 operations.
 
-## Intentional raw exceptions
+## Raw compatibility exceptions
 
-The two ticket reads remain on the raw compatibility path. The public ticket
-surface is intentionally discovery-only, and its lower-level compatibility
-scope is documented in `docs/ticket-surface-scope.md`. An architecture test
-keeps the production raw-call and manual-parser inventory fixed at those two
-operations.
+There are no raw execution or manual response-parsing exceptions in the
+gvmd adapter. Issue #500 removed the ticket discovery surface that previously
+accounted for its final two exceptions. Architecture tests require zero
+`.call(...)` and `::from_response(...)` sites in production adapter modules;
+any future exception requires an explicit, reviewed architectural decision.

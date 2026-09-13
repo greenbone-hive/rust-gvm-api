@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Greenbone AG
 
 //! Supporting resource catalogs used by report export, finding triage, saved
-//! filters, tags, tickets, asset inventory, and NVT discovery workflows.
+//! filters, tags, asset inventory, and NVT discovery workflows.
 
 use serde::{Deserialize, Serialize};
 
@@ -600,44 +600,6 @@ pub struct ModifyOperatingSystemInput {
     /// The pinned gvmd operating-system asset update surface only accepts a
     /// comment payload, so this input intentionally carries no other fields.
     pub comment: Option<String>,
-}
-
-/// Domain ticket representation.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct Ticket {
-    /// Shared resource metadata.
-    #[serde(flatten)]
-    pub meta: SupportingResourceMeta,
-    /// Optional ticket status.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<String>,
-    /// Optional assigned user reference.
-    #[serde(rename = "assignedTo", skip_serializing_if = "Option::is_none")]
-    pub assigned_to: Option<ResourceRef>,
-    /// Optional related result reference.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub result: Option<ResourceRef>,
-    /// Optional related task reference.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub task: Option<ResourceRef>,
-    /// Optional note for the open state.
-    #[serde(rename = "openNote", skip_serializing_if = "Option::is_none")]
-    pub open_note: Option<String>,
-    /// Optional note for the fixed state.
-    #[serde(rename = "fixedNote", skip_serializing_if = "Option::is_none")]
-    pub fixed_note: Option<String>,
-    /// Optional note for the closed state.
-    #[serde(rename = "closedNote", skip_serializing_if = "Option::is_none")]
-    pub closed_note: Option<String>,
-}
-
-/// Paginated ticket list response.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct TicketPage {
-    /// Page items.
-    pub data: Vec<Ticket>,
-    /// Pagination metadata.
-    pub pagination: Pagination,
 }
 
 /// Domain note representation.

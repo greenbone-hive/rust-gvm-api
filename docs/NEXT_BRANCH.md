@@ -33,3 +33,11 @@ lock after rust-gvm `next` advances is an explicit, reviewed integration change.
   report focused gaps upstream instead of changing the gateway boundary.
 - Move mature work to `main` through bounded reviewed pull requests rather than
   merging the entire development branch.
+
+## Intentional contract changes
+
+Issue [#500](https://github.com/greenbone-hive/rust-gvm-api/issues/500) removes
+the Technology Preview GMP ticket discovery endpoints from `next`. The REST and
+OpenAPI surface therefore contains neither `/api/v1/tickets` nor
+`/api/v1/tickets/{id}`. Direct GMP consumers remain unaffected because ticket
+support in `greenbone-hive/rust-gvm` is unchanged.

@@ -6,10 +6,10 @@ use serde_json::json;
 use super::{
     reject_host_ultimate_query, reject_operating_system_ultimate_query, ModifyHostRequest,
     ModifyOperatingSystemRequest, NvtListQuery, NvtSortOrder, OperatingSystemResponse,
-    PaginationOnlyQuery, SupportingListQuery, TicketResponse, TicketStatus,
+    PaginationOnlyQuery, SupportingListQuery,
 };
 use crate::query::parse_delete_resource_query;
-use gvm_gateway_domain::{OperatingSystem, OperatingSystemHost, SupportingResourceMeta, Ticket};
+use gvm_gateway_domain::{OperatingSystem, OperatingSystemHost, SupportingResourceMeta};
 
 #[test]
 fn supporting_query_decodes_percent_encoded_filter_values() {
@@ -219,48 +219,4 @@ fn operating_system_response_preserves_typed_asset_view() {
     assert_eq!(value["allInstalls"], json!(3));
     assert_eq!(value["hosts"][0]["name"], json!("192.0.2.10"));
     assert!(value.get("assetType").is_none());
-}
-
-fn ticket_with_status(status: &str) -> Ticket {
-    Ticket {
-        meta: SupportingResourceMeta {
-            id: "123e4567-e89b-12d3-a456-426614174000".to_string(),
-            name: "Ticket".to_string(),
-            comment: None,
-            creation_time: None,
-            modification_time: None,
-            writable: true,
-            in_use: false,
-        },
-        status: Some(status.to_string()),
-        assigned_to: None,
-        result: None,
-        task: None,
-        open_note: None,
-        fixed_note: None,
-        closed_note: None,
-    }
-}
-
-#[test]
-fn ticket_status_deserialization_preserves_unknown_values() {
-    // Ticket status responses should preserve backend-added states even
-    // when this gateway build only documents the current rust-gvm set.
-    let parsed: TicketStatus =
-        serde_json::from_value(json!("Deferred")).expect("ticket status should parse");
-
-    assert_eq!(serde_json::to_value(parsed).unwrap(), json!("Deferred"));
-}
-
-#[test]
-fn ticket_response_preserves_known_and_unknown_statuses() {
-    // Current gvmd responses use display-case ticket statuses; future
-    // values should remain visible to clients without coercion.
-    let known = serde_json::to_value(TicketResponse::from(ticket_with_status("Open")))
-        .expect("ticket response should serialize");
-    let unknown = serde_json::to_value(TicketResponse::from(ticket_with_status("Deferred")))
-        .expect("ticket response should serialize");
-
-    assert_eq!(known["status"], json!("Open"));
-    assert_eq!(unknown["status"], json!("Deferred"));
 }

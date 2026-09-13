@@ -619,55 +619,6 @@ paths:
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
 
-  /tickets:
-    get:
-      operationId: getTickets
-      tags: [Tickets]
-      summary: List tickets
-      description: Returns a paginated list of tickets.
-      parameters:
-        - $ref: "./common.yaml#/components/parameters/FilterString"
-        - $ref: "./common.yaml#/components/parameters/FilterId"
-        - $ref: "./common.yaml#/components/parameters/Page"
-        - $ref: "./common.yaml#/components/parameters/PerPage"
-      responses:
-        "200":
-          description: Paginated list of tickets
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TicketList"
-        "400":
-          $ref: "./common.yaml#/components/responses/BadRequest"
-        "401":
-          $ref: "./common.yaml#/components/responses/Unauthorized"
-        "502":
-          $ref: "./common.yaml#/components/responses/BadGateway"
-
-  /tickets/{id}:
-    parameters:
-      - $ref: "./common.yaml#/components/parameters/ResourceId"
-    get:
-      operationId: getTicket
-      tags: [Tickets]
-      summary: Get a ticket
-      description: Returns the details for a single ticket.
-      responses:
-        "200":
-          description: Ticket details
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Ticket"
-        "400":
-          $ref: "./common.yaml#/components/responses/BadRequest"
-        "401":
-          $ref: "./common.yaml#/components/responses/Unauthorized"
-        "502":
-          $ref: "./common.yaml#/components/responses/BadGateway"
-        "404":
-          $ref: "./common.yaml#/components/responses/NotFound"
-
   /notes:
     get:
       operationId: getNotes
@@ -1687,57 +1638,6 @@ components:
           format: uuid
         active:
           type: boolean
-
-    Ticket:
-      type: object
-      required:
-        - id
-        - name
-        - writable
-        - inUse
-      properties:
-        id:
-          type: string
-          format: uuid
-        name:
-          type: string
-        comment:
-          type: string
-        creationTime:
-          type: string
-        modificationTime:
-          type: string
-        writable:
-          type: boolean
-        inUse:
-          type: boolean
-        status:
-          type: string
-        assignedTo:
-          $ref: "./common.yaml#/components/schemas/ResourceRef"
-        result:
-          $ref: "./common.yaml#/components/schemas/ResourceRef"
-        task:
-          $ref: "./common.yaml#/components/schemas/ResourceRef"
-        openNote:
-          type: string
-        fixedNote:
-          type: string
-        closedNote:
-          type: string
-
-    TicketList:
-      type: object
-      required:
-        - data
-        - pagination
-      properties:
-        data:
-          type: array
-          items:
-            $ref: "#/components/schemas/Ticket"
-        pagination:
-          $ref: "./common.yaml#/components/schemas/Pagination"
 
     Note:
       type: object

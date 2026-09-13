@@ -366,10 +366,10 @@ fn remaining_adapter_families_and_raw_call_inventory_stay_typed() {
         manual_parsers += contents.matches("::from_response(").count();
         raw_helpers += contents.matches("call_with_session").count();
     }
-    assert_eq!(raw_calls, 2, "only the two ticket reads may remain raw");
+    assert_eq!(raw_calls, 0, "production adapters must stay fully typed");
     assert_eq!(
-        manual_parsers, 2,
-        "only the two ticket reads may manually parse responses"
+        manual_parsers, 0,
+        "production adapters must not manually parse GMP responses"
     );
     assert_eq!(
         raw_helpers, 0,
@@ -409,20 +409,13 @@ fn migrated_supporting_resource_families_stay_on_typed_execution() {
     );
     assert_eq!(
         supporting.matches(".call(").count(),
-        2,
-        "only the two documented ticket operations may use raw calls"
+        0,
+        "supporting resources must not bypass typed execution with raw calls"
     );
     assert_eq!(
-        supporting
-            .matches("GetTicketsResponse::from_response")
-            .count(),
-        2,
-        "only the two documented ticket operations may parse raw responses"
-    );
-    assert!(
-        supporting.contains("rust-gvm does not expose semantic ticket requests yet")
-            && supporting.contains("rust-gvm does not expose a semantic ticket detail request yet"),
-        "the remaining raw ticket operations must stay explicitly documented"
+        supporting.matches("::from_response").count(),
+        0,
+        "supporting resources must not parse GMP responses manually"
     );
 
     let results =
