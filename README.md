@@ -229,6 +229,7 @@ Useful follow-up commands:
 - [REST API OpenSpec](spec/rest-api/openspec.md)
 - [gRPC API OpenSpec](spec/grpc-api/openspec.md)
 - [Gateway Architecture](docs/gateway-architecture.md)
+- [GMP to REST Translation Model](docs/gmp-rest-translation.md)
 - [GMP API Proxy Analysis](docs/gmp-api-proxy-analysis.md)
 - [Proxy Access Control Analysis](docs/proxy-access-control-analysis.md)
 - [MCP Implementation Roadmap](docs/mcp-implementation-roadmap.md)
