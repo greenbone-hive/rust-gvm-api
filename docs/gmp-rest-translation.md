@@ -21,7 +21,8 @@ The analysis is based on these repository snapshots:
 
 - [`greenbone/gsa` at `4ba9551`](https://github.com/greenbone/gsa/tree/4ba9551bcd82bc53e22684ab5bb0eacc73419729)
 - [`greenbone/gsad` at `b98497f`](https://github.com/greenbone/gsad/tree/b98497f2cad94888b594aa6af1c84719d3c36a03)
-- `greenbone-hive/rust-gvm-api` `main` at `386ede0`
+- `greenbone-hive/rust-gvm-api` `main` at `0ff45e7`
+- [`greenbone-hive/rust-gvm` at the API-pinned `5a43e1e`](https://github.com/greenbone-hive/rust-gvm/tree/5a43e1e90a0645202a79c10d47bef15b6684aeab)
 
 GSA and GSAD are valuable behavioral references, but they are not the
 normative GMP specification. Their bridge is tailored to the needs of the GSA
@@ -492,7 +493,204 @@ fields.
    serialization, and a real-gvmd lifecycle where the operation is mutable or
    version-sensitive.
 
-## 7. Related Documentation
+## 7. Recommendations from the GSA/GSAD Comparison
+
+The current resource-oriented paths, bounded action routes, asynchronous report
+export jobs, Problem Details responses, and typed `rust-gvm` boundary are the
+right foundation. The comparison does not justify a command tunnel or automatic
+endpoint parity with GSA. It does identify the following adjustments and
+follow-up work.
+
+| Priority | Recommendation | Primary owner |
+| --- | --- | --- |
+| 1 | Make partial-update, clear, detach, and reset semantics explicit | `rust-gvm-api`, supported by `rust-gvm` update types |
+| 1 | Model actionable command-support states and map unsupported backends consistently | `rust-gvm`, then `rust-gvm-api` |
+| 2 | Complete update support for specialized task variants | both repositories |
+| 2 | Add delta/comparison report export to the existing export-job workflow | both repositories |
+| 2 | Stabilize the collection query and GMP-filter compatibility contract | both repositories |
+| 3 | Apply one bounded artifact contract to downloads and future uploads | `rust-gvm-api` |
+| Continuous | Maintain an operation disposition ledger and compatibility scenario suite | both repositories |
+
+### 7.1 Make update semantics explicit
+
+GSA and GSAD's save flows show that GMP updates frequently distinguish omitted,
+set, clear, detach, and reset-to-default states. They sometimes encode those
+states with empty elements or sentinel identifiers. The REST contract must not
+collapse those states accidentally.
+
+Many current `PUT` request schemas are sparse updates in which every property is
+optional. Some request DTOs also use default empty collections, making an
+omitted field indistinguishable from an explicit clear. For example, task
+updates cannot detach a schedule through the public JSON shape, and omitted and
+empty observer or preference collections do not have a uniform contract.
+
+Before the mutable surface grows further:
+
+- define one JSON rule across resources: omitted means unchanged, a value means
+  set or replace, and an explicit `null` or documented empty collection means
+  detach or clear;
+- prefer `PATCH` for this partial-update behavior before the API becomes stable;
+  retain `PUT` only for full replacement or as a documented compatibility alias;
+- preserve the distinction in domain inputs instead of converting early to
+  `Option<T>` or a default empty collection; and
+- carry it into `rust-gvm` with types such as `ScalarUpdate<T>` and
+  `CollectionUpdate<T>`, including exact XML tests for every state.
+
+This is more important than matching the names of GSA's save commands: it
+prevents a harmless-looking REST omission from clearing backend state.
+
+### 7.2 Complete the specialized-task lifecycle
+
+`POST /api/v1/tasks` and task responses already recognize classic,
+agent-group, OCI-image, web-application, and import tasks. `PUT
+/api/v1/tasks/{id}`, however, exposes only the classic target, scan-config, and
+scanner relationships. GSA and GSAD contain separate save flows for the other
+task variants, all implemented as variant-specific `modify_task` payloads.
+
+The REST update shape should therefore accept the relevant relationship and
+preference fields for the task's existing variant, while rejecting mixed
+selectors and attempts to change a task from one variant to another. Task
+responses should also expose a stable variant discriminator; the existing
+known relationship fields can remain for compatibility, while future backend
+target kinds should not be silently discarded.
+
+The prerequisite in `rust-gvm` is a typed modify-task model that can encode
+`agent_group`, `oci_image_target`, and `web_application_target` relationships
+plus their variant-specific preferences. Validation must operate on the final
+typed request and enforce that fields are valid for that variant. The gateway
+can then map the REST discriminator and fields without constructing XML or
+reproducing GSAD's sentinel conventions.
+
+### 7.3 Add delta report export to the existing job resource
+
+GSA can render a report relative to another report by passing
+`delta_report_id` to `get_reports`. The reviewed GSAD snapshot also exposes the
+newer `export_delta_scan_report` command. The current
+`POST /api/v1/reports/{id}/exports` job request supports report formats,
+report configs, and filters, but it has no comparison-report input. The pinned
+`rust-gvm` `GetReportExportOpts` and `ExportScanReportOpts` omit that input and
+there is no typed `export_delta_scan_report` request.
+
+Add an optional `deltaReportId` to the existing report-export request rather
+than adding an RPC-style route. The resulting resource remains a
+`report_export` job and should record both report references. Validate UUIDs,
+reject identical report identifiers, enforce access to both reports, and use
+the existing job polling, cancellation, retention, and result-download
+semantics.
+
+In `rust-gvm`, first add typed support for the `get_reports` delta attribute and
+a distinct help-discovery-gated `ExportDeltaScanReportRequest`. Exact request
+and response fixtures should cover filters, report formats, report configs,
+unknown command discovery, and server failure. `rust-gvm-api` should select the
+appropriate typed request according to backend support; it must not assemble a
+delta command locally.
+
+### 7.4 Stabilize collection queries and the filter escape hatch
+
+The public `filter` query parameter is the main deliberate GMP-shaped escape
+hatch in the REST API. It is useful because GSA demonstrates many real filter,
+sort, aggregate, and resource-specific combinations, but it also exposes a
+backend expression language whose accepted fields vary by resource and gvmd
+version.
+
+Define and test one collection-query contract across endpoints:
+
+- specify how `filterId`, inline `filter`, typed resource selectors, sorting,
+  `page`, and `perPage` are combined and which one wins on conflict;
+- keep `first`, `rows`, and endpoint-owned scope terms reserved so clients
+  cannot override gateway pagination or escape a parent resource;
+- reject unknown query parameters instead of silently ignoring misspellings;
+- bound filter length and complexity before sending it to gvmd; and
+- add common `sortBy` and `sortOrder` parameters, plus high-value typed
+  selectors, when they remove the need for clients to embed routine behavior in
+  a GMP expression.
+
+Extend `rust-gvm`'s filter composition types to perform the backend-safe
+serialization and reserved-term validation shared by callers. Do not implement
+a second, divergent GMP filter grammar in the REST handler. The OpenAPI
+description should continue to label raw `filter` as an advanced,
+backend-dependent compatibility surface rather than implying that every gvmd
+filter field is part of the stable REST model.
+
+Generic `get_aggregates` parity is not recommended. Add a resource-specific
+analytics endpoint only when a concrete consumer needs a stable metric and
+shape; otherwise GSA's aggregate calls remain test and requirements evidence,
+not public-contract requirements.
+
+### 7.5 Make capability and server outcomes actionable
+
+Version numbers alone do not describe all observed behavior. Commands may be
+version-gated, advertised only through XML help discovery, compiled out, or
+present but unauthorized. `rust-gvm` should replace the ambiguous
+`supports_command() -> Option<bool>` result with actionable states such as
+supported, discovery required, insufficient version, not advertised, and
+unknown to the library. This work is tracked in
+[`rust-gvm` issue #600](https://github.com/greenbone-hive/rust-gvm/issues/600).
+
+`rust-gvm-api` should explicitly perform and cache required discovery in the
+authenticated backend-session context, then map insufficient-version and
+not-advertised outcomes to the documented `501 Not Implemented` problem. An
+unknown library command indicates an adapter/programming defect and must not be
+reported as an ordinary backend capability absence.
+
+Similarly, `rust-gvm` should preserve non-success GMP status and status text as
+structured server outcomes for every typed execution path. The gateway remains
+the owner of HTTP classification, but it should use one central mapping instead
+of endpoint-specific message matching. Tests should cover bad input,
+authentication, authorization, missing resources, conflicts, unavailable
+backends, and timeouts. This does not require a public capability-discovery
+endpoint; callers can rely on the documented operation and its `501` behavior.
+
+### 7.6 Use one bounded artifact contract
+
+GSA/GSAD have several exceptional binary and upload flows: report rendering,
+agent installers and support bundles, credential downloads, report imports,
+and report-format imports. The existing asynchronous report job and bounded
+agent support-bundle endpoint are better patterns than exposing each GMP
+download command directly.
+
+Factor their guarantees into a common artifact policy:
+
+- per-artifact and aggregate storage limits, with limits enforced before an
+  unbounded in-memory buffer is accepted;
+- allowlisted or normalized media types and sanitized attachment filenames;
+- authenticated ownership, authorization checks, expiry, cancellation, and
+  cleanup;
+- bounded upload media types and sizes for any future import workflow; and
+- streaming or disk-backed spooling when the maximum artifact is too large for
+  predictable in-memory handling.
+
+Future report and report-format imports should be modeled as bounded resources
+or jobs with these rules. Credential private-material export should remain
+omitted unless a concrete product requirement and a stricter secret-delivery
+contract justify it.
+
+### 7.7 Convert the reference catalog into governance and tests
+
+Maintain a disposition ledger for the GSA/GSAD operation catalog and the public
+typed `rust-gvm` surface. Each operation should be classified as exposed,
+mapped to another REST workflow, internal, upstream-blocked, deferred, or
+deliberately omitted. A new GSA operation or public typed request should require
+a disposition, not necessarily a new endpoint. The broader parity ledger is
+tracked in
+[`rust-gvm-api` issue #381](https://github.com/greenbone-hive/rust-gvm-api/issues/381).
+
+For every accepted mapping, derive tests at the layer that owns the behavior:
+
+- exact XML request/response and version/help gates in `rust-gvm`;
+- domain projection, filter composition, and error mapping in the gvmd adapter;
+- OpenAPI and HTTP contract tests in the REST adapter; and
+- representative real-gvmd lifecycles for mutable, version-sensitive, upload,
+  and download workflows.
+
+The scenario set should include unknown future enum values and optional model
+fields, missing or inconsistent collection counts, saved filters with their own
+pagination or sorting, explicit clear/detach updates, permission failures,
+binary metadata, oversized artifacts, and backend disconnects. This reuses the
+most valuable part of GSA/GSAD—their accumulated compatibility knowledge—without
+making their bridge the public contract.
+
+## 8. Related Documentation
 
 - [`gateway-architecture.md`](gateway-architecture.md) defines the authoritative
   repository layering and session ownership.
