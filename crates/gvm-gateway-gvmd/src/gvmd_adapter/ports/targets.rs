@@ -21,7 +21,7 @@ impl TargetPort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "targets.list",
-                GetTargetsRequest::new(GetTargetsOpts {
+                GetTargetsRequest {
                     filter_string: self
                         .paginated_filter_resolving_filter_id(
                             session_token,
@@ -36,7 +36,7 @@ impl TargetPort for GvmdAdapter {
                     filter_id: None,
                     trash: None,
                     details: Some(true),
-                }),
+                },
             )
             .await?;
         let items = parsed
@@ -53,7 +53,7 @@ impl TargetPort for GvmdAdapter {
                 .execute_with_session(
                     session_token,
                     "targets.list",
-                    GetTargetsRequest::new(GetTargetsOpts {
+                    GetTargetsRequest {
                         filter_string: self
                             .filter_resolving_filter_id(
                                 session_token,
@@ -66,7 +66,7 @@ impl TargetPort for GvmdAdapter {
                         filter_id: None,
                         trash: None,
                         details: Some(true),
-                    }),
+                    },
                 )
                 .await?;
             let items = parsed
@@ -101,46 +101,35 @@ impl TargetPort for GvmdAdapter {
             .transpose()?
             .map(TargetPortSelection::PortList)
             .unwrap_or_else(default_target_ports);
-        let request = CreateTargetRequest::new(
-            input.name,
-            CreateTargetOpts {
-                comment: input.comment,
-                hosts,
-                alive_test: input
-                    .alive_test
-                    .as_deref()
-                    .map(parse_alive_test)
-                    .transpose()?,
-                ports,
-                ssh_credential_id: input
-                    .ssh_credential_id
-                    .as_deref()
-                    .map(parse_entity_id)
-                    .transpose()?,
-                ssh_credential_port: None,
-                ssh_elevate_credential_id: None,
-                smb_credential_id: input
-                    .smb_credential_id
-                    .as_deref()
-                    .map(parse_entity_id)
-                    .transpose()?,
-                krb5_credential_id: None,
-                esxi_credential_id: input
-                    .esxi_credential_id
-                    .as_deref()
-                    .map(parse_entity_id)
-                    .transpose()?,
-                snmp_credential_id: input
-                    .snmp_credential_id
-                    .as_deref()
-                    .map(parse_entity_id)
-                    .transpose()?,
-                reverse_lookup_only: input.reverse_lookup_only,
-                reverse_lookup_unify: input.reverse_lookup_unify,
-                allow_simultaneous_ips: None,
-            },
-        )
-        .map_err(|error| GatewayError::InvalidInput(error.to_string()))?;
+        let mut request = CreateTargetRequest::new(input.name, hosts, ports);
+        request.comment = input.comment;
+        request.alive_test = input
+            .alive_test
+            .as_deref()
+            .map(parse_alive_test)
+            .transpose()?;
+        request.ssh_credential_id = input
+            .ssh_credential_id
+            .as_deref()
+            .map(parse_entity_id)
+            .transpose()?;
+        request.smb_credential_id = input
+            .smb_credential_id
+            .as_deref()
+            .map(parse_entity_id)
+            .transpose()?;
+        request.esxi_credential_id = input
+            .esxi_credential_id
+            .as_deref()
+            .map(parse_entity_id)
+            .transpose()?;
+        request.snmp_credential_id = input
+            .snmp_credential_id
+            .as_deref()
+            .map(parse_entity_id)
+            .transpose()?;
+        request.reverse_lookup_only = input.reverse_lookup_only;
+        request.reverse_lookup_unify = input.reverse_lookup_unify;
         let parsed = self
             .execute_with_session(session_token, "targets.create", request)
             .await?;
@@ -193,61 +182,52 @@ impl TargetPort for GvmdAdapter {
                 ));
             }
         };
-        let request = ModifyTargetRequest::new(
-            target_id,
-            ModifyTargetOpts {
-                name: input.name,
-                comment: input.comment,
-                hosts,
-                reverse_lookup_only: input.reverse_lookup_only,
-                reverse_lookup_unify: input.reverse_lookup_unify,
-                alive_test: input
-                    .alive_test
-                    .as_deref()
-                    .map(parse_alive_test)
-                    .transpose()?,
-                port_list_id: input
-                    .port_list_id
-                    .as_deref()
-                    .map(parse_entity_id)
-                    .transpose()?
-                    .map(ScalarUpdate::Set)
-                    .unwrap_or_default(),
-                ssh_credential_id: input
-                    .ssh_credential_id
-                    .as_deref()
-                    .map(parse_entity_id)
-                    .transpose()?
-                    .map(ScalarUpdate::Set)
-                    .unwrap_or_default(),
-                ssh_credential_port: ScalarUpdate::Omitted,
-                ssh_elevate_credential_id: ScalarUpdate::Omitted,
-                smb_credential_id: input
-                    .smb_credential_id
-                    .as_deref()
-                    .map(parse_entity_id)
-                    .transpose()?
-                    .map(ScalarUpdate::Set)
-                    .unwrap_or_default(),
-                krb5_credential_id: ScalarUpdate::Omitted,
-                esxi_credential_id: input
-                    .esxi_credential_id
-                    .as_deref()
-                    .map(parse_entity_id)
-                    .transpose()?
-                    .map(ScalarUpdate::Set)
-                    .unwrap_or_default(),
-                snmp_credential_id: input
-                    .snmp_credential_id
-                    .as_deref()
-                    .map(parse_entity_id)
-                    .transpose()?
-                    .map(ScalarUpdate::Set)
-                    .unwrap_or_default(),
-                allow_simultaneous_ips: None,
-            },
-        )
-        .map_err(|error| GatewayError::InvalidInput(error.to_string()))?;
+        let mut request = ModifyTargetRequest::new(target_id);
+        request.name = input.name;
+        request.comment = input.comment;
+        request.hosts = hosts;
+        request.reverse_lookup_only = input.reverse_lookup_only;
+        request.reverse_lookup_unify = input.reverse_lookup_unify;
+        request.alive_test = input
+            .alive_test
+            .as_deref()
+            .map(parse_alive_test)
+            .transpose()?;
+        request.port_list_id = input
+            .port_list_id
+            .as_deref()
+            .map(parse_entity_id)
+            .transpose()?
+            .map(ScalarUpdate::Set)
+            .unwrap_or_default();
+        request.ssh_credential_id = input
+            .ssh_credential_id
+            .as_deref()
+            .map(parse_entity_id)
+            .transpose()?
+            .map(ScalarUpdate::Set)
+            .unwrap_or_default();
+        request.smb_credential_id = input
+            .smb_credential_id
+            .as_deref()
+            .map(parse_entity_id)
+            .transpose()?
+            .map(ScalarUpdate::Set)
+            .unwrap_or_default();
+        request.esxi_credential_id = input
+            .esxi_credential_id
+            .as_deref()
+            .map(parse_entity_id)
+            .transpose()?
+            .map(ScalarUpdate::Set)
+            .unwrap_or_default();
+        request.snmp_credential_id = input
+            .snmp_credential_id
+            .as_deref()
+            .map(parse_entity_id)
+            .transpose()?
+            .map(ScalarUpdate::Set)
+            .unwrap_or_default();
         self.execute_with_session(session_token, "targets.modify", request)
             .await?;
         self.get_target(session_token, id).await
@@ -296,12 +276,12 @@ impl TargetPort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "oci_image_targets.list",
-                GetOciImageTargetsRequest::new(GetOciImageTargetsOpts {
+                GetOciImageTargetsRequest {
                     filter_string,
                     filter_id: None,
                     trash: Some(query.trash),
                     tasks: Some(true),
-                }),
+                },
             )
             .await?;
         let items = parsed
@@ -324,12 +304,12 @@ impl TargetPort for GvmdAdapter {
                 .execute_with_session(
                     session_token,
                     "oci_image_targets.list",
-                    GetOciImageTargetsRequest::new(GetOciImageTargetsOpts {
+                    GetOciImageTargetsRequest {
                         filter_string,
                         filter_id: None,
                         trash: Some(query.trash),
                         tasks: Some(true),
-                    }),
+                    },
                 )
                 .await?;
             let items = parsed
@@ -359,19 +339,11 @@ impl TargetPort for GvmdAdapter {
             .as_deref()
             .map(parse_entity_id)
             .transpose()?;
+        let mut request = CreateOciImageTargetRequest::new(input.name, input.image_references);
+        request.comment = input.comment;
+        request.credential_id = credential_id;
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "oci_image_targets.create",
-                CreateOciImageTargetRequest::new(
-                    input.name,
-                    input.image_references,
-                    CreateOciImageTargetOpts {
-                        comment: input.comment,
-                        credential_id,
-                    },
-                ),
-            )
+            .execute_with_session(session_token, "oci_image_targets.create", request)
             .await?;
         Ok(parsed.id.to_string())
     }
@@ -397,11 +369,11 @@ impl TargetPort for GvmdAdapter {
         id: &str,
     ) -> Result<OciImageTarget, GatewayError> {
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "oci_image_targets.get",
-                GetOciImageTargetRequest::new(parse_entity_id(id)?, Some(true)),
-            )
+            .execute_with_session(session_token, "oci_image_targets.get", {
+                let mut request = GetOciImageTargetRequest::new(parse_entity_id(id)?);
+                request.tasks = Some(true);
+                request
+            })
             .await?;
         parsed
             .items
@@ -423,20 +395,13 @@ impl TargetPort for GvmdAdapter {
             .as_deref()
             .map(parse_entity_id)
             .transpose()?;
-        self.execute_with_session(
-            session_token,
-            "oci_image_targets.modify",
-            ModifyOciImageTargetRequest::new(
-                target_id,
-                ModifyOciImageTargetOpts {
-                    name: input.name,
-                    comment: input.comment,
-                    image_references: input.image_references.unwrap_or_default(),
-                    credential_id,
-                },
-            ),
-        )
-        .await?;
+        let mut request = ModifyOciImageTargetRequest::new(target_id);
+        request.name = input.name;
+        request.comment = input.comment;
+        request.image_references = input.image_references.unwrap_or_default();
+        request.credential_id = credential_id;
+        self.execute_with_session(session_token, "oci_image_targets.modify", request)
+            .await?;
         self.get_oci_image_target(session_token, id).await
     }
 
@@ -483,12 +448,12 @@ impl TargetPort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "web_application_targets.list",
-                GetWebApplicationTargetsRequest::new(GetWebApplicationTargetsOpts {
+                GetWebApplicationTargetsRequest {
                     filter_string,
                     filter_id: None,
                     trash: Some(query.trash),
                     tasks: Some(true),
-                }),
+                },
             )
             .await?;
         let items = parsed
@@ -511,12 +476,12 @@ impl TargetPort for GvmdAdapter {
                 .execute_with_session(
                     session_token,
                     "web_application_targets.list",
-                    GetWebApplicationTargetsRequest::new(GetWebApplicationTargetsOpts {
+                    GetWebApplicationTargetsRequest {
                         filter_string,
                         filter_id: None,
                         trash: Some(query.trash),
                         tasks: Some(true),
-                    }),
+                    },
                 )
                 .await?;
             let items = parsed
@@ -546,20 +511,12 @@ impl TargetPort for GvmdAdapter {
             .as_deref()
             .map(parse_entity_id)
             .transpose()?;
+        let mut request = CreateWebApplicationTargetRequest::new(input.name, input.urls);
+        request.comment = input.comment;
+        request.exclude_urls = input.exclude_urls;
+        request.credential_id = credential_id;
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "web_application_targets.create",
-                CreateWebApplicationTargetRequest::new(
-                    input.name,
-                    input.urls,
-                    CreateWebApplicationTargetOpts {
-                        comment: input.comment,
-                        exclude_urls: input.exclude_urls,
-                        credential_id,
-                    },
-                ),
-            )
+            .execute_with_session(session_token, "web_application_targets.create", request)
             .await?;
         Ok(parsed.id.to_string())
     }
@@ -585,11 +542,11 @@ impl TargetPort for GvmdAdapter {
         id: &str,
     ) -> Result<WebApplicationTarget, GatewayError> {
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "web_application_targets.get",
-                GetWebApplicationTargetRequest::new(parse_entity_id(id)?, Some(true)),
-            )
+            .execute_with_session(session_token, "web_application_targets.get", {
+                let mut request = GetWebApplicationTargetRequest::new(parse_entity_id(id)?);
+                request.tasks = Some(true);
+                request
+            })
             .await?;
         parsed
             .items
@@ -611,21 +568,14 @@ impl TargetPort for GvmdAdapter {
             .as_deref()
             .map(parse_entity_id)
             .transpose()?;
-        self.execute_with_session(
-            session_token,
-            "web_application_targets.modify",
-            ModifyWebApplicationTargetRequest::new(
-                target_id,
-                ModifyWebApplicationTargetOpts {
-                    name: input.name,
-                    comment: input.comment,
-                    urls: input.urls.unwrap_or_default(),
-                    exclude_urls: input.exclude_urls.unwrap_or_default(),
-                    credential_id,
-                },
-            ),
-        )
-        .await?;
+        let mut request = ModifyWebApplicationTargetRequest::new(target_id);
+        request.name = input.name;
+        request.comment = input.comment;
+        request.urls = input.urls.unwrap_or_default();
+        request.exclude_urls = input.exclude_urls.unwrap_or_default();
+        request.credential_id = credential_id;
+        self.execute_with_session(session_token, "web_application_targets.modify", request)
+            .await?;
         self.get_web_application_target(session_token, id).await
     }
 
