@@ -54,6 +54,20 @@ fn map_gvm_error_400_to_invalid_input() {
 }
 
 #[test]
+fn map_gvm_request_validation_to_invalid_input() {
+    // Canonical request validation happens client-side, but remains a caller
+    // input error rather than becoming a backend availability failure.
+    let error = gvm_client::GvmError::Request(gvm_gmp::GmpRequestError::invalid_field(
+        "name",
+        "must not be empty",
+    ));
+
+    let mapped = map_gvm_error(error);
+
+    assert!(matches!(mapped, GatewayError::InvalidInput(detail) if detail.contains("name")));
+}
+
+#[test]
 fn map_gvm_error_400_authentication_failed_to_unauthorized() {
     // gvmd may report failed login as a 400 server error; the REST
     // contract still exposes credential failure as 401 Unauthorized.
