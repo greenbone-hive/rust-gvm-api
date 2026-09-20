@@ -142,6 +142,9 @@ Run the compose-backed REST end-to-end tests through the wrapper script:
 
 The wrapper waits for `/ready`, prints feed status for diagnostics, then polls the REST resources required by the discovery scan test: discovery scan configs, OpenVAS scanner availability, and usable port lists. This is stricter than feed status alone because gvmd can accept GMP connections before first-boot data imports have populated REST-visible scan configs.
 
+The same command also runs the bounded three-scenario
+[formal BDD pilot](docs/bdd-pilot.md) serially against that environment.
+
 Run the weekly-scope performance slice through its dedicated wrapper:
 
 ```bash
