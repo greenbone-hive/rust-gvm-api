@@ -207,10 +207,19 @@ Report reads and result subresources use `page` and `perPage`.
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/v1/scan-configs` | List scan configurations |
-| `POST` | `/api/v1/scan-configs` | Create scan config (`201 Created` + `Location`) |
+| `POST` | `/api/v1/scan-configs` | Copy an explicit active scan-config base (`baseScanConfigId`; `201 Created` + `Location`) |
 | `GET` | `/api/v1/scan-configs/{id}` | Get scan config |
 | `PUT` | `/api/v1/scan-configs/{id}` | Update scan config |
 | `DELETE` | `/api/v1/scan-configs/{id}` | Delete scan config |
+
+Scan-config creation does not select an implicit backend default. The request
+must name an active scan configuration in `baseScanConfigId`; missing,
+nonexistent, trashed, and policy IDs are invalid input.
+
+#### Policies
+
+Policy creation likewise requires an explicit active policy base in
+`basePolicyId`. A scan-config ID is not accepted as a policy base.
 
 #### Scanners
 
