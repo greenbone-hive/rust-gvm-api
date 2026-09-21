@@ -73,7 +73,7 @@ use gvm_gmp::{
         hosts::{DeleteHostRequest, GetHostRequest, GetHostsRequest},
         notes::{DeleteNoteRequest, GetNotesRequest},
         nvts::{
-            GetNvtFamiliesRequest, GetNvtRequest, GetNvtsOpts, GetNvtsRequest,
+            GetNvtFamiliesRequest, GetNvtRequest, GetNvtsRequest, GetScanConfigNvtRequest,
             GetScanConfigNvtsRequest,
         },
         oci_image_targets::{
@@ -123,9 +123,9 @@ use gvm_gmp::{
         secinfo::{
             GetCertBundAdvisoriesRequest, GetCertBundAdvisoryRequest, GetCpeRequest,
             GetCpesRequest, GetCveRequest, GetCvesRequest, GetDfnCertAdvisoriesRequest,
-            GetDfnCertAdvisoryRequest, GetSecInfoOpts,
+            GetDfnCertAdvisoryRequest,
         },
-        system::{FilteredGetOpts, GetTimezonesRequest, GetVulnsRequest},
+        system::{GetTimezonesRequest, GetVulnsRequest},
         tags::{CloneTagRequest, DeleteTagRequest, GetTagRequest, GetTagsRequest},
         targets::{
             CloneTargetRequest, CreateTargetRequest, DeleteTargetRequest, GetTargetRequest,
@@ -158,7 +158,7 @@ use gvm_gmp::{
     },
     responses::User as GmpUser,
     CollectionUpdate, CredentialStoreCredentialType, EntityId, GmpRequest,
-    Pagination as GmpPagination, ScalarUpdate, TargetHost, TargetHosts, TargetPortRange,
+    Pagination as GmpPagination, ScalarUpdate, SortOrder, TargetHost, TargetHosts, TargetPortRange,
     TargetPortSelection,
 };
 use tracing::{field, info_span, Instrument};
@@ -192,8 +192,8 @@ use crate::conversions::{
     user_from_gmp, user_setting_from_gmp, vulnerability_from_gmp, web_application_target_from_gmp,
 };
 use filters::{
-    backend_ignored_pagination, composed_filter, gvmd_total, needs_client_side_pagination_fallback,
-    paged_pagination, paged_slice, paginated_filter,
+    composed_filter, gvmd_total, needs_client_side_pagination_fallback, paged_pagination,
+    paged_slice, paginated_filter,
 };
 use session::{
     connect_authenticated_client, CredentialStoreCapability, SessionClient, SharedClient,
