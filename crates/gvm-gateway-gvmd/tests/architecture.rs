@@ -14,6 +14,73 @@ const RUST_GVM_COMPONENTS: &[&str] = &[
     "gvm-mock-server",
     "gvm-protocol",
 ];
+const RUST_GVM_BASELINE: &str = "ebfdb93dab53f1748d68df5d4e831d89fbf2b71d";
+
+const REMOVED_CANONICAL_TRANSITION_TYPES: &[&str] = &[
+    "CreateTargetOpts",
+    "GetTargetsOpts",
+    "ModifyTargetOpts",
+    "CreateOciImageTargetOpts",
+    "GetOciImageTargetsOpts",
+    "ModifyOciImageTargetOpts",
+    "CreateWebApplicationTargetOpts",
+    "GetWebApplicationTargetsOpts",
+    "ModifyWebApplicationTargetOpts",
+    "CreateAgentGroupOpts",
+    "GetAgentGroupsOpts",
+    "ModifyAgentGroupOpts",
+    "GetAgentsOpts",
+    "ModifyAgentOpts",
+    "ModifyAgentControlScanConfigOpts",
+    "GetIntegrationConfigsOpts",
+    "ModifyIntegrationConfigOpts",
+    "PortListOpts",
+    "ModifyPortListOpts",
+    "GetPortListsOpts",
+    "CredentialOpts",
+    "ModifyCredentialOpts",
+    "GetCredentialsOpts",
+    "GetCredentialStoresOpts",
+    "CredentialStoreCredentialOpts",
+    "ModifyCredentialStoreOpts",
+    "ModifyCredentialStoreCredentialOpts",
+    "FilterOpts",
+    "GetFiltersOpts",
+    "TagOpts",
+    "GetTagsOpts",
+    "AlertOpts",
+    "GetAlertsOpts",
+    "TriggerAlertOpts",
+    "ScheduleOpts",
+    "GetSchedulesOpts",
+    "CreateTypedScheduleRequest",
+    "ModifyTypedScheduleRequest",
+    "ScannerOpts",
+    "GetScannersOpts",
+    "NoteOpts",
+    "ModifyNoteOpts",
+    "GetNotesOpts",
+    "OverrideOpts",
+    "ModifyOverrideOpts",
+    "GetOverridesOpts",
+    "UserOpts",
+    "ModifyUserOpts",
+    "GetUsersOpts",
+    "GroupOpts",
+    "GetGroupsOpts",
+    "RoleOpts",
+    "GetRolesOpts",
+    "PermissionOpts",
+    "GetPermissionsOpts",
+    "CreateAssetOpts",
+    "DeleteAssetOpts",
+    "GetAssetsOpts",
+    "ModifyAssetOpts",
+    "HostOpts",
+    "GetHostsOpts",
+    "GetOperatingSystemsOpts",
+    "ModifyOperatingSystemAssetRequest",
+];
 
 #[derive(Debug, Eq, PartialEq)]
 struct Finding {
@@ -182,6 +249,55 @@ fn rust_gvm_components_resolve_to_one_revision() {
         revisions.values().all(|revision| revision == expected),
         "rust-gvm components resolved to different revisions: {revisions:?}"
     );
+    assert_eq!(
+        *expected, RUST_GVM_BASELINE,
+        "rust-gvm components must remain on the reviewed issue #512 asset baseline"
+    );
+
+    let workspace_manifest =
+        fs::read_to_string(manifest_dir.join("../../Cargo.toml")).expect("read workspace manifest");
+    for component in RUST_GVM_COMPONENTS {
+        let dependency = workspace_manifest
+            .lines()
+            .find(|line| line.trim_start().starts_with(&format!("{component} =")))
+            .unwrap_or_else(|| panic!("{component} must be declared in workspace dependencies"));
+        assert!(
+            dependency.contains(&format!("rev = \"{RUST_GVM_BASELINE}\"")),
+            "{component} must pin the reviewed issue #512 baseline in Cargo.toml: {dependency}"
+        );
+        assert!(
+            !dependency.contains("branch ="),
+            "{component} must not use a moving branch dependency: {dependency}"
+        );
+    }
+}
+
+#[test]
+fn removed_pre_result_transition_types_stay_absent() {
+    // Issue #512 adopts every canonical complete-request family through the
+    // asset baseline. Scanning adapter production and sidecar tests prevents a
+    // future upstream compatibility shim from silently restoring option bags
+    // or the removed operating-system-specific transition request downstream.
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut findings = Vec::new();
+    for root in [manifest_dir.join("src"), manifest_dir.join("tests")] {
+        for file in rust_files(&root) {
+            if file.ends_with("tests/architecture.rs") {
+                continue;
+            }
+            let contents = fs::read_to_string(&file).expect("read adapter Rust source");
+            for removed in REMOVED_CANONICAL_TRANSITION_TYPES {
+                if contents.contains(removed) {
+                    findings.push(format!("{} uses {removed}", file.display()));
+                }
+            }
+        }
+    }
+    assert!(
+        findings.is_empty(),
+        "removed pre-result canonical transition APIs must stay absent:\n{}",
+        findings.join("\n")
+    );
 }
 
 #[test]
@@ -221,7 +337,7 @@ fn initial_adapter_slice_stays_on_typed_execution() {
         "async fn list_oci_image_targets",
     );
     for request in [
-        "GetTargetsRequest::new",
+        "GetTargetsRequest",
         "GetTargetRequest::new",
         "CreateTargetRequest::new",
         "ModifyTargetRequest::new",
@@ -271,20 +387,16 @@ fn migrated_security_and_config_families_stay_on_typed_execution() {
     for (file, request, description) in [
         (
             "credentials.rs",
-            "GetCredentialsRequest::new",
+            "GetCredentialsRequest",
             "credential family",
         ),
-        ("scanners.rs", "GetScannersRequest::new", "scanner family"),
+        ("scanners.rs", "GetScannersRequest", "scanner family"),
         (
             "scan_configs.rs",
             "GetScanConfigsRequest::new",
             "config and policy family",
         ),
-        (
-            "port_lists.rs",
-            "GetPortListsRequest::new",
-            "port-list family",
-        ),
+        ("port_lists.rs", "GetPortListsRequest", "port-list family"),
     ] {
         let contents = fs::read_to_string(ports_dir.join(file))
             .unwrap_or_else(|error| panic!("read {description} adapter module: {error}"));
@@ -298,12 +410,8 @@ fn migrated_automation_families_stay_on_typed_execution() {
     let ports_dir = manifest_dir.join("src/gvmd_adapter/ports");
 
     for (file, request, description) in [
-        ("alerts.rs", "GetAlertsRequest::new", "alert family"),
-        (
-            "schedules.rs",
-            "GetSchedulesRequest::new",
-            "schedule family",
-        ),
+        ("alerts.rs", "GetAlertsRequest", "alert family"),
+        ("schedules.rs", "GetSchedulesRequest", "schedule family"),
     ] {
         let contents = fs::read_to_string(ports_dir.join(file))
             .unwrap_or_else(|error| panic!("read {description} adapter module: {error}"));
@@ -318,10 +426,10 @@ fn migrated_identity_families_stay_on_typed_execution() {
         .expect("read identity adapter module");
 
     for request in [
-        "GetUsersRequest::new",
-        "GetGroupsRequest::new",
-        "GetRolesRequest::new",
-        "GetPermissionsRequest::new",
+        "GetUsersRequest",
+        "GetGroupsRequest",
+        "GetRolesRequest",
+        "GetPermissionsRequest",
         "GetUserSettingsRequest::new",
     ] {
         assert!(
@@ -341,7 +449,7 @@ fn remaining_adapter_families_and_raw_call_inventory_stay_typed() {
     for (file, request, description) in [
         ("feeds.rs", "GetFeedsRequest::new", "feed family"),
         ("system.rs", "GetTimezonesRequest::new", "system family"),
-        ("agents.rs", "GetAgentsRequest::new", "agent family"),
+        ("agents.rs", "GetAgentsRequest", "agent family"),
     ] {
         let contents = fs::read_to_string(ports_dir.join(file))
             .unwrap_or_else(|error| panic!("read {description} adapter module: {error}"));
@@ -351,8 +459,8 @@ fn remaining_adapter_families_and_raw_call_inventory_stay_typed() {
     let targets =
         fs::read_to_string(ports_dir.join("targets.rs")).expect("read target adapter module");
     assert!(
-        targets.contains("GetOciImageTargetsRequest::new")
-            && targets.contains("GetWebApplicationTargetsRequest::new"),
+        targets.contains("GetOciImageTargetsRequest")
+            && targets.contains("GetWebApplicationTargetsRequest"),
         "specialized target families must construct semantic requests"
     );
     assert_typed_section(&targets, "execute_with_session", "all target families");
@@ -386,14 +494,14 @@ fn migrated_supporting_resource_families_stay_on_typed_execution() {
 
     for request in [
         "GetAssetsRequest::new",
-        "GetHostsRequest::new",
-        "GetOperatingSystemAssetsRequest::new",
+        "GetHostsRequest",
+        "GetOperatingSystemAssetsRequest",
         "GetTlsCertificatesRequest::new",
         "GetReportFormatsRequest::new",
-        "GetFiltersRequest::new",
-        "GetTagsRequest::new",
-        "GetNotesRequest::new",
-        "GetOverridesRequest::new",
+        "GetFiltersRequest",
+        "GetTagsRequest",
+        "GetNotesRequest",
+        "GetOverridesRequest",
         "GetNvtsRequest::new",
         "GetVulnsRequest::new",
         "GetCvesRequest::new",

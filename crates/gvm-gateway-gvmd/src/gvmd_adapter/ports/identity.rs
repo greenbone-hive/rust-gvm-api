@@ -18,7 +18,7 @@ impl IdentityPort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "users.list",
-                GetUsersRequest::new(GetUsersOpts {
+                GetUsersRequest {
                     filter_string: self
                         .paginated_filter_resolving_filter_id(
                             session_token,
@@ -33,7 +33,7 @@ impl IdentityPort for GvmdAdapter {
                     filter_id: None,
                     trash: None,
                     details: Some(true),
-                }),
+                },
             )
             .await?;
         let items = parsed
@@ -64,21 +64,14 @@ impl IdentityPort for GvmdAdapter {
             .as_deref()
             .map(parse_user_auth_type)
             .transpose()?;
+        let mut request = CreateUserRequest::new(input.name);
+        request.comment = input.comment;
+        request.password = input.password;
+        request.host_access = input.hosts.map(UserHostAccess::allow);
+        request.role_ids = role_ids;
+        request.auth_source = auth_type;
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "users.create",
-                CreateUserRequest::new(
-                    input.name,
-                    UserOpts {
-                        comment: input.comment,
-                        password: input.password,
-                        host_access: input.hosts.map(UserHostAccess::allow),
-                        role_ids,
-                        auth_type,
-                    },
-                ),
-            )
+            .execute_with_session(session_token, "users.create", request)
             .await?;
         Ok(parsed.id.to_string())
     }
@@ -103,8 +96,12 @@ impl IdentityPort for GvmdAdapter {
             authentication_type,
         } = input;
         let host_access = match hosts {
-            Some(hosts) => Some(UserHostAccess::allow(hosts)),
-            None => self.get_gmp_user(session_token, id).await?.host_access(),
+            Some(hosts) => UserHostAccess::allow(hosts),
+            None => self
+                .get_gmp_user(session_token, id)
+                .await?
+                .host_access()
+                .unwrap_or_else(|| UserHostAccess::allow("")),
         };
         let role_ids = role_ids
             .map(|role_ids| {
@@ -120,22 +117,14 @@ impl IdentityPort for GvmdAdapter {
             .as_deref()
             .map(parse_user_auth_type)
             .transpose()?;
-        self.execute_with_session(
-            session_token,
-            "users.modify",
-            ModifyUserRequest::new(
-                user_id,
-                ModifyUserOpts {
-                    new_name: name,
-                    comment,
-                    password,
-                    host_access,
-                    role_ids,
-                    auth_type,
-                },
-            ),
-        )
-        .await?;
+        let mut request = ModifyUserRequest::new(user_id, host_access);
+        request.new_name = name;
+        request.comment = comment;
+        request.password = password;
+        request.role_ids = role_ids;
+        request.auth_source = auth_type;
+        self.execute_with_session(session_token, "users.modify", request)
+            .await?;
         self.get_user(session_token, id).await
     }
 
@@ -143,12 +132,12 @@ impl IdentityPort for GvmdAdapter {
         &self,
         session_token: &str,
         id: &str,
-        ultimate: bool,
+        _ultimate: bool,
     ) -> Result<(), GatewayError> {
         self.execute_with_session(
             session_token,
             "users.delete",
-            DeleteUserRequest::new(parse_entity_id(id)?, ultimate),
+            DeleteUserRequest::new(parse_entity_id(id)?),
         )
         .await?;
         Ok(())
@@ -168,7 +157,7 @@ impl IdentityPort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "groups.list",
-                GetGroupsRequest::new(GetGroupsOpts {
+                GetGroupsRequest {
                     filter_string: self
                         .paginated_filter_resolving_filter_id(
                             session_token,
@@ -183,7 +172,7 @@ impl IdentityPort for GvmdAdapter {
                     filter_id: None,
                     trash: None,
                     details: Some(true),
-                }),
+                },
             )
             .await?;
         let items = parsed
@@ -204,18 +193,11 @@ impl IdentityPort for GvmdAdapter {
         session_token: &str,
         input: CreateGroupInput,
     ) -> Result<String, GatewayError> {
+        let mut request = CreateGroupRequest::new(input.name);
+        request.comment = input.comment;
+        request.users = input.users;
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "groups.create",
-                CreateGroupRequest::new(
-                    input.name,
-                    GroupOpts {
-                        comment: input.comment,
-                        users: input.users,
-                    },
-                ),
-            )
+            .execute_with_session(session_token, "groups.create", request)
             .await?;
         Ok(parsed.id.to_string())
     }
@@ -242,18 +224,15 @@ impl IdentityPort for GvmdAdapter {
         id: &str,
         input: ModifyGroupInput,
     ) -> Result<Group, GatewayError> {
-        self.execute_with_session(
-            session_token,
-            "groups.modify",
-            ModifyGroupRequest::new(
-                parse_entity_id(id)?,
-                GroupOpts {
-                    comment: input.comment,
-                    users: input.users.unwrap_or_default(),
-                },
-            ),
-        )
-        .await?;
+        let current = self.get_group(session_token, id).await?;
+        let request = ModifyGroupRequest::new(
+            parse_entity_id(id)?,
+            current.meta.name,
+            input.comment.or(current.meta.comment).unwrap_or_default(),
+            input.users.unwrap_or(current.users),
+        );
+        self.execute_with_session(session_token, "groups.modify", request)
+            .await?;
         self.get_group(session_token, id).await
     }
 
@@ -297,12 +276,12 @@ impl IdentityPort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "roles.list",
-                GetRolesRequest::new(GetRolesOpts {
+                GetRolesRequest {
                     filter_string,
                     filter_id: None,
                     trash: None,
                     details: Some(true),
-                }),
+                },
             )
             .await?;
         let items = parsed
@@ -323,18 +302,11 @@ impl IdentityPort for GvmdAdapter {
         session_token: &str,
         input: CreateRoleInput,
     ) -> Result<String, GatewayError> {
+        let mut request = CreateRoleRequest::new(input.name);
+        request.comment = input.comment;
+        request.users = input.users;
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "roles.create",
-                CreateRoleRequest::new(
-                    input.name,
-                    RoleOpts {
-                        comment: input.comment,
-                        users: input.users,
-                    },
-                ),
-            )
+            .execute_with_session(session_token, "roles.create", request)
             .await?;
         Ok(parsed.id.to_string())
     }
@@ -361,18 +333,15 @@ impl IdentityPort for GvmdAdapter {
         id: &str,
         input: ModifyRoleInput,
     ) -> Result<Role, GatewayError> {
-        self.execute_with_session(
-            session_token,
-            "roles.modify",
-            ModifyRoleRequest::new(
-                parse_entity_id(id)?,
-                RoleOpts {
-                    comment: input.comment,
-                    users: input.users.unwrap_or_default(),
-                },
-            ),
-        )
-        .await?;
+        let current = self.get_role(session_token, id).await?;
+        let request = ModifyRoleRequest::new(
+            parse_entity_id(id)?,
+            current.meta.name,
+            input.comment.or(current.meta.comment).unwrap_or_default(),
+            input.users.unwrap_or(current.users),
+        );
+        self.execute_with_session(session_token, "roles.modify", request)
+            .await?;
         self.get_role(session_token, id).await
     }
 
@@ -416,12 +385,12 @@ impl IdentityPort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "permissions.list",
-                GetPermissionsRequest::new(GetPermissionsOpts {
+                GetPermissionsRequest {
                     filter_string,
                     filter_id: None,
                     trash: None,
                     details: Some(true),
-                }),
+                },
             )
             .await?;
         let items = parsed
@@ -442,31 +411,37 @@ impl IdentityPort for GvmdAdapter {
         session_token: &str,
         input: CreatePermissionInput,
     ) -> Result<String, GatewayError> {
+        let name = input
+            .name
+            .ok_or_else(|| GatewayError::InvalidInput("name is required".to_string()))?;
+        let subject_id = input
+            .subject_id
+            .as_deref()
+            .ok_or_else(|| GatewayError::InvalidInput("subjectId is required".to_string()))
+            .and_then(parse_entity_id)?;
+        let subject_type = input
+            .subject_type
+            .as_deref()
+            .ok_or_else(|| GatewayError::InvalidInput("subjectType is required".to_string()))
+            .and_then(parse_permission_subject_type)?;
+        let mut request =
+            CreatePermissionRequest::new(name, PermissionSubject::new(subject_id, subject_type));
+        request.comment = input.comment;
+        request.resource = match input.resource_id.as_deref() {
+            Some(resource_id) => {
+                let mut resource = PermissionResource::new(parse_entity_id(resource_id)?);
+                resource.resource_type = input.resource_type;
+                Some(resource)
+            }
+            None if input.resource_type.is_some() => {
+                return Err(GatewayError::InvalidInput(
+                    "resourceType requires resourceId".to_string(),
+                ));
+            }
+            None => None,
+        };
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "permissions.create",
-                CreatePermissionRequest::new(PermissionOpts {
-                    comment: input.comment,
-                    name: input.name,
-                    resource_id: input
-                        .resource_id
-                        .as_deref()
-                        .map(parse_entity_id)
-                        .transpose()?,
-                    resource_type: input.resource_type,
-                    subject_type: input
-                        .subject_type
-                        .as_deref()
-                        .map(parse_permission_subject_type)
-                        .transpose()?,
-                    subject_id: input
-                        .subject_id
-                        .as_deref()
-                        .map(parse_entity_id)
-                        .transpose()?,
-                }),
-            )
+            .execute_with_session(session_token, "permissions.create", request)
             .await?;
         Ok(parsed.id.to_string())
     }
@@ -497,34 +472,29 @@ impl IdentityPort for GvmdAdapter {
         id: &str,
         input: ModifyPermissionInput,
     ) -> Result<Permission, GatewayError> {
-        self.execute_with_session(
-            session_token,
-            "permissions.modify",
-            ModifyPermissionRequest::new(
-                parse_entity_id(id)?,
-                PermissionOpts {
-                    comment: input.comment,
-                    name: input.name,
-                    resource_id: input
-                        .resource_id
-                        .as_deref()
-                        .map(parse_entity_id)
-                        .transpose()?,
-                    resource_type: input.resource_type,
-                    subject_type: input
-                        .subject_type
-                        .as_deref()
-                        .map(parse_permission_subject_type)
-                        .transpose()?,
-                    subject_id: input
-                        .subject_id
-                        .as_deref()
-                        .map(parse_entity_id)
-                        .transpose()?,
-                },
-            ),
-        )
-        .await?;
+        let mut request = ModifyPermissionRequest::new(parse_entity_id(id)?);
+        request.comment = input.comment;
+        request.name = input.name;
+        request.resource_id = input
+            .resource_id
+            .as_deref()
+            .map(parse_entity_id)
+            .transpose()?
+            .map(ScalarUpdate::Set)
+            .unwrap_or_default();
+        request.resource_type = input.resource_type;
+        request.subject_type = input
+            .subject_type
+            .as_deref()
+            .map(parse_permission_subject_type)
+            .transpose()?;
+        request.subject_id = input
+            .subject_id
+            .as_deref()
+            .map(parse_entity_id)
+            .transpose()?;
+        self.execute_with_session(session_token, "permissions.modify", request)
+            .await?;
         self.get_permission(session_token, id).await
     }
 

@@ -732,8 +732,8 @@ async fn gvmd_adapter_create_credential_forwards_certificate_and_community_field
     let (adapter, server, token) = create_mock_adapter().await;
     server.clear_history();
 
-    // Regression coverage for #403: typed credential create requests must keep
-    // supported secret-bearing fields instead of 400-rejecting them locally.
+    // Regression coverage for #403: a complete client-certificate request must
+    // keep both required key material and unrelated supported secret fields.
     let result = adapter
         .create_credential(
             &token,
@@ -743,7 +743,7 @@ async fn gvmd_adapter_create_credential_forwards_certificate_and_community_field
                 credential_type: "cc".to_string(),
                 login: None,
                 password: None,
-                private_key: None,
+                private_key: Some("PRIVATE KEY".to_string()),
                 certificate: Some("CERTIFICATE".to_string()),
                 community: Some("public".to_string()),
                 auth_algorithm: None,
@@ -765,6 +765,7 @@ async fn gvmd_adapter_create_credential_forwards_certificate_and_community_field
         .expect("create_credential command should be recorded");
     let xml = String::from_utf8(command.raw_xml().to_vec()).expect("xml command");
     assert!(xml.contains("<type>cc</type>"));
+    assert!(xml.contains("<key><private>PRIVATE KEY</private>"));
     assert!(xml.contains("<certificate>CERTIFICATE</certificate>"));
     assert!(xml.contains("<community>public</community>"));
 
@@ -1946,6 +1947,15 @@ async fn gvmd_adapter_asset_mutations_emit_comment_only_and_no_ultimate() {
         .await
         .expect("generic asset comment should update");
     assert_eq!(updated.meta.comment.as_deref(), Some("updated"));
+    server.clear_history();
+
+    // Complete canonical requests must not turn an omitted patch field into
+    // an accidental comment clear; the adapter supplies the stored value.
+    let preserved = adapter
+        .modify_asset(&token, &id, "host", ModifyAssetInput { comment: None })
+        .await
+        .expect("omitted generic asset comment should be preserved");
+    assert_eq!(preserved.meta.comment.as_deref(), Some("updated"));
     adapter
         .delete_asset(&token, &id)
         .await
@@ -3096,7 +3106,9 @@ async fn gvmd_adapter_operating_system_reads_preserve_typed_asset_fields() {
     assert_eq!(page.data[0].all_installs, 4);
     assert_eq!(page.data[0].highest_severity.as_deref(), Some("8.1"));
     assert!(!page.data[0].meta.writable);
-    assert!(!page.data[0].meta.in_use);
+    // The canonical OS parser derives in-use state from all installations,
+    // even when the filtered/current installation count is zero.
+    assert!(page.data[0].meta.in_use);
 
     let fetched = adapter
         .get_operating_system(token, &os_id.to_string())
@@ -3137,10 +3149,10 @@ async fn gvmd_adapter_operating_system_reads_preserve_typed_asset_fields() {
 }
 
 #[tokio::test]
-async fn gvmd_adapter_operating_system_mutations_use_backend_supported_shape() {
-    // The OS modify command accepts only a comment, and OS deletion has no
-    // ultimate flag. The mock currently rejects OS comment mutation, but its
-    // command history still proves the typed boundary shape before that reply.
+async fn gvmd_adapter_operating_system_mutations_use_canonical_asset_requests() {
+    // The removed OS-specific transition request must be replaced by the
+    // canonical complete asset request without changing this domain route.
+    // The mock rejects the mutation, but its history proves the typed shape.
     let removable_id = uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440132")
         .expect("valid operating-system id");
     let in_use_id = uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440133")

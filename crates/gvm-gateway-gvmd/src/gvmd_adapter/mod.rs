@@ -48,68 +48,50 @@ use gvm_gateway_domain::{
 use gvm_gmp::{
     commands::{
         alerts::{
-            AlertData, AlertOpts, CreateAlertRequest, DeleteAlertRequest, GetAlertRequest,
-            GetAlertsOpts, GetAlertsRequest, ModifyAlertRequest,
+            AlertData, CreateAlertRequest, DeleteAlertRequest, GetAlertRequest, GetAlertsRequest,
+            ModifyAlertRequest,
         },
-        assets::{
-            DeleteAssetOpts, DeleteAssetRequest, GetAssetRequest, GetAssetsOpts, GetAssetsRequest,
-            ModifyAssetOpts, ModifyAssetRequest,
-        },
+        assets::{DeleteAssetRequest, GetAssetRequest, GetAssetsRequest, ModifyAssetRequest},
         configs::{
             CloneConfigOpts, CloneConfigRequest, ConfigUsageType, DeleteConfigOpts,
             DeleteConfigRequest, GetConfigOpts, GetConfigRequest, GetConfigsOpts,
             GetConfigsRequest, ModifyConfigOpts, ModifyConfigRequest,
         },
         credentials::{
-            CreateCredentialRequest, CreateCredentialStoreCredentialRequest, CredentialOpts,
-            CredentialStoreCredentialOpts, CredentialStorePreference, DeleteCredentialRequest,
-            GetCredentialRequest, GetCredentialStoreRequest, GetCredentialStoresOpts,
-            GetCredentialStoresRequest, GetCredentialsOpts, GetCredentialsRequest,
-            ModifyCredentialOpts, ModifyCredentialRequest, ModifyCredentialStoreCredentialOpts,
-            ModifyCredentialStoreCredentialRequest, ModifyCredentialStoreOpts,
+            CreateCredentialRequest, CreateCredentialStoreCredentialRequest,
+            CredentialStorePreference, DeleteCredentialRequest, GetCredentialRequest,
+            GetCredentialStoreRequest, GetCredentialStoresRequest, GetCredentialsRequest,
+            ModifyCredentialRequest, ModifyCredentialStoreCredentialRequest,
             ModifyCredentialStoreRequest, VerifyCredentialStoreRequest,
         },
         feed::{GetFeedRequest, GetFeedsRequest},
-        filters::{
-            CloneFilterRequest, CreateFilterRequest, DeleteFilterRequest, GetFilterRequest,
-            GetFiltersOpts, GetFiltersRequest, ModifyFilterRequest,
-        },
+        filters::{CloneFilterRequest, DeleteFilterRequest, GetFilterRequest, GetFiltersRequest},
         groups::{
-            CreateGroupRequest, DeleteGroupRequest, GetGroupRequest, GetGroupsOpts,
-            GetGroupsRequest, GroupOpts, ModifyGroupRequest,
+            CreateGroupRequest, DeleteGroupRequest, GetGroupRequest, GetGroupsRequest,
+            ModifyGroupRequest,
         },
-        hosts::{
-            CreateHostRequest, DeleteHostRequest, GetHostRequest, GetHostsOpts, GetHostsRequest,
-            ModifyHostRequest,
-        },
-        notes::{
-            CreateNoteRequest, DeleteNoteRequest, GetNotesOpts, GetNotesRequest, ModifyNoteRequest,
-        },
+        hosts::{DeleteHostRequest, GetHostRequest, GetHostsRequest},
+        notes::{DeleteNoteRequest, GetNotesRequest},
         nvts::{
             GetNvtFamiliesRequest, GetNvtRequest, GetNvtsOpts, GetNvtsRequest,
             GetScanConfigNvtsRequest,
         },
         oci_image_targets::{
-            CloneOciImageTargetRequest, CreateOciImageTargetOpts, CreateOciImageTargetRequest,
-            DeleteOciImageTargetRequest, GetOciImageTargetRequest, GetOciImageTargetsOpts,
-            GetOciImageTargetsRequest, ModifyOciImageTargetOpts, ModifyOciImageTargetRequest,
+            CloneOciImageTargetRequest, CreateOciImageTargetRequest, DeleteOciImageTargetRequest,
+            GetOciImageTargetRequest, GetOciImageTargetsRequest, ModifyOciImageTargetRequest,
         },
         operating_systems::{
             DeleteOperatingSystemAssetRequest, GetOperatingSystemAssetRequest,
-            GetOperatingSystemAssetsRequest, GetOperatingSystemsOpts,
-            ModifyOperatingSystemAssetRequest,
+            GetOperatingSystemAssetsRequest,
         },
-        overrides::{
-            CreateOverrideRequest, DeleteOverrideRequest, GetOverridesOpts, GetOverridesRequest,
-            ModifyOverrideRequest,
-        },
+        overrides::{DeleteOverrideRequest, GetOverridesRequest},
         permissions::{
             CreatePermissionRequest, DeletePermissionRequest, GetPermissionRequest,
-            GetPermissionsOpts, GetPermissionsRequest, ModifyPermissionRequest, PermissionOpts,
+            GetPermissionsRequest, ModifyPermissionRequest, PermissionResource, PermissionSubject,
         },
         port_lists::{
-            CreatePortListRequest, DeletePortListRequest, GetPortListRequest, GetPortListsOpts,
-            GetPortListsRequest, ModifyPortListOpts, ModifyPortListRequest, PortListOpts,
+            CreatePortListRequest, DeletePortListRequest, GetPortListRequest, GetPortListsRequest,
+            ModifyPortListRequest,
         },
         report_formats::{GetReportFormatRequest, GetReportFormatsOpts, GetReportFormatsRequest},
         reports::{
@@ -122,8 +104,8 @@ use gvm_gmp::{
         },
         results::{GetResultRequest, GetResultsOpts, GetResultsRequest},
         roles::{
-            CreateRoleRequest, DeleteRoleRequest, GetRoleRequest, GetRolesOpts, GetRolesRequest,
-            ModifyRoleRequest, RoleOpts,
+            CreateRoleRequest, DeleteRoleRequest, GetRoleRequest, GetRolesRequest,
+            ModifyRoleRequest,
         },
         scan_configs::{
             ConfigOpts, CreatePolicyRequest, CreateScanConfigRequest, DeletePolicyRequest,
@@ -133,10 +115,10 @@ use gvm_gmp::{
             ModifyScanConfigSetNvtPreferenceRequest, ModifyScanConfigSetNvtSelectionRequest,
             ModifyScanConfigSetScannerPreferenceRequest, NvtFamilySelection,
         },
-        scanners::{GetScannerRequest, GetScannersOpts, GetScannersRequest},
+        scanners::{GetScannerRequest, GetScannersRequest},
         schedules::{
-            CreateScheduleRequest, DeleteScheduleRequest, GetScheduleRequest, GetSchedulesOpts,
-            GetSchedulesRequest, ModifyScheduleRequest, ScheduleOpts,
+            CreateScheduleRequest, DeleteScheduleRequest, GetScheduleRequest, GetSchedulesRequest,
+            ModifyScheduleRequest,
         },
         secinfo::{
             GetCertBundAdvisoriesRequest, GetCertBundAdvisoryRequest, GetCpeRequest,
@@ -144,14 +126,10 @@ use gvm_gmp::{
             GetDfnCertAdvisoryRequest, GetSecInfoOpts,
         },
         system::{FilteredGetOpts, GetTimezonesRequest, GetVulnsRequest},
-        tags::{
-            CloneTagRequest, CreateTagRequest, DeleteTagRequest, GetTagRequest, GetTagsOpts,
-            GetTagsRequest, ModifyTagRequest,
-        },
+        tags::{CloneTagRequest, DeleteTagRequest, GetTagRequest, GetTagsRequest},
         targets::{
-            CloneTargetRequest, CreateTargetOpts, CreateTargetRequest, DeleteTargetRequest,
-            GetTargetRequest, GetTargetsOpts, GetTargetsRequest, ModifyTargetOpts,
-            ModifyTargetRequest,
+            CloneTargetRequest, CreateTargetRequest, DeleteTargetRequest, GetTargetRequest,
+            GetTargetsRequest, ModifyTargetRequest,
         },
         tasks::{
             CloneTaskRequest, CreateAgentGroupTaskOpts, CreateAgentGroupTaskRequest,
@@ -171,15 +149,13 @@ use gvm_gmp::{
             ModifyUserSettingOpts, ModifyUserSettingRequest,
         },
         users::{
-            CreateUserRequest, DeleteUserRequest, GetUserRequest, GetUsersOpts, GetUsersRequest,
-            ModifyUserOpts, ModifyUserRequest, UserHostAccess, UserOpts,
+            CreateUserRequest, DeleteUserRequest, GetUserRequest, GetUsersRequest,
+            ModifyUserRequest, UserHostAccess,
         },
         web_application_targets::{
-            CloneWebApplicationTargetRequest, CreateWebApplicationTargetOpts,
-            CreateWebApplicationTargetRequest, DeleteWebApplicationTargetRequest,
-            GetWebApplicationTargetRequest, GetWebApplicationTargetsOpts,
-            GetWebApplicationTargetsRequest, ModifyWebApplicationTargetOpts,
-            ModifyWebApplicationTargetRequest,
+            CloneWebApplicationTargetRequest, CreateWebApplicationTargetRequest,
+            DeleteWebApplicationTargetRequest, GetWebApplicationTargetRequest,
+            GetWebApplicationTargetsRequest, ModifyWebApplicationTargetRequest,
         },
     },
     responses::User as GmpUser,
@@ -225,10 +201,11 @@ use session::{
     connect_authenticated_client, CredentialStoreCapability, SessionClient, SharedClient,
 };
 use supporting_inputs::{
-    filter_opts_from_create_input, filter_opts_from_modify_input, host_opts_from_create_input,
-    host_opts_from_modify_input, note_opts_from_create_input, note_opts_from_modify_input,
-    override_opts_from_create_input, override_opts_from_modify_input, tag_opts_from_create_input,
-    tag_opts_from_modify_input,
+    filter_request_from_create_input, filter_request_from_modify_input,
+    host_request_from_create_input, host_request_from_modify_input, note_request_from_create_input,
+    note_request_from_modify_input, override_request_from_create_input,
+    override_request_from_modify_input, tag_request_from_create_input,
+    tag_request_from_modify_input,
 };
 
 /// gvmd adapter backed by session-keyed GMP clients.

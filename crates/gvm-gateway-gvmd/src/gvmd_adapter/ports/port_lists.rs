@@ -32,12 +32,12 @@ impl PortListPort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "port_lists.list",
-                GetPortListsRequest::new(GetPortListsOpts {
+                GetPortListsRequest {
                     filter_string,
                     filter_id: None,
                     trash: None,
                     details: Some(true),
-                }),
+                },
             )
             .await?;
         let items = parsed
@@ -57,18 +57,11 @@ impl PortListPort for GvmdAdapter {
         session_token: &str,
         input: CreatePortListInput,
     ) -> Result<String, GatewayError> {
+        let mut request = CreatePortListRequest::new(input.name);
+        request.comment = input.comment;
+        request.port_range = input.port_range;
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "port_lists.create",
-                CreatePortListRequest::new(
-                    input.name,
-                    PortListOpts {
-                        comment: input.comment,
-                        port_range: input.port_range,
-                    },
-                ),
-            )
+            .execute_with_session(session_token, "port_lists.create", request)
             .await?;
         Ok(parsed.id.to_string())
     }
@@ -101,18 +94,11 @@ impl PortListPort for GvmdAdapter {
                     .to_string(),
             ));
         }
-        self.execute_with_session(
-            session_token,
-            "port_lists.modify",
-            ModifyPortListRequest::new(
-                parse_entity_id(id)?,
-                ModifyPortListOpts {
-                    name: input.name,
-                    comment: input.comment,
-                },
-            ),
-        )
-        .await?;
+        let mut request = ModifyPortListRequest::new(parse_entity_id(id)?);
+        request.name = input.name;
+        request.comment = input.comment;
+        self.execute_with_session(session_token, "port_lists.modify", request)
+            .await?;
         self.get_port_list(session_token, id).await
     }
 

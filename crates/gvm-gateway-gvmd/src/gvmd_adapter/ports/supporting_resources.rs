@@ -63,20 +63,11 @@ impl SupportingResourcePort for GvmdAdapter {
                 &[],
             )
             .await?;
+        let mut request = GetAssetsRequest::new(parse_asset_type(&query.asset_type));
+        request.filter_string = filter_string;
+        request.details = Some(true);
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "assets.list",
-                GetAssetsRequest::new(GetAssetsOpts {
-                    asset_id: None,
-                    asset_type: None,
-                    type_: Some(parse_asset_type(&query.asset_type)),
-                    filter_string,
-                    filter_id: None,
-                    trash: None,
-                    details: Some(true),
-                }),
-            )
+            .execute_with_session(session_token, "assets.list", request)
             .await?;
         let mut items = parsed
             .items
@@ -127,16 +118,19 @@ impl SupportingResourcePort for GvmdAdapter {
         input: ModifyAssetInput,
     ) -> Result<GenericAsset, GatewayError> {
         let asset_id = parse_entity_id(id)?;
+        let comment = match input.comment {
+            Some(comment) => comment,
+            None => self
+                .get_asset(session_token, id, asset_type)
+                .await?
+                .meta
+                .comment
+                .unwrap_or_default(),
+        };
         self.execute_with_session(
             session_token,
             "assets.modify",
-            ModifyAssetRequest::new(
-                asset_id,
-                ModifyAssetOpts {
-                    comment: input.comment,
-                    value: None,
-                },
-            ),
+            ModifyAssetRequest::new(asset_id, comment),
         )
         .await?;
         self.get_asset(session_token, id, asset_type).await
@@ -146,7 +140,7 @@ impl SupportingResourcePort for GvmdAdapter {
         self.execute_with_session(
             session_token,
             "assets.delete",
-            DeleteAssetRequest::new(parse_entity_id(id)?, DeleteAssetOpts::default()),
+            DeleteAssetRequest::new(parse_entity_id(id)?),
         )
         .await?;
         Ok(())
@@ -180,12 +174,12 @@ impl SupportingResourcePort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "hosts.list",
-                GetHostsRequest::new(GetHostsOpts {
+                GetHostsRequest {
                     filter_string,
                     filter_id: None,
-                    trash: None,
+                    ignore_pagination: None,
                     details: Some(true),
-                }),
+                },
             )
             .await?;
         let mut items = parsed
@@ -251,11 +245,12 @@ impl SupportingResourcePort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "operating_systems.list",
-                GetOperatingSystemAssetsRequest::new(GetOperatingSystemsOpts {
+                GetOperatingSystemAssetsRequest {
                     filter_string,
                     filter_id: None,
+                    ignore_pagination: None,
                     details: Some(true),
-                }),
+                },
             )
             .await?;
         let items = parsed
@@ -276,11 +271,11 @@ impl SupportingResourcePort for GvmdAdapter {
         id: &str,
     ) -> Result<OperatingSystem, GatewayError> {
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "operating_systems.get",
-                GetOperatingSystemAssetRequest::new(parse_entity_id(id)?, Some(true)),
-            )
+            .execute_with_session(session_token, "operating_systems.get", {
+                let mut request = GetOperatingSystemAssetRequest::new(parse_entity_id(id)?);
+                request.details = Some(true);
+                request
+            })
             .await?;
         parsed
             .items
@@ -367,7 +362,7 @@ impl SupportingResourcePort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "hosts.create",
-                CreateHostRequest::new(host_opts_from_create_input(input)),
+                host_request_from_create_input(input),
             )
             .await?;
         Ok(parsed.id.to_string())
@@ -380,10 +375,15 @@ impl SupportingResourcePort for GvmdAdapter {
         input: ModifyHostInput,
     ) -> Result<Host, GatewayError> {
         let host_id = parse_entity_id(id)?;
+        let current_comment = if input.comment.is_none() {
+            self.get_host(session_token, id).await?.meta.comment
+        } else {
+            None
+        };
         self.execute_with_session(
             session_token,
             "hosts.modify",
-            ModifyHostRequest::new(host_id, host_opts_from_modify_input(input)),
+            host_request_from_modify_input(host_id, input, current_comment),
         )
         .await?;
         self.get_host(session_token, id).await
@@ -396,10 +396,19 @@ impl SupportingResourcePort for GvmdAdapter {
         input: ModifyOperatingSystemInput,
     ) -> Result<OperatingSystem, GatewayError> {
         let operating_system_id = parse_entity_id(id)?;
+        let comment = match input.comment {
+            Some(comment) => comment,
+            None => self
+                .get_operating_system(session_token, id)
+                .await?
+                .meta
+                .comment
+                .unwrap_or_default(),
+        };
         self.execute_with_session(
             session_token,
             "operating_systems.modify",
-            ModifyOperatingSystemAssetRequest::new(operating_system_id, input.comment),
+            ModifyAssetRequest::new(operating_system_id, comment),
         )
         .await?;
         self.get_operating_system(session_token, id).await
@@ -411,7 +420,7 @@ impl SupportingResourcePort for GvmdAdapter {
         self.execute_with_session(
             session_token,
             "hosts.delete",
-            DeleteHostRequest::new(parse_entity_id(id)?, false),
+            DeleteHostRequest::new(parse_entity_id(id)?),
         )
         .await?;
         Ok(())
@@ -542,12 +551,13 @@ impl SupportingResourcePort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "filters.list",
-                GetFiltersRequest::new(GetFiltersOpts {
+                GetFiltersRequest {
                     filter_string,
                     filter_id: None,
                     trash: None,
                     details: Some(true),
-                }),
+                    alerts: None,
+                },
             )
             .await?;
         let items = parsed
@@ -583,14 +593,9 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         input: CreateFilterInput,
     ) -> Result<String, GatewayError> {
-        let name = input.name.clone();
-        let opts = filter_opts_from_create_input(input)?;
+        let request = filter_request_from_create_input(input)?;
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "filters.create",
-                CreateFilterRequest::new(name, opts),
-            )
+            .execute_with_session(session_token, "filters.create", request)
             .await?;
         Ok(parsed.id.to_string())
     }
@@ -605,7 +610,7 @@ impl SupportingResourcePort for GvmdAdapter {
         self.execute_with_session(
             session_token,
             "filters.modify",
-            ModifyFilterRequest::new(filter_id, filter_opts_from_modify_input(input)?),
+            filter_request_from_modify_input(filter_id, input)?,
         )
         .await?;
         self.get_filter(session_token, id).await
@@ -665,12 +670,13 @@ impl SupportingResourcePort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "tags.list",
-                GetTagsRequest::new(GetTagsOpts {
+                GetTagsRequest {
                     filter_string,
                     filter_id: None,
                     trash: None,
                     details: Some(true),
-                }),
+                    names_only: None,
+                },
             )
             .await?;
         let items = parsed
@@ -706,14 +712,9 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         input: CreateTagInput,
     ) -> Result<String, GatewayError> {
-        let name = input.name.clone();
-        let opts = tag_opts_from_create_input(input)?;
+        let request = tag_request_from_create_input(input)?;
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "tags.create",
-                CreateTagRequest::new(name, opts),
-            )
+            .execute_with_session(session_token, "tags.create", request)
             .await?;
         Ok(parsed.id.to_string())
     }
@@ -728,7 +729,7 @@ impl SupportingResourcePort for GvmdAdapter {
         self.execute_with_session(
             session_token,
             "tags.modify",
-            ModifyTagRequest::new(tag_id, tag_opts_from_modify_input(input)?),
+            tag_request_from_modify_input(tag_id, input)?,
         )
         .await?;
         self.get_tag(session_token, id).await
@@ -788,13 +789,13 @@ impl SupportingResourcePort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "notes.list",
-                GetNotesRequest::new(GetNotesOpts {
+                GetNotesRequest {
                     filter_string,
                     filter_id: None,
                     trash: None,
                     details: Some(true),
                     result: Some(true),
-                }),
+                },
             )
             .await?;
         let items = parsed.items;
@@ -813,13 +814,13 @@ impl SupportingResourcePort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "notes.get",
-                GetNotesRequest::new(GetNotesOpts {
+                GetNotesRequest {
                     filter_string: paginated_filter(Some(&uuid_filter), None, 1, 1)?,
                     filter_id: None,
                     trash: None,
                     details: Some(true),
                     result: Some(true),
-                }),
+                },
             )
             .await?;
         parsed
@@ -835,14 +836,9 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         input: CreateNoteInput,
     ) -> Result<String, GatewayError> {
-        let nvt_oid = input.nvt_oid.clone();
-        let opts = note_opts_from_create_input(input)?;
+        let request = note_request_from_create_input(input)?;
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "notes.create",
-                CreateNoteRequest::new(nvt_oid, opts),
-            )
+            .execute_with_session(session_token, "notes.create", request)
             .await?;
         Ok(parsed.id.to_string())
     }
@@ -854,10 +850,11 @@ impl SupportingResourcePort for GvmdAdapter {
         input: ModifyNoteInput,
     ) -> Result<Note, GatewayError> {
         let note_id = parse_entity_id(id)?;
+        let current = self.get_note(session_token, id).await?;
         self.execute_with_session(
             session_token,
             "notes.modify",
-            ModifyNoteRequest::new(note_id, note_opts_from_modify_input(input)?),
+            note_request_from_modify_input(note_id, input, current)?,
         )
         .await?;
         self.get_note(session_token, id).await
@@ -906,13 +903,13 @@ impl SupportingResourcePort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "overrides.list",
-                GetOverridesRequest::new(GetOverridesOpts {
+                GetOverridesRequest {
                     filter_string,
                     filter_id: None,
                     trash: None,
                     details: Some(true),
                     result: Some(true),
-                }),
+                },
             )
             .await?;
         let items = parsed.items;
@@ -931,13 +928,13 @@ impl SupportingResourcePort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "overrides.get",
-                GetOverridesRequest::new(GetOverridesOpts {
+                GetOverridesRequest {
                     filter_string: paginated_filter(Some(&uuid_filter), None, 1, 1)?,
                     filter_id: None,
                     trash: None,
                     details: Some(true),
                     result: Some(true),
-                }),
+                },
             )
             .await?;
         parsed
@@ -953,14 +950,9 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         input: CreateOverrideInput,
     ) -> Result<String, GatewayError> {
-        let nvt_oid = input.nvt_oid.clone();
-        let opts = override_opts_from_create_input(input)?;
+        let request = override_request_from_create_input(input)?;
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "overrides.create",
-                CreateOverrideRequest::new(nvt_oid, opts),
-            )
+            .execute_with_session(session_token, "overrides.create", request)
             .await?;
         Ok(parsed.id.to_string())
     }
@@ -972,10 +964,11 @@ impl SupportingResourcePort for GvmdAdapter {
         input: ModifyOverrideInput,
     ) -> Result<Override, GatewayError> {
         let override_id = parse_entity_id(id)?;
+        let current = self.get_override(session_token, id).await?;
         self.execute_with_session(
             session_token,
             "overrides.modify",
-            ModifyOverrideRequest::new(override_id, override_opts_from_modify_input(input)?),
+            override_request_from_modify_input(override_id, input, current)?,
         )
         .await?;
         self.get_override(session_token, id).await
