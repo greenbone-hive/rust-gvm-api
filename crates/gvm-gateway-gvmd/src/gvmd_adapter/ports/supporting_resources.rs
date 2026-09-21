@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Greenbone AG
 use super::super::*;
 
-fn nvt_opts(query: &NvtQuery, filter_string: Option<String>) -> Result<GetNvtsOpts, GatewayError> {
+fn nvt_request(query: &NvtQuery, family: Option<String>) -> Result<GetNvtsRequest, GatewayError> {
     let entity_id = |field: &str, value: Option<&str>| {
         value
             .map(|value| {
@@ -11,30 +11,47 @@ fn nvt_opts(query: &NvtQuery, filter_string: Option<String>) -> Result<GetNvtsOp
             })
             .transpose()
     };
-    if let Some(sort_order) = query.sort_order.as_deref() {
-        if !matches!(sort_order, "ascending" | "descending") {
-            return Err(GatewayError::InvalidInput(
-                "sortOrder must be ascending or descending".to_string(),
-            ));
-        }
-    }
+    let sort_order = query
+        .sort_order
+        .as_deref()
+        .map(|value| {
+            value.parse::<SortOrder>().map_err(|_| {
+                GatewayError::InvalidInput("sortOrder must be ascending or descending".to_string())
+            })
+        })
+        .transpose()?;
 
-    Ok(GetNvtsOpts {
-        filter_string,
-        filter_id: None,
-        details: Some(true),
-        preferences: query.include_preferences,
-        preference_count: query.include_preference_count,
-        timeout: query.include_timeout,
+    Ok(GetNvtsRequest {
+        family,
         config_id: entity_id("configId", query.config_id.as_deref())?,
         preferences_config_id: entity_id(
             "preferencesConfigId",
             query.preferences_config_id.as_deref(),
         )?,
-        family: query.family.clone(),
-        sort_order: query.sort_order.clone(),
+        details: Some(true),
+        preferences: query.include_preferences,
+        preference_count: query.include_preference_count,
+        timeout: query.include_timeout,
+        lean: None,
+        skip_cert_refs: None,
+        skip_tags: None,
+        sort_order,
         sort_field: query.sort_field.clone(),
     })
+}
+
+fn sort_nvts(items: &mut [Nvt], sort_field: Option<&str>, sort_order: Option<&str>) {
+    match sort_field.unwrap_or("oid") {
+        "oid" => items.sort_by(|left, right| left.oid.cmp(&right.oid)),
+        "name" => items.sort_by(|left, right| left.name.cmp(&right.name)),
+        "family" => items.sort_by(|left, right| left.family.cmp(&right.family)),
+        // The backend owns its wider sort vocabulary. Retain its ordering when
+        // the compact REST projection cannot compare the requested field.
+        _ => return,
+    }
+    if sort_order == Some("descending") {
+        items.reverse();
+    }
 }
 
 #[async_trait]
@@ -1008,7 +1025,11 @@ impl SupportingResourcePort for GvmdAdapter {
                     .map_err(|_| GatewayError::InvalidInput("invalid filterId".to_string()))
             })
             .transpose()?;
-        let filter_string = self
+        // Dedicated get_nvts does not consume generic GMP filter attributes.
+        // Resolve and validate the public filter inputs so saved-filter and
+        // reserved-pagination error behavior remains stable, then paginate the
+        // canonical unfiltered response locally.
+        let _resolved_filter = self
             .paginated_filter_resolving_filter_id(
                 session_token,
                 None,
@@ -1019,65 +1040,55 @@ impl SupportingResourcePort for GvmdAdapter {
                 &[],
             )
             .await?;
-        let parsed = self
-            .execute_with_session(
-                session_token,
-                "nvts.list",
-                GetNvtsRequest::new(nvt_opts(query, filter_string)?),
-            )
-            .await?;
-        let mut items = parsed
-            .items
-            .into_iter()
-            .map(nvt_from_gmp)
-            .collect::<Vec<_>>();
-        items.sort_by(|left, right| {
-            left.oid
-                .cmp(&right.oid)
-                .then_with(|| left.name.cmp(&right.name))
-        });
-        let total = gvmd_total(parsed.counts.filtered, parsed.counts.total, items.len());
-
-        if needs_client_side_pagination_fallback(&items, total, query.page)
-            || backend_ignored_pagination(&items, query.per_page)
-        {
+        let mut items = Vec::new();
+        let total;
+        if query.config_id.is_some() && query.family.is_none() {
+            if query.preferences_config_id.is_some() {
+                return Err(GatewayError::InvalidInput(
+                    "configId and preferencesConfigId must not both be supplied".to_string(),
+                ));
+            }
+            let families = self
+                .execute_with_session(
+                    session_token,
+                    "nvt_families.list",
+                    GetNvtFamiliesRequest::new(),
+                )
+                .await?;
+            for family in families.items {
+                let parsed = self
+                    .execute_with_session(
+                        session_token,
+                        "nvts.list",
+                        nvt_request(query, Some(family.name))?,
+                    )
+                    .await?;
+                items.extend(parsed.items.into_iter().map(nvt_from_gmp));
+            }
+            total = items.len() as u32;
+        } else {
             let parsed = self
                 .execute_with_session(
                     session_token,
                     "nvts.list",
-                    GetNvtsRequest::new(nvt_opts(
-                        query,
-                        self.filter_resolving_filter_id(
-                            session_token,
-                            None,
-                            query.filter_string.as_deref(),
-                            filter_id.as_ref(),
-                            &[],
-                        )
-                        .await?,
-                    )?),
+                    nvt_request(query, query.family.clone())?,
                 )
                 .await?;
-            let mut items = parsed
-                .items
-                .into_iter()
-                .map(nvt_from_gmp)
-                .collect::<Vec<_>>();
-            items.sort_by(|left, right| {
-                left.oid
-                    .cmp(&right.oid)
-                    .then_with(|| left.name.cmp(&right.name))
-            });
-            let total = gvmd_total(parsed.counts.filtered, parsed.counts.total, items.len());
-
-            return Ok(NvtPage {
-                data: paged_slice(items, query.page, query.per_page),
-                pagination: paged_pagination(total, query.page, query.per_page),
-            });
+            total = gvmd_total(
+                parsed.counts.filtered,
+                parsed.counts.total,
+                parsed.items.len(),
+            );
+            items.extend(parsed.items.into_iter().map(nvt_from_gmp));
         }
+        sort_nvts(
+            &mut items,
+            query.sort_field.as_deref(),
+            query.sort_order.as_deref(),
+        );
 
         Ok(NvtPage {
-            data: items,
+            data: paged_slice(items, query.page, query.per_page),
             pagination: paged_pagination(total, query.page, query.per_page),
         })
     }
@@ -1148,10 +1159,10 @@ impl SupportingResourcePort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "vulnerabilities.list",
-                GetVulnsRequest::new(FilteredGetOpts {
+                GetVulnsRequest {
                     filter_string,
                     filter_id: None,
-                }),
+                },
             )
             .await?;
         let items = parsed
@@ -1194,11 +1205,12 @@ impl SupportingResourcePort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "cves.list",
-                GetCvesRequest::new(GetSecInfoOpts {
-                    filter: filter_string,
+                GetCvesRequest {
+                    name: None,
+                    filter_string,
                     filter_id: None,
                     details: None,
-                }),
+                },
             )
             .await?;
         let total = gvmd_total(
@@ -1252,11 +1264,12 @@ impl SupportingResourcePort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "cpes.list",
-                GetCpesRequest::new(GetSecInfoOpts {
-                    filter: filter_string,
+                GetCpesRequest {
+                    name: None,
+                    filter_string,
                     filter_id: None,
                     details: None,
-                }),
+                },
             )
             .await?;
         let total = gvmd_total(
@@ -1310,11 +1323,12 @@ impl SupportingResourcePort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "cert_bund_advisories.list",
-                GetCertBundAdvisoriesRequest::new(GetSecInfoOpts {
-                    filter: filter_string,
+                GetCertBundAdvisoriesRequest {
+                    name: None,
+                    filter_string,
                     filter_id: None,
                     details: None,
-                }),
+                },
             )
             .await?;
         let total = gvmd_total(
@@ -1380,11 +1394,12 @@ impl SupportingResourcePort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "dfn_cert_advisories.list",
-                GetDfnCertAdvisoriesRequest::new(GetSecInfoOpts {
-                    filter: filter_string,
+                GetDfnCertAdvisoriesRequest {
+                    name: None,
+                    filter_string,
                     filter_id: None,
                     details: None,
-                }),
+                },
             )
             .await?;
         let total = gvmd_total(

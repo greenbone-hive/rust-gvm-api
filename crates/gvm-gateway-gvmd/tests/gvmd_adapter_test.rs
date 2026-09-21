@@ -2229,7 +2229,7 @@ async fn gvmd_adapter_start_audit_verifies_audit_scope_before_acting() {
 }
 
 #[tokio::test]
-async fn gvmd_adapter_list_nvts_emits_backend_pagination_filter() {
+async fn gvmd_adapter_list_nvts_emits_complete_canonical_context() {
     let (adapter, server, token) = create_mock_adapter().await;
     server.clear_history();
 
@@ -2237,13 +2237,16 @@ async fn gvmd_adapter_list_nvts_emits_backend_pagination_filter() {
         .list_nvts(
             &token,
             &NvtQuery {
-                filter_string: Some("family=Databases".to_string()),
+                // Dedicated get_nvts does not accept generic filter attributes;
+                // this still exercises public filter validation without
+                // fabricating unsupported wire fields.
+                filter_string: Some("family=General".to_string()),
                 filter_id: None,
-                page: 3,
+                page: 1,
                 per_page: 25,
-                config_id: Some("550e8400-e29b-41d4-a716-446655440001".to_string()),
-                preferences_config_id: Some("550e8400-e29b-41d4-a716-446655440002".to_string()),
-                family: Some("Databases".to_string()),
+                config_id: Some("daba56c8-73ec-11df-a475-002264764cea".to_string()),
+                preferences_config_id: None,
+                family: Some("General".to_string()),
                 include_preferences: Some(true),
                 include_preference_count: Some(false),
                 include_timeout: Some(true),
@@ -2261,15 +2264,78 @@ async fn gvmd_adapter_list_nvts_emits_backend_pagination_filter() {
         .expect("get_nvts command should be recorded");
     let xml = String::from_utf8(command.raw_xml().to_vec()).expect("xml command");
     assert!(xml.contains("<get_nvts"));
-    assert!(xml.contains("filter=\"family=Databases first=51 rows=25\""));
-    assert!(xml.contains("config_id=\"550e8400-e29b-41d4-a716-446655440001\""));
-    assert!(xml.contains("preferences_config_id=\"550e8400-e29b-41d4-a716-446655440002\""));
-    assert!(xml.contains("family=\"Databases\""));
+    assert!(xml.contains("config_id=\"daba56c8-73ec-11df-a475-002264764cea\""));
+    assert!(xml.contains("family=\"General\""));
+    assert!(
+        !xml.contains(" filter="),
+        "get_nvts must not regain ignored filters: {xml}"
+    );
+    assert!(
+        !xml.contains("filt_id="),
+        "get_nvts must not regain ignored filters: {xml}"
+    );
+    assert!(!xml.contains("preferences_config_id="));
+    assert!(xml.contains("details=\"1\""));
     assert!(xml.contains("preferences=\"1\""));
     assert!(xml.contains("preference_count=\"0\""));
     assert!(xml.contains("timeout=\"1\""));
     assert!(xml.contains("sort_order=\"ascending\""));
     assert!(xml.contains("sort_field=\"name\""));
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_scan_config_nvt_reads_keep_family_and_detail_context() {
+    // Config-scoped lists require a family in reviewed gvmd. This regression
+    // test protects the adapter's family decomposition and the distinct
+    // preference-expanded detail request without changing the REST query.
+    let (adapter, server, token) = create_mock_adapter().await;
+    let config_id = "daba56c8-73ec-11df-a475-002264764cea";
+    let nvt_oid = "1.3.6.1.4.1.25623.1";
+    server.clear_history();
+
+    let page = adapter
+        .list_scan_config_nvts(
+            &token,
+            config_id,
+            &ScanConfigNvtQuery {
+                family: None,
+                page: 1,
+                per_page: 25,
+            },
+        )
+        .await
+        .expect("config-only NVT list should decompose through canonical families");
+    assert_eq!(page.data.len(), 1);
+    assert_eq!(page.pagination.total, 1);
+    assert!(server
+        .command_history()
+        .iter()
+        .any(|record| record.command_name() == "get_nvt_families"));
+    let list_xml = recorded_xml(&server, "get_nvts");
+    assert!(list_xml.contains(&format!("config_id=\"{config_id}\"")));
+    assert!(list_xml.contains("family=\"General\""));
+    assert!(list_xml.contains("details=\"1\""));
+    assert!(list_xml.contains("preferences=\"1\""));
+    assert!(list_xml.contains("preference_count=\"1\""));
+    assert!(list_xml.contains("timeout=\"1\""));
+    assert!(list_xml.contains("sort_field=\"name\""));
+
+    server.clear_history();
+    let nvt = adapter
+        .get_scan_config_nvt(&token, config_id, nvt_oid)
+        .await
+        .expect("scan-config NVT detail should preserve preference context");
+    assert_eq!(nvt.oid, nvt_oid);
+    let detail_xml = recorded_xml(&server, "get_nvts");
+    assert!(detail_xml.contains(&format!("nvt_oid=\"{nvt_oid}\"")));
+    assert!(detail_xml.contains(&format!("config_id=\"{config_id}\"")));
+    assert!(!detail_xml.contains("family="));
+    assert!(detail_xml.contains("details=\"1\""));
+    assert!(detail_xml.contains("preferences=\"1\""));
+    assert!(detail_xml.contains("preference_count=\"1\""));
+    assert!(detail_xml.contains("timeout=\"1\""));
 
     server.shutdown().await;
 }
@@ -3613,7 +3679,10 @@ async fn gvmd_adapter_list_cves_uses_typed_secinfo_request_with_pagination_filte
         .list_cves(
             &token,
             &SupportingResourceQuery {
-                filter_string: Some("name~CVE".to_string()),
+                // The reviewed mock deliberately rejects its old permissive
+                // `~` fixture syntax. Use a supported inline sort term while
+                // still verifying filter and pagination forwarding.
+                filter_string: Some("sort=name".to_string()),
                 filter_id: None,
                 page: 2,
                 per_page: 1,
@@ -3622,7 +3691,7 @@ async fn gvmd_adapter_list_cves_uses_typed_secinfo_request_with_pagination_filte
         .await
         .expect("list_cves should succeed against the mock backend");
 
-    assert_eq!(page.data.len(), 2);
+    assert_eq!(page.data.len(), 1);
     assert_eq!(page.pagination.page, 2);
     assert_eq!(page.pagination.per_page, 1);
     assert_eq!(page.pagination.total, 2);
@@ -3630,7 +3699,7 @@ async fn gvmd_adapter_list_cves_uses_typed_secinfo_request_with_pagination_filte
     let xml = recorded_xml(&server, "get_info");
     assert!(xml.contains("type=\"CVE\""), "xml={xml}");
     assert!(
-        xml.contains("filter=\"name~CVE first=2 rows=1\""),
+        xml.contains("filter=\"sort=name first=2 rows=1\""),
         "xml={xml}"
     );
 
