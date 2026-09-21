@@ -925,12 +925,23 @@ pub(crate) fn parse_asset_type(value: &str) -> AssetType {
     }
 }
 
-pub(crate) fn parse_config_usage_type(value: &str) -> ConfigUsageType {
+pub(crate) fn parse_config_usage_type(
+    value: &str,
+) -> Result<Option<ConfigUsageType>, GatewayError> {
     match value {
-        "scan" => ConfigUsageType::Scan,
-        "audit" => ConfigUsageType::Audit,
-        "policy" => ConfigUsageType::Policy,
-        other => ConfigUsageType::custom(other),
+        "scan" => Ok(Some(ConfigUsageType::Scan)),
+        "policy" => Ok(Some(ConfigUsageType::Policy)),
+        custom
+            if !custom.is_empty()
+                && custom
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-')) =>
+        {
+            Ok(None)
+        }
+        _ => Err(GatewayError::InvalidInput(
+            "usageType must be a nonempty token".to_string(),
+        )),
     }
 }
 

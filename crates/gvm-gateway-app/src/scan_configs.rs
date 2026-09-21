@@ -4,10 +4,10 @@
 //! Scan configuration use cases.
 
 use gvm_gateway_domain::{
-    CreateScanConfigInput, GatewayError, GenericConfig, GenericConfigPage, GenericConfigQuery,
-    ModifyScanConfigInput, Nvt, ScanConfig, ScanConfigNvtPage, ScanConfigNvtQuery, ScanConfigPage,
-    ScanConfigPreference, ScanConfigPreferenceQuery, ScanConfigQuery,
-    SetScanConfigFamilySelectionInput,
+    CreatePolicyInput, CreateScanConfigInput, GatewayError, GenericConfig, GenericConfigPage,
+    GenericConfigQuery, ModifyScanConfigInput, Nvt, ScanConfig, ScanConfigNvtPage,
+    ScanConfigNvtQuery, ScanConfigPage, ScanConfigPreference, ScanConfigPreferenceQuery,
+    ScanConfigQuery, SetScanConfigFamilySelectionInput,
 };
 
 use crate::GatewayService;
@@ -389,7 +389,7 @@ impl GatewayService {
     pub async fn create_policy(
         &self,
         session_token: &str,
-        input: CreateScanConfigInput,
+        input: CreatePolicyInput,
     ) -> Result<String, GatewayError> {
         self.execute_with_resource(
             "policies.create",

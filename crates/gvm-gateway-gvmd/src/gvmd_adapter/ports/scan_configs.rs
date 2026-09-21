@@ -9,6 +9,20 @@ impl ScanConfigPort for GvmdAdapter {
         session_token: &str,
         query: &GenericConfigQuery,
     ) -> Result<GenericConfigPage, GatewayError> {
+        let usage_type = query
+            .usage_type
+            .as_deref()
+            .map(parse_config_usage_type)
+            .transpose()?
+            .flatten();
+        let custom_usage_filter = query
+            .usage_type
+            .as_deref()
+            .filter(|_| usage_type.is_none())
+            .map(|value| format!("usage_type={value}"));
+        let reserved_terms = custom_usage_filter
+            .as_ref()
+            .map_or(&[][..], |_| &["usage_type"][..]);
         let filter_id = query
             .filter_id
             .as_deref()
@@ -20,19 +34,19 @@ impl ScanConfigPort for GvmdAdapter {
         let filter_string = self
             .paginated_filter_resolving_filter_id(
                 session_token,
-                None,
+                custom_usage_filter.as_deref(),
                 query.filter_string.as_deref(),
                 filter_id.as_ref(),
                 query.page,
                 query.per_page,
-                &[],
+                reserved_terms,
             )
             .await?;
         let parsed = self
             .execute_with_session(
                 session_token,
                 "configs.list",
-                GetConfigsRequest::new(GetConfigsOpts {
+                GetConfigsRequest {
                     config_id: None,
                     filter_string,
                     filter_id: None,
@@ -41,8 +55,8 @@ impl ScanConfigPort for GvmdAdapter {
                     families: None,
                     preferences: None,
                     tasks: None,
-                    usage_type: query.usage_type.as_deref().map(parse_config_usage_type),
-                }),
+                    usage_type,
+                },
             )
             .await?;
         let mut items = parsed
@@ -73,16 +87,7 @@ impl ScanConfigPort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "configs.get",
-                GetConfigRequest::new(
-                    parse_entity_id(id)?,
-                    GetConfigOpts {
-                        details: Some(true),
-                        families: None,
-                        preferences: None,
-                        tasks: None,
-                        usage_type: None,
-                    },
-                ),
+                GetConfigRequest::new(parse_entity_id(id)?),
             )
             .await?;
         parsed
@@ -99,17 +104,10 @@ impl ScanConfigPort for GvmdAdapter {
         id: &str,
         ultimate: bool,
     ) -> Result<(), GatewayError> {
-        self.execute_with_session(
-            session_token,
-            "configs.delete",
-            DeleteConfigRequest::new(
-                parse_entity_id(id)?,
-                DeleteConfigOpts {
-                    ultimate: ultimate.then_some(true),
-                },
-            ),
-        )
-        .await?;
+        let mut request = DeleteConfigRequest::new(parse_entity_id(id)?);
+        request.ultimate = ultimate.then_some(true);
+        self.execute_with_session(session_token, "configs.delete", request)
+            .await?;
         Ok(())
     }
 
@@ -118,7 +116,7 @@ impl ScanConfigPort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "configs.clone",
-                CloneConfigRequest::new(parse_entity_id(id)?, CloneConfigOpts::default()),
+                CloneConfigRequest::new(parse_entity_id(id)?),
             )
             .await?;
         Ok(parsed.id.to_string())
@@ -152,12 +150,16 @@ impl ScanConfigPort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "scan_configs.list",
-                GetScanConfigsRequest::new(GetScanConfigsOpts {
+                GetScanConfigsRequest {
+                    config_id: None,
                     filter_string,
                     filter_id: None,
                     trash: None,
                     details: Some(true),
-                }),
+                    families: None,
+                    preferences: None,
+                    tasks: None,
+                },
             )
             .await?;
         let items = parsed
@@ -178,24 +180,13 @@ impl ScanConfigPort for GvmdAdapter {
         session_token: &str,
         input: CreateScanConfigInput,
     ) -> Result<String, GatewayError> {
-        let base_id = input
-            .base_scan_config_id
-            .as_deref()
-            .map(parse_entity_id)
-            .transpose()?;
+        let base_id = self
+            .validate_active_scan_config_base(session_token, &input.base_scan_config_id)
+            .await?;
+        let mut request = CreateScanConfigRequest::new(input.name, base_id);
+        request.comment = input.comment;
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "scan_configs.create",
-                CreateScanConfigRequest::new(
-                    input.name,
-                    base_id,
-                    ConfigOpts {
-                        comment: input.comment,
-                        usage_type: None,
-                    },
-                ),
-            )
+            .execute_with_session(session_token, "scan_configs.create", request)
             .await?;
         Ok(parsed.id.to_string())
     }
@@ -219,7 +210,7 @@ impl ScanConfigPort for GvmdAdapter {
             // A policy shares the config resource family but must not be
             // readable through the scan-config route; treat it as absent so the
             // discriminator holds symmetrically with `get_policy`.
-            .filter(|item| item.usage_type.as_deref() != Some("policy"))
+            .filter(|item| item.usage_type.as_deref() == Some("scan"))
             .map(scan_config_from_gmp)
             .ok_or_else(|| GatewayError::NotFound(format!("scan config {id} not found")))
     }
@@ -231,19 +222,11 @@ impl ScanConfigPort for GvmdAdapter {
         input: ModifyScanConfigInput,
     ) -> Result<ScanConfig, GatewayError> {
         let config_id = parse_entity_id(id)?;
-        self.execute_with_session(
-            session_token,
-            "scan_configs.modify",
-            ModifyConfigRequest::new(
-                config_id,
-                ModifyConfigOpts {
-                    name: input.name,
-                    comment: input.comment,
-                    usage_type: Some(ConfigUsageType::Scan),
-                },
-            ),
-        )
-        .await?;
+        let mut request = ModifyScanConfigRequest::new(config_id);
+        request.name = input.name;
+        request.comment = input.comment;
+        self.execute_with_session(session_token, "scan_configs.modify", request)
+            .await?;
         self.get_scan_config(session_token, id).await
     }
 
@@ -253,12 +236,10 @@ impl ScanConfigPort for GvmdAdapter {
         id: &str,
         ultimate: bool,
     ) -> Result<(), GatewayError> {
-        self.execute_with_session(
-            session_token,
-            "scan_configs.delete",
-            DeleteScanConfigRequest::new(parse_entity_id(id)?, ultimate),
-        )
-        .await?;
+        let mut request = DeleteScanConfigRequest::new(parse_entity_id(id)?);
+        request.ultimate = ultimate.then_some(true);
+        self.execute_with_session(session_token, "scan_configs.delete", request)
+            .await?;
         Ok(())
     }
 
@@ -473,12 +454,16 @@ impl ScanConfigPort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "policies.list",
-                GetPoliciesRequest::new(GetScanConfigsOpts {
+                GetPoliciesRequest {
+                    policy_id: None,
                     filter_string,
                     filter_id: None,
                     trash: None,
                     details: Some(true),
-                }),
+                    families: None,
+                    preferences: None,
+                    audits: None,
+                },
             )
             .await?;
         let items = parsed
@@ -495,26 +480,20 @@ impl ScanConfigPort for GvmdAdapter {
     }
 
     async fn get_policy(&self, session_token: &str, id: &str) -> Result<ScanConfig, GatewayError> {
-        // Fetch through the policy-scoped `get_configs usage_type="policy"`
-        // command filtered to this id, so a scan-config id is not readable as a
-        // policy (and vice versa).
-        let _ = parse_entity_id(id)?;
         let parsed = self
             .execute_with_session(
                 session_token,
                 "policies.get",
-                GetPoliciesRequest::new(GetScanConfigsOpts {
-                    filter_string: Some(format!("uuid={id}")),
-                    filter_id: None,
-                    trash: None,
-                    details: Some(true),
-                }),
+                GetPolicyRequest::new(parse_entity_id(id)?),
             )
             .await?;
         parsed
             .items
             .into_iter()
             .next()
+            // gvmd's ID-selected iterator bypasses the usage predicate, so
+            // enforce the REST resource-family discriminator after parsing.
+            .filter(|item| item.usage_type.as_deref() == Some("policy"))
             .map(scan_config_from_gmp)
             .ok_or_else(|| GatewayError::NotFound(format!("policy {id} not found")))
     }
@@ -522,20 +501,15 @@ impl ScanConfigPort for GvmdAdapter {
     async fn create_policy(
         &self,
         session_token: &str,
-        input: CreateScanConfigInput,
+        input: CreatePolicyInput,
     ) -> Result<String, GatewayError> {
+        let base_id = self
+            .validate_active_policy_base(session_token, &input.base_policy_id)
+            .await?;
+        let mut request = CreatePolicyRequest::new(input.name, base_id);
+        request.comment = input.comment;
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "policies.create",
-                CreatePolicyRequest::new(
-                    input.name,
-                    ConfigOpts {
-                        comment: input.comment,
-                        usage_type: None,
-                    },
-                ),
-            )
+            .execute_with_session(session_token, "policies.create", request)
             .await?;
         Ok(parsed.id.to_string())
     }
@@ -547,19 +521,11 @@ impl ScanConfigPort for GvmdAdapter {
         input: ModifyScanConfigInput,
     ) -> Result<ScanConfig, GatewayError> {
         let config_id = parse_entity_id(id)?;
-        self.execute_with_session(
-            session_token,
-            "policies.modify",
-            ModifyConfigRequest::new(
-                config_id,
-                ModifyConfigOpts {
-                    name: input.name,
-                    comment: input.comment,
-                    usage_type: Some(ConfigUsageType::Policy),
-                },
-            ),
-        )
-        .await?;
+        let mut request = ModifyPolicyRequest::new(config_id);
+        request.name = input.name;
+        request.comment = input.comment;
+        self.execute_with_session(session_token, "policies.modify", request)
+            .await?;
         self.get_policy(session_token, id).await
     }
 
@@ -571,6 +537,38 @@ impl ScanConfigPort for GvmdAdapter {
         )
         .await?;
         Ok(())
+    }
+}
+
+impl GvmdAdapter {
+    async fn validate_active_scan_config_base(
+        &self,
+        session_token: &str,
+        id: &str,
+    ) -> Result<EntityId, GatewayError> {
+        let base_id = parse_entity_id(id)?;
+        match self.get_scan_config(session_token, id).await {
+            Ok(_) => Ok(base_id),
+            Err(GatewayError::NotFound(_)) => Err(GatewayError::InvalidInput(
+                "baseScanConfigId must identify an active scan config".to_string(),
+            )),
+            Err(error) => Err(error),
+        }
+    }
+
+    async fn validate_active_policy_base(
+        &self,
+        session_token: &str,
+        id: &str,
+    ) -> Result<EntityId, GatewayError> {
+        let base_id = parse_entity_id(id)?;
+        match self.get_policy(session_token, id).await {
+            Ok(_) => Ok(base_id),
+            Err(GatewayError::NotFound(_)) => Err(GatewayError::InvalidInput(
+                "basePolicyId must identify an active policy".to_string(),
+            )),
+            Err(error) => Err(error),
+        }
     }
 }
 
