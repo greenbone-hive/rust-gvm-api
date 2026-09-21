@@ -14,7 +14,7 @@ const RUST_GVM_COMPONENTS: &[&str] = &[
     "gvm-mock-server",
     "gvm-protocol",
 ];
-const RUST_GVM_BASELINE: &str = "e2f23f60b3f58e07274875ba0e42e379a468d68c";
+const RUST_GVM_BASELINE: &str = "6ea4d0db89311c7093dcf1c5974f66d81790fe58";
 
 const REMOVED_CANONICAL_TRANSITION_TYPES: &[&str] = &[
     "CreateTargetOpts",
@@ -257,7 +257,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
     );
     assert_eq!(
         *expected, RUST_GVM_BASELINE,
-        "rust-gvm components must remain on the reviewed issue #514 report-configuration baseline"
+        "rust-gvm components must remain on the reviewed issue #515 report-format baseline"
     );
 
     let workspace_manifest =
@@ -528,12 +528,17 @@ fn migrated_supporting_resource_families_stay_on_typed_execution() {
     let supporting = fs::read_to_string(ports_dir.join("supporting_resources.rs"))
         .expect("read supporting-resource adapter module");
 
+    assert!(
+        !supporting.contains("GetReportFormatsOpts"),
+        "report-format adapters must not restore the removed option bag"
+    );
+
     for request in [
         "GetAssetsRequest::new",
         "GetHostsRequest",
         "GetOperatingSystemAssetsRequest",
         "GetTlsCertificatesRequest::new",
-        "GetReportFormatsRequest::new",
+        "GetReportFormatsRequest {",
         "GetFiltersRequest",
         "GetTagsRequest",
         "GetNotesRequest",
