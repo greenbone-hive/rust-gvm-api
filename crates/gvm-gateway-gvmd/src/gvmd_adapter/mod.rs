@@ -93,7 +93,7 @@ use gvm_gmp::{
             CreatePortListRequest, DeletePortListRequest, GetPortListRequest, GetPortListsRequest,
             ModifyPortListRequest,
         },
-        report_formats::{GetReportFormatRequest, GetReportFormatsOpts, GetReportFormatsRequest},
+        report_formats::{GetReportFormatRequest, GetReportFormatsRequest},
         reports::{
             DeleteReportRequest, GetReportApplicationsRequest, GetReportClosedCvesRequest,
             GetReportCvesRequest, GetReportErrorsRequest,

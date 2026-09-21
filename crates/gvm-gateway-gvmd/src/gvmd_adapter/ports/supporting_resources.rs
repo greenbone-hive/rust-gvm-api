@@ -483,12 +483,17 @@ impl SupportingResourcePort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "report_formats.list",
-                GetReportFormatsRequest::new(GetReportFormatsOpts {
+                GetReportFormatsRequest {
+                    report_format_id: None,
                     filter_string,
                     filter_id: None,
                     trash: None,
                     details: Some(true),
-                }),
+                    alerts: None,
+                    params: None,
+                    report_configs: None,
+                    ignore_pagination: None,
+                },
             )
             .await?;
         let items = parsed
