@@ -32,12 +32,12 @@ impl ScannerPort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "scanners.list",
-                GetScannersRequest::new(GetScannersOpts {
+                GetScannersRequest {
                     filter_string,
                     filter_id: None,
                     trash: None,
                     details: Some(true),
-                }),
+                },
             )
             .await?;
         let items = parsed

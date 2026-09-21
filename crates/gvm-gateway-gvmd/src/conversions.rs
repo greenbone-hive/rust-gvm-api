@@ -996,6 +996,10 @@ pub(crate) fn parse_permission_subject_type(
 pub(crate) fn map_gvm_error(error: gvm_client::GvmError) -> GatewayError {
     match error {
         gvm_client::GvmError::Parse(error) => map_parse_error(error),
+        // Canonical complete requests validate before any bytes are sent. Keep
+        // those caller-correctable failures at the same 400 boundary as a
+        // validation error reported by gvmd itself.
+        gvm_client::GvmError::Request(error) => GatewayError::InvalidInput(error.to_string()),
         gvm_client::GvmError::UnsupportedCommand { .. } => {
             GatewayError::NotImplemented(error.to_string())
         }

@@ -9,7 +9,7 @@ and the typed request/associated-response work owned by
 
 - `main` remains the release integration branch and continues to use reviewed,
   explicitly pinned rust-gvm revisions.
-- `next` consumes the paired rust-gvm `next` branch and carries incremental
+- `next` consumes reviewed, exact rust-gvm revisions and carries incremental
   gvmd-adapter adoption without changing REST, OpenAPI, application, or domain
   contracts merely for the migration.
 - Short-lived migration branches target `next` through pull requests.
@@ -19,9 +19,16 @@ and the typed request/associated-response work owned by
 
 ## Dependency and integration rules
 
-The workspace manifests select the rust-gvm `next` branch. `Cargo.lock` records
-the exact resolved commit so every build remains reproducible. Refreshing that
-lock after rust-gvm `next` advances is an explicit, reviewed integration change.
+The workspace manifest and `Cargo.lock` pin all five rust-gvm crates to one exact
+reviewed commit so every build remains reproducible. Refreshing that revision is
+an explicit, atomic integration change.
+
+Issue [#512](https://github.com/greenbone-hive/rust-gvm-api/issues/512) sets the
+canonical complete-request baseline to rust-gvm commit
+`ebfdb93dab53f1748d68df5d4e831d89fbf2b71d`, the merge of rust-gvm PR #644.
+This is the last reviewed slice before result canonicalization. Follow-up issue
+[#513](https://github.com/greenbone-hive/rust-gvm-api/issues/513) must start from
+this exact five-crate baseline and advance the result family in upstream order.
 
 - Require `CI`, `Security`, and `REST Discovery Scan E2E (next)` for changes to
   this branch.
