@@ -14,7 +14,7 @@ const RUST_GVM_COMPONENTS: &[&str] = &[
     "gvm-mock-server",
     "gvm-protocol",
 ];
-const RUST_GVM_BASELINE: &str = "fd5142f57ec980503acd2f9d29903f06e76e4389";
+const RUST_GVM_BASELINE: &str = "034d0ce29ad54d93b328e83b85f6a29f2ba6daa5";
 
 const REMOVED_CANONICAL_TRANSITION_TYPES: &[&str] = &[
     "CreateTargetOpts",
@@ -86,6 +86,8 @@ const REMOVED_CANONICAL_TRANSITION_TYPES: &[&str] = &[
     "DeleteReportConfigOpts",
     "GetReportConfigsOpts",
     "ModifyReportConfigOpts",
+    "GetNvtsOpts",
+    "GetSecInfoOpts",
 ];
 
 #[derive(Debug, Eq, PartialEq)]
@@ -257,7 +259,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
     );
     assert_eq!(
         *expected, RUST_GVM_BASELINE,
-        "rust-gvm components must remain on the reviewed issue #516 TLS-certificate baseline"
+        "rust-gvm components must remain on the reviewed issue #517 NVT/SecInfo baseline"
     );
 
     let workspace_manifest =
@@ -269,7 +271,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
             .unwrap_or_else(|| panic!("{component} must be declared in workspace dependencies"));
         assert!(
             dependency.contains(&format!("rev = \"{RUST_GVM_BASELINE}\"")),
-            "{component} must pin the reviewed issue #514 baseline in Cargo.toml: {dependency}"
+            "{component} must pin the reviewed issue #517 baseline in Cargo.toml: {dependency}"
         );
         assert!(
             !dependency.contains("branch ="),
@@ -334,6 +336,47 @@ fn report_configuration_administration_stays_omitted() {
         reports.contains("opts.report_config_id = request"),
         "reportConfigId must remain an export selector"
     );
+}
+
+#[test]
+fn nvt_secinfo_migration_dispositions_stay_bounded() {
+    // Issue #517 migrates existing reads only. Generic SecInfo/vulnerability
+    // endpoints remain omitted, while preference and selection mutations keep
+    // their existing implementation until the separately reviewed #523 work.
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let production = fs::read_to_string(manifest_dir.join("src/gvmd_adapter/mod.rs"))
+        .expect("read gvmd adapter imports");
+    for request in [
+        "GetInfoListRequest",
+        "GetInfoRequest",
+        "GetVulnerabilityRequest",
+        "GetNvtPreferencesRequest",
+        "GetNvtPreferenceRequest",
+    ] {
+        assert!(
+            !production.contains(request),
+            "issue #517 must not widen the public surface through {request}"
+        );
+    }
+
+    let scan_configs =
+        fs::read_to_string(manifest_dir.join("src/gvmd_adapter/ports/scan_configs.rs"))
+            .expect("read scan-config adapter");
+    for deferred_mutation in [
+        "ModifyScanConfigSetNvtSelectionRequest::new",
+        "ModifyScanConfigSetNvtPreferenceRequest::new",
+    ] {
+        assert!(
+            scan_configs.contains(deferred_mutation),
+            "preference/selection mutation must remain unchanged pending #523: {deferred_mutation}"
+        );
+    }
+
+    let dispositions =
+        fs::read_to_string(manifest_dir.join("../../docs/upstream-surface-dispositions.md"))
+            .expect("read upstream surface dispositions");
+    assert!(dispositions.contains("Deferred to #523"));
+    assert!(dispositions.contains("Generic SecInfo dispatch"));
 }
 
 #[test]
@@ -536,6 +579,10 @@ fn migrated_supporting_resource_families_stay_on_typed_execution() {
         !supporting.contains("GetTlsCertificatesOpts"),
         "TLS-certificate adapters must not restore the removed option bag"
     );
+    assert!(
+        !supporting.contains("GetNvtsOpts") && !supporting.contains("GetSecInfoOpts"),
+        "NVT and SecInfo adapters must not restore removed option bags"
+    );
 
     for request in [
         "GetAssetsRequest::new",
@@ -547,9 +594,18 @@ fn migrated_supporting_resource_families_stay_on_typed_execution() {
         "GetTagsRequest",
         "GetNotesRequest",
         "GetOverridesRequest",
-        "GetNvtsRequest::new",
-        "GetVulnsRequest::new",
-        "GetCvesRequest::new",
+        "GetNvtsRequest {",
+        "GetNvtRequest::new",
+        "GetNvtFamiliesRequest::new",
+        "GetVulnsRequest {",
+        "GetCvesRequest {",
+        "GetCveRequest::new",
+        "GetCpesRequest {",
+        "GetCpeRequest::new",
+        "GetCertBundAdvisoriesRequest {",
+        "GetCertBundAdvisoryRequest::new",
+        "GetDfnCertAdvisoriesRequest {",
+        "GetDfnCertAdvisoryRequest::new",
     ] {
         assert!(
             supporting.contains(request),
@@ -574,6 +630,22 @@ fn migrated_supporting_resource_families_stay_on_typed_execution() {
     let results =
         fs::read_to_string(ports_dir.join("results.rs")).expect("read result adapter module");
     assert_typed_section(&results, "GetResultsRequest {", "result family");
+
+    let scan_configs = fs::read_to_string(ports_dir.join("scan_configs.rs"))
+        .expect("read scan-config adapter module");
+    assert!(
+        !scan_configs.contains("GetNvtsOpts"),
+        "scan-config NVT reads must not restore the removed option bag"
+    );
+    for request in [
+        "GetScanConfigNvtsRequest::new",
+        "GetScanConfigNvtRequest::new",
+    ] {
+        assert!(
+            scan_configs.contains(request),
+            "scan-config NVT reads must use canonical request {request}"
+        );
+    }
 }
 
 fn section_between<'a>(contents: &'a str, start: &str, end: &str) -> &'a str {

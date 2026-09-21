@@ -268,33 +268,39 @@ impl ScanConfigPort for GvmdAdapter {
         id: &str,
         query: &ScanConfigNvtQuery,
     ) -> Result<ScanConfigNvtPage, GatewayError> {
-        let parsed = self
-            .execute_with_session(
+        let config_id = parse_entity_id(id)?;
+        let families = if let Some(family) = &query.family {
+            vec![family.clone()]
+        } else {
+            self.execute_with_session(
                 session_token,
-                "scan_configs.nvts.list",
-                GetScanConfigNvtsRequest::new(GetNvtsOpts {
-                    filter_string: paginated_filter(None, None, query.page, query.per_page)?,
-                    filter_id: None,
-                    details: Some(true),
-                    preferences: Some(true),
-                    preference_count: Some(true),
-                    timeout: Some(true),
-                    config_id: Some(parse_entity_id(id)?),
-                    preferences_config_id: Some(parse_entity_id(id)?),
-                    family: query.family.clone(),
-                    sort_order: Some("ascending".to_string()),
-                    sort_field: Some("name".to_string()),
-                }),
+                "nvt_families.list",
+                GetNvtFamiliesRequest::new(),
             )
-            .await?;
-        let items = parsed
+            .await?
             .items
             .into_iter()
-            .map(nvt_from_gmp)
-            .collect::<Vec<_>>();
-        let total = gvmd_total(parsed.counts.filtered, parsed.counts.total, items.len());
+            .map(|family| family.name)
+            .collect()
+        };
+        let mut items = Vec::new();
+        for family in families {
+            let mut request = GetScanConfigNvtsRequest::new(config_id.clone(), family);
+            request.details = Some(true);
+            request.preferences = Some(true);
+            request.preference_count = Some(true);
+            request.timeout = Some(true);
+            request.sort_order = Some(SortOrder::Ascending);
+            request.sort_field = Some("name".to_string());
+            let parsed = self
+                .execute_with_session(session_token, "scan_configs.nvts.list", request)
+                .await?;
+            items.extend(parsed.items.into_iter().map(nvt_from_gmp));
+        }
+        items.sort_by(|left, right| left.name.cmp(&right.name));
+        let total = items.len() as u32;
         Ok(ScanConfigNvtPage {
-            data: items,
+            data: paged_slice(items, query.page, query.per_page),
             pagination: paged_pagination(total, query.page, query.per_page),
         })
     }
@@ -305,24 +311,11 @@ impl ScanConfigPort for GvmdAdapter {
         id: &str,
         oid: &str,
     ) -> Result<Nvt, GatewayError> {
+        let mut request = GetScanConfigNvtRequest::new(oid);
+        request.config_id = Some(parse_entity_id(id)?);
+        request.timeout = Some(true);
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "scan_configs.nvts.get",
-                GetScanConfigNvtsRequest::new(GetNvtsOpts {
-                    filter_string: Some(format!("oid={oid}")),
-                    filter_id: None,
-                    details: Some(true),
-                    preferences: Some(true),
-                    preference_count: Some(true),
-                    timeout: Some(true),
-                    config_id: Some(parse_entity_id(id)?),
-                    preferences_config_id: Some(parse_entity_id(id)?),
-                    family: None,
-                    sort_order: None,
-                    sort_field: None,
-                }),
-            )
+            .execute_with_session(session_token, "scan_configs.nvts.get", request)
             .await?;
         parsed
             .items
