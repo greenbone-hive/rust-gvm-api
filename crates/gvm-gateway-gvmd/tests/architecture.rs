@@ -14,7 +14,7 @@ const RUST_GVM_COMPONENTS: &[&str] = &[
     "gvm-mock-server",
     "gvm-protocol",
 ];
-const RUST_GVM_BASELINE: &str = "2e5ccd1a3910324e64edbc2092c47ced5ab87279";
+const RUST_GVM_BASELINE: &str = "e2f23f60b3f58e07274875ba0e42e379a468d68c";
 
 const REMOVED_CANONICAL_TRANSITION_TYPES: &[&str] = &[
     "CreateTargetOpts",
@@ -81,6 +81,11 @@ const REMOVED_CANONICAL_TRANSITION_TYPES: &[&str] = &[
     "GetOperatingSystemsOpts",
     "ModifyOperatingSystemAssetRequest",
     "GetResultsOpts",
+    "CreateReportConfigOpts",
+    "CreateReportConfigWithOptsRequest",
+    "DeleteReportConfigOpts",
+    "GetReportConfigsOpts",
+    "ModifyReportConfigOpts",
 ];
 
 #[derive(Debug, Eq, PartialEq)]
@@ -252,7 +257,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
     );
     assert_eq!(
         *expected, RUST_GVM_BASELINE,
-        "rust-gvm components must remain on the reviewed issue #513 result baseline"
+        "rust-gvm components must remain on the reviewed issue #514 report-configuration baseline"
     );
 
     let workspace_manifest =
@@ -264,7 +269,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
             .unwrap_or_else(|| panic!("{component} must be declared in workspace dependencies"));
         assert!(
             dependency.contains(&format!("rev = \"{RUST_GVM_BASELINE}\"")),
-            "{component} must pin the reviewed issue #513 baseline in Cargo.toml: {dependency}"
+            "{component} must pin the reviewed issue #514 baseline in Cargo.toml: {dependency}"
         );
         assert!(
             !dependency.contains("branch ="),
@@ -298,6 +303,36 @@ fn removed_pre_result_transition_types_stay_absent() {
         findings.is_empty(),
         "removed pre-result canonical transition APIs must stay absent:\n{}",
         findings.join("\n")
+    );
+}
+
+#[test]
+fn report_configuration_administration_stays_omitted() {
+    // Issue #514 distinguishes the supported report-export selector from the
+    // intentionally omitted report-configuration administration surface in
+    // issue #381. Canonical upstream availability must not add those methods.
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let production = fs::read_to_string(manifest_dir.join("src/gvmd_adapter/mod.rs"))
+        .expect("read gvmd adapter imports");
+    for request in [
+        "GetReportConfigsRequest",
+        "GetReportConfigRequest",
+        "CreateReportConfigRequest",
+        "CloneReportConfigRequest",
+        "ModifyReportConfigRequest",
+        "DeleteReportConfigRequest",
+    ] {
+        assert!(
+            !production.contains(request),
+            "report-configuration administration is omitted under issue #381: {request}"
+        );
+    }
+
+    let reports = fs::read_to_string(manifest_dir.join("src/gvmd_adapter/ports/reports.rs"))
+        .expect("read report adapter");
+    assert!(
+        reports.contains("opts.report_config_id = request"),
+        "reportConfigId must remain an export selector"
     );
 }
 
