@@ -2079,7 +2079,7 @@ async fn gvmd_adapter_list_tls_certificates_emits_backend_pagination_filter() {
         .list_tls_certificates(
             &token,
             &SupportingResourceQuery {
-                filter_string: Some("subject~example".to_string()),
+                filter_string: Some("subject_dn~example".to_string()),
                 filter_id: None,
                 page: 2,
                 per_page: 10,
@@ -2095,7 +2095,7 @@ async fn gvmd_adapter_list_tls_certificates_emits_backend_pagination_filter() {
         .expect("get_tls_certificates command should be recorded");
     let xml = String::from_utf8(command.raw_xml().to_vec()).expect("xml command");
     assert!(xml.contains("<get_tls_certificates"));
-    assert!(xml.contains("filter=\"subject~example first=11 rows=10\""));
+    assert!(xml.contains("filter=\"subject_dn~example first=11 rows=10\""));
 
     server.shutdown().await;
 }
