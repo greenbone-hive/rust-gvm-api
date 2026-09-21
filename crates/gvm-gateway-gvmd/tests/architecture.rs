@@ -14,7 +14,7 @@ const RUST_GVM_COMPONENTS: &[&str] = &[
     "gvm-mock-server",
     "gvm-protocol",
 ];
-const RUST_GVM_BASELINE: &str = "ebfdb93dab53f1748d68df5d4e831d89fbf2b71d";
+const RUST_GVM_BASELINE: &str = "2e5ccd1a3910324e64edbc2092c47ced5ab87279";
 
 const REMOVED_CANONICAL_TRANSITION_TYPES: &[&str] = &[
     "CreateTargetOpts",
@@ -80,6 +80,7 @@ const REMOVED_CANONICAL_TRANSITION_TYPES: &[&str] = &[
     "GetHostsOpts",
     "GetOperatingSystemsOpts",
     "ModifyOperatingSystemAssetRequest",
+    "GetResultsOpts",
 ];
 
 #[derive(Debug, Eq, PartialEq)]
@@ -251,7 +252,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
     );
     assert_eq!(
         *expected, RUST_GVM_BASELINE,
-        "rust-gvm components must remain on the reviewed issue #512 asset baseline"
+        "rust-gvm components must remain on the reviewed issue #513 result baseline"
     );
 
     let workspace_manifest =
@@ -263,7 +264,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
             .unwrap_or_else(|| panic!("{component} must be declared in workspace dependencies"));
         assert!(
             dependency.contains(&format!("rev = \"{RUST_GVM_BASELINE}\"")),
-            "{component} must pin the reviewed issue #512 baseline in Cargo.toml: {dependency}"
+            "{component} must pin the reviewed issue #513 baseline in Cargo.toml: {dependency}"
         );
         assert!(
             !dependency.contains("branch ="),
@@ -528,7 +529,7 @@ fn migrated_supporting_resource_families_stay_on_typed_execution() {
 
     let results =
         fs::read_to_string(ports_dir.join("results.rs")).expect("read result adapter module");
-    assert_typed_section(&results, "GetResultsRequest::new", "result family");
+    assert_typed_section(&results, "GetResultsRequest {", "result family");
 }
 
 fn section_between<'a>(contents: &'a str, start: &str, end: &str) -> &'a str {
