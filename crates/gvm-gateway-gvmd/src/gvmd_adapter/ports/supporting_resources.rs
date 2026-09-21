@@ -313,12 +313,13 @@ impl SupportingResourcePort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "tls_certificates.list",
-                GetTlsCertificatesRequest::new(GetTlsCertificatesOpts {
+                GetTlsCertificatesRequest {
+                    tls_certificate_id: None,
                     filter_string,
                     filter_id: None,
-                    trash: None,
                     details: Some(true),
-                }),
+                    include_certificate_data: None,
+                },
             )
             .await?;
         let items = parsed
