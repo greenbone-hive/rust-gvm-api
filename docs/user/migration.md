@@ -31,3 +31,10 @@ Policy request example:
   "basePolicyId": "085569ce-73ed-11df-83c3-002264764cea"
 }
 ```
+
+## Task host ordering
+
+`hostsOrdering` is no longer accepted by task or audit create/modify requests.
+Pinned gvmd versions do not parse a request-side host-ordering field, so the
+previous Technology Preview input was misleading. Response-side
+`hostsOrdering` remains unchanged when gvmd reports it.

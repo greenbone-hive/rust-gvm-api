@@ -232,8 +232,6 @@ pub struct CreateTaskInput {
     pub alert_ids: Vec<String>,
     /// Optional alterable flag.
     pub alterable: Option<bool>,
-    /// Optional hosts ordering.
-    pub hosts_ordering: Option<String>,
     /// Optional observers.
     pub observers: Vec<String>,
     /// Optional schedule periods.
@@ -261,8 +259,6 @@ pub struct ModifyTaskInput {
     pub alert_ids: Option<Vec<String>>,
     /// Optional alterable flag.
     pub alterable: Option<bool>,
-    /// Optional hosts ordering.
-    pub hosts_ordering: Option<String>,
     /// Optional observers.
     pub observers: Vec<String>,
     /// Optional schedule periods.

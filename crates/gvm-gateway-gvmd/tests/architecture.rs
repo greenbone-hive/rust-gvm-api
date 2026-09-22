@@ -451,7 +451,7 @@ fn migrated_task_and_report_families_stay_on_typed_execution() {
     let ports_dir = manifest_dir.join("src/gvmd_adapter/ports");
 
     let tasks = fs::read_to_string(ports_dir.join("tasks.rs")).expect("read task adapter module");
-    assert_typed_section(&tasks, "GetTasksRequest::new", "task and audit family");
+    assert_typed_section(&tasks, "GetTasksRequest {", "standard task family");
 
     let reports =
         fs::read_to_string(ports_dir.join("reports.rs")).expect("read report adapter module");
