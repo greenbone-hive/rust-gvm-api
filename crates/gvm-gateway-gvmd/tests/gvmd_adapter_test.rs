@@ -991,6 +991,42 @@ async fn gvmd_adapter_modify_scan_config_forwards_rename() {
 }
 
 #[tokio::test]
+async fn gvmd_adapter_scan_config_preference_reads_use_complete_requests() {
+    let (adapter, server, token) = create_mock_adapter().await;
+    let config_id = "550e8400-e29b-41d4-a716-446655440123";
+    let nvt_oid = "1.3.6.1.4.1.25623.1.0.100000";
+    server.clear_history();
+
+    let query = ScanConfigPreferenceQuery {
+        nvt_oid: Some(nvt_oid.to_string()),
+    };
+    let _ = adapter
+        .list_scan_config_preferences(&token, config_id, &query)
+        .await;
+    let _ = adapter
+        .get_scan_config_preference(&token, config_id, "Timeout", &query)
+        .await;
+
+    let history = server.command_history();
+    assert!(history.iter().any(|record| {
+        let xml = String::from_utf8_lossy(record.raw_xml());
+        record.command_name() == "get_preferences"
+            && xml.contains(&format!("config_id=\"{config_id}\""))
+            && xml.contains(&format!("nvt_oid=\"{nvt_oid}\""))
+            && !xml.contains("preference=")
+    }));
+    assert!(history.iter().any(|record| {
+        let xml = String::from_utf8_lossy(record.raw_xml());
+        record.command_name() == "get_preferences"
+            && xml.contains(&format!("config_id=\"{config_id}\""))
+            && xml.contains(&format!("nvt_oid=\"{nvt_oid}\""))
+            && xml.contains("preference=\"Timeout\"")
+    }));
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn gvmd_adapter_scan_config_selection_uses_typed_modify_shapes() {
     let (adapter, server, token) = create_mock_adapter().await;
     let config_id = "550e8400-e29b-41d4-a716-446655440123";
