@@ -21,7 +21,7 @@ impl TaskPort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "tasks.list",
-                GetTasksRequest::new(GetTasksOpts {
+                GetTasksRequest {
                     filter_string: self
                         .paginated_filter_resolving_filter_id(
                             session_token,
@@ -38,7 +38,7 @@ impl TaskPort for GvmdAdapter {
                     details: Some(true),
                     schedules_only: None,
                     ignore_pagination: None,
-                }),
+                },
             )
             .await?;
         let items = parsed
@@ -66,7 +66,6 @@ impl TaskPort for GvmdAdapter {
             schedule_id,
             alert_ids,
             alterable,
-            hosts_ordering,
             observers,
             schedule_periods,
             preferences,
@@ -83,42 +82,29 @@ impl TaskPort for GvmdAdapter {
                 scan_config_id,
                 scanner_id,
             } => {
-                let hosts_ordering = hosts_ordering
-                    .as_deref()
-                    .map(parse_hosts_ordering)
-                    .transpose()?;
-                self.execute_with_session(
-                    session_token,
-                    "tasks.create",
-                    CreateTaskRequest::new(
-                        name,
-                        parse_entity_id(&scan_config_id)?,
-                        parse_entity_id(&target_id)?,
-                        parse_entity_id(&scanner_id)?,
-                        CreateTaskOpts {
-                            alterable,
-                            hosts_ordering,
-                            schedule_id,
-                            alert_ids,
-                            comment,
-                            schedule_periods,
-                            observers,
-                            observer_group_ids: Vec::new(),
-                            preferences,
-                        },
-                    ),
-                )
-                .await?
+                let mut request = CreateTaskRequest::new(
+                    name,
+                    parse_entity_id(&scan_config_id)?,
+                    parse_entity_id(&target_id)?,
+                    parse_entity_id(&scanner_id)?,
+                );
+                request.comment = comment;
+                request.alterable = alterable;
+                request.schedule_id = schedule_id;
+                request.alert_ids = alert_ids;
+                request.schedule_periods = schedule_periods;
+                request.observers = observers;
+                request.preferences = preferences
+                    .into_iter()
+                    .map(|(name, value)| TaskPreference::new(name, value))
+                    .collect();
+                self.execute_with_session(session_token, "tasks.create", request)
+                    .await?
             }
             CreateTaskTarget::AgentGroup {
                 agent_group_id,
                 scanner_id,
             } => {
-                if hosts_ordering.is_some() {
-                    return Err(GatewayError::InvalidInput(
-                        "hostsOrdering is only valid for classic tasks".to_string(),
-                    ));
-                }
                 self.execute_with_session(
                     session_token,
                     "tasks.create",
@@ -144,11 +130,6 @@ impl TaskPort for GvmdAdapter {
                 oci_image_target_id,
                 scanner_id,
             } => {
-                if hosts_ordering.is_some() {
-                    return Err(GatewayError::InvalidInput(
-                        "hostsOrdering is only valid for classic tasks".to_string(),
-                    ));
-                }
                 self.execute_with_session(
                     session_token,
                     "tasks.create",
@@ -174,11 +155,6 @@ impl TaskPort for GvmdAdapter {
                 web_application_target_id,
                 scanner_id,
             } => {
-                if hosts_ordering.is_some() {
-                    return Err(GatewayError::InvalidInput(
-                        "hostsOrdering is only valid for classic tasks".to_string(),
-                    ));
-                }
                 self.execute_with_session(
                     session_token,
                     "tasks.create",
@@ -204,7 +180,6 @@ impl TaskPort for GvmdAdapter {
                 if schedule_id.is_some()
                     || !alert_ids.is_empty()
                     || alterable.is_some()
-                    || hosts_ordering.is_some()
                     || !observers.is_empty()
                     || schedule_periods.is_some()
                     || !preferences.is_empty()
@@ -288,31 +263,22 @@ impl TaskPort for GvmdAdapter {
                     .collect::<Result<Vec<_>, _>>()
             })
             .transpose()?;
-        let hosts_ordering = input
-            .hosts_ordering
-            .as_deref()
-            .map(parse_hosts_ordering)
-            .transpose()?;
-
-        let request = ModifyTaskRequest::new(
-            task_id,
-            ModifyTaskOpts {
-                name: input.name,
-                comment: input.comment,
-                alterable: input.alterable,
-                hosts_ordering,
-                schedule_id,
-                schedule_periods: input.schedule_periods,
-                target_id,
-                config_id,
-                scanner_id,
-                alert_ids,
-                observers: CollectionUpdate::Replace(input.observers),
-                observer_group_ids: CollectionUpdate::Omitted,
-                preferences: input.preferences,
-            },
-        )
-        .map_err(|error| GatewayError::InvalidInput(error.to_string()))?;
+        let mut request = ModifyTaskRequest::new(task_id);
+        request.name = input.name;
+        request.comment = input.comment;
+        request.alterable = input.alterable;
+        request.schedule_id = schedule_id;
+        request.schedule_periods = input.schedule_periods;
+        request.target_id = target_id;
+        request.config_id = config_id;
+        request.scanner_id = scanner_id;
+        request.alert_ids = alert_ids.map(CollectionUpdate::Replace).unwrap_or_default();
+        request.observers = CollectionUpdate::Replace(input.observers);
+        request.preferences = input
+            .preferences
+            .into_iter()
+            .map(|(name, value)| TaskPreference::new(name, value))
+            .collect();
         self.execute_with_session(session_token, "tasks.modify", request)
             .await?;
         self.get_task(session_token, id).await
@@ -449,12 +415,6 @@ impl TaskPort for GvmdAdapter {
             .iter()
             .map(|id| parse_entity_id(id))
             .collect::<Result<Vec<_>, _>>()?;
-        let hosts_ordering = input
-            .hosts_ordering
-            .as_deref()
-            .map(parse_hosts_ordering)
-            .transpose()?;
-
         let parsed = self
             .execute_with_session(
                 session_token,
@@ -466,7 +426,6 @@ impl TaskPort for GvmdAdapter {
                     scanner_id,
                     CreateTaskOpts {
                         alterable: input.alterable,
-                        hosts_ordering,
                         schedule_id,
                         alert_ids,
                         comment: input.comment,
@@ -518,19 +477,12 @@ impl TaskPort for GvmdAdapter {
                     .collect::<Result<Vec<_>, _>>()
             })
             .transpose()?;
-        let hosts_ordering = input
-            .hosts_ordering
-            .as_deref()
-            .map(parse_hosts_ordering)
-            .transpose()?;
-
         let request = ModifyAuditRequest::new(
             task_id,
             ModifyTaskOpts {
                 name: input.name,
                 comment: input.comment,
                 alterable: input.alterable,
-                hosts_ordering,
                 schedule_id,
                 schedule_periods: input.schedule_periods,
                 target_id,
