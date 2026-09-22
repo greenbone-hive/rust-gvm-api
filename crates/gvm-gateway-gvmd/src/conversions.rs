@@ -23,7 +23,7 @@ use gvm_gateway_domain::{
 };
 use gvm_gmp::{
     commands::{assets::AssetType, configs::ConfigUsageType},
-    AlertCondition, AlertEvent, AlertMethod, AliveTest, CredentialType, EntityId, HostsOrdering,
+    AlertCondition, AlertEvent, AlertMethod, AliveTest, CredentialType, EntityId,
     PermissionSubjectType, SnmpAuthAlgorithm, SnmpPrivacyAlgorithm, UserAuthType,
 };
 
@@ -942,17 +942,6 @@ pub(crate) fn parse_config_usage_type(
         _ => Err(GatewayError::InvalidInput(
             "usageType must be a nonempty token".to_string(),
         )),
-    }
-}
-
-pub(crate) fn parse_hosts_ordering(value: &str) -> Result<HostsOrdering, GatewayError> {
-    match value {
-        "sequential" => Ok(HostsOrdering::Sequential),
-        "random" => Ok(HostsOrdering::Random),
-        "reverse" => Ok(HostsOrdering::Reverse),
-        _ => Err(GatewayError::InvalidInput(format!(
-            "invalid hostsOrdering: {value}"
-        ))),
     }
 }
 

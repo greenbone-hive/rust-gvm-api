@@ -200,8 +200,6 @@ pub(crate) struct CreateTaskDoc {
     #[serde(rename = "alertIds")]
     alert_ids: Option<Vec<Uuid>>,
     alterable: Option<bool>,
-    #[serde(rename = "hostsOrdering")]
-    hosts_ordering: Option<HostsOrderingDoc>,
     observers: Option<Vec<String>>,
     #[serde(rename = "schedulePeriods")]
     schedule_periods: Option<u32>,
@@ -239,8 +237,6 @@ pub(crate) struct CreateAuditDoc {
     #[serde(rename = "alertIds")]
     alert_ids: Option<Vec<Uuid>>,
     alterable: Option<bool>,
-    #[serde(rename = "hostsOrdering")]
-    hosts_ordering: Option<HostsOrderingDoc>,
     observers: Option<Vec<String>>,
     #[serde(rename = "schedulePeriods")]
     schedule_periods: Option<u32>,
@@ -264,24 +260,12 @@ pub(crate) struct ModifyTaskDoc {
     #[serde(rename = "alertIds")]
     alert_ids: Option<Vec<Uuid>>,
     alterable: Option<bool>,
-    #[serde(rename = "hostsOrdering")]
-    hosts_ordering: Option<HostsOrderingDoc>,
     observers: Option<Vec<String>>,
     #[serde(rename = "schedulePeriods")]
     schedule_periods: Option<u32>,
     /// Key-value scan preferences. Omitted or empty objects leave preferences
     /// unchanged; clearing preferences is not supported by this request shape.
     preferences: Option<std::collections::HashMap<String, String>>,
-}
-
-#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
-pub(crate) enum HostsOrderingDoc {
-    #[serde(rename = "sequential")]
-    Sequential,
-    #[serde(rename = "random")]
-    Random,
-    #[serde(rename = "reverse")]
-    Reverse,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]

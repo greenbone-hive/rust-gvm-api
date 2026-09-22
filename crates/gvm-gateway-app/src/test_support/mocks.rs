@@ -638,7 +638,7 @@ impl TaskPort for MockTaskPort {
             schedule: None,
             alerts: vec![],
             alterable: None,
-            hosts_ordering: input.hosts_ordering,
+            hosts_ordering: None,
             observers: gvm_gateway_domain::TaskObservers {
                 users: input.observers,
                 groups: vec![],
