@@ -985,7 +985,7 @@ async fn gvmd_adapter_modify_scan_config_forwards_rename() {
         .expect("modify_config command should be recorded");
     let xml = String::from_utf8(command.raw_xml().to_vec()).expect("xml command");
     assert!(xml.contains("<name>Renamed Config</name>"));
-    assert!(xml.contains("<usage_type>scan</usage_type>"));
+    assert!(!xml.contains("usage_type"), "xml={xml}");
 
     server.shutdown().await;
 }
@@ -2027,7 +2027,8 @@ async fn gvmd_adapter_generic_configs_forward_open_usage_clone_and_ultimate_dele
     let history = server.command_history();
     assert!(history.iter().any(|record| {
         record.command_name() == "get_configs"
-            && String::from_utf8_lossy(record.raw_xml()).contains("usage_type=\"future_usage\"")
+            && String::from_utf8_lossy(record.raw_xml())
+                .contains("filter=\"usage_type=future_usage")
     }));
     assert!(history.iter().any(|record| {
         record.command_name() == "create_config"
@@ -2037,6 +2038,228 @@ async fn gvmd_adapter_generic_configs_forward_open_usage_clone_and_ultimate_dele
         record.command_name() == "delete_config"
             && String::from_utf8_lossy(record.raw_xml()).contains("ultimate=\"1\"")
     }));
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_config_create_requires_active_same_usage_bases() {
+    // Issue #518 requires deterministic validation before create_config: a
+    // scan config can copy only an active scan config, and a policy can copy
+    // only an active policy. Exercise valid, wrong-usage, missing, and trashed
+    // sources against the canonical stateful lifecycle implementation.
+    let (adapter, server, token) = create_mock_adapter().await;
+    let scan_base = "daba56c8-73ec-11df-a475-002264764cea";
+    let policy_base = "00000000-0000-0000-0000-000000000301";
+    let missing_base = "00000000-0000-0000-0000-000000009999";
+    server.clear_history();
+
+    let scan_id = adapter
+        .create_scan_config(
+            &token,
+            CreateScanConfigInput {
+                name: "Issue 518 scan copy".to_string(),
+                comment: Some("scan metadata".to_string()),
+                base_scan_config_id: scan_base.to_string(),
+            },
+        )
+        .await
+        .expect("active scan base should be copied");
+    let policy_id = adapter
+        .create_policy(
+            &token,
+            CreatePolicyInput {
+                name: "Issue 518 policy copy".to_string(),
+                comment: Some("policy metadata".to_string()),
+                base_policy_id: policy_base.to_string(),
+            },
+        )
+        .await
+        .expect("active policy base should be copied");
+
+    for error in [
+        adapter
+            .create_scan_config(
+                &token,
+                CreateScanConfigInput {
+                    name: "Wrong usage scan".to_string(),
+                    comment: None,
+                    base_scan_config_id: policy_base.to_string(),
+                },
+            )
+            .await
+            .expect_err("policy base must be rejected for scan creation"),
+        adapter
+            .create_scan_config(
+                &token,
+                CreateScanConfigInput {
+                    name: "Missing scan".to_string(),
+                    comment: None,
+                    base_scan_config_id: missing_base.to_string(),
+                },
+            )
+            .await
+            .expect_err("missing scan base must be rejected"),
+    ] {
+        assert_eq!(
+            error,
+            GatewayError::InvalidInput(
+                "baseScanConfigId must identify an active scan config".to_string()
+            )
+        );
+    }
+
+    for error in [
+        adapter
+            .create_policy(
+                &token,
+                CreatePolicyInput {
+                    name: "Wrong usage policy".to_string(),
+                    comment: None,
+                    base_policy_id: scan_base.to_string(),
+                },
+            )
+            .await
+            .expect_err("scan base must be rejected for policy creation"),
+        adapter
+            .create_policy(
+                &token,
+                CreatePolicyInput {
+                    name: "Missing policy".to_string(),
+                    comment: None,
+                    base_policy_id: missing_base.to_string(),
+                },
+            )
+            .await
+            .expect_err("missing policy base must be rejected"),
+    ] {
+        assert_eq!(
+            error,
+            GatewayError::InvalidInput("basePolicyId must identify an active policy".to_string())
+        );
+    }
+
+    adapter
+        .delete_scan_config(&token, &scan_id, false)
+        .await
+        .expect("created scan should move to trash");
+    let trashed_scan = adapter
+        .create_scan_config(
+            &token,
+            CreateScanConfigInput {
+                name: "Trashed scan source".to_string(),
+                comment: None,
+                base_scan_config_id: scan_id,
+            },
+        )
+        .await
+        .expect_err("trashed scan base must be rejected");
+    assert!(matches!(trashed_scan, GatewayError::InvalidInput(_)));
+
+    adapter
+        .delete_policy(&token, &policy_id)
+        .await
+        .expect("created policy should move to trash");
+    let trashed_policy = adapter
+        .create_policy(
+            &token,
+            CreatePolicyInput {
+                name: "Trashed policy source".to_string(),
+                comment: None,
+                base_policy_id: policy_id,
+            },
+        )
+        .await
+        .expect_err("trashed policy base must be rejected");
+    assert!(matches!(trashed_policy, GatewayError::InvalidInput(_)));
+
+    let create_commands = server
+        .command_history()
+        .into_iter()
+        .filter(|record| record.command_name() == "create_config")
+        .collect::<Vec<_>>();
+    assert_eq!(
+        create_commands.len(),
+        2,
+        "invalid bases must be rejected before create_config"
+    );
+    let scan_xml = String::from_utf8_lossy(create_commands[0].raw_xml());
+    assert!(scan_xml.contains(&format!("<copy>{scan_base}</copy>")));
+    assert!(scan_xml.contains("<name>Issue 518 scan copy</name>"));
+    assert!(!scan_xml.contains("<usage_type>"));
+    let policy_xml = String::from_utf8_lossy(create_commands[1].raw_xml());
+    assert!(policy_xml.contains(&format!("<copy>{policy_base}</copy>")));
+    assert!(policy_xml.contains("<usage_type>policy</usage_type>"));
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_config_modify_is_metadata_only_and_reads_back() {
+    // Canonical scan/policy modifies must emit metadata only and then perform
+    // the existing typed read-back without touching selectors/preferences.
+    let (adapter, server, token) = create_mock_adapter().await;
+    let scan_id = "00000000-0000-0000-0000-000000000300";
+    let policy_id = "00000000-0000-0000-0000-000000000302";
+    server.clear_history();
+
+    let scan = adapter
+        .modify_scan_config(
+            &token,
+            scan_id,
+            ModifyScanConfigInput {
+                name: Some("Renamed discovery scan".to_string()),
+                comment: Some("updated scan".to_string()),
+            },
+        )
+        .await
+        .expect("scan metadata update should read back");
+    assert_eq!(scan.name, "Renamed discovery scan");
+
+    let policy = adapter
+        .modify_policy(
+            &token,
+            policy_id,
+            ModifyScanConfigInput {
+                name: Some("Renamed empty policy".to_string()),
+                comment: Some("updated policy".to_string()),
+            },
+        )
+        .await
+        .expect("policy metadata update should read back");
+    assert_eq!(policy.name, "Renamed empty policy");
+
+    let history = server.command_history();
+    let modifies = history
+        .iter()
+        .filter(|record| record.command_name() == "modify_config")
+        .collect::<Vec<_>>();
+    assert_eq!(modifies.len(), 2);
+    for modify in modifies {
+        let xml = String::from_utf8_lossy(modify.raw_xml());
+        assert!(xml.contains("<name>"));
+        assert!(xml.contains("<comment>"));
+        assert!(
+            !xml.contains("usage_type"),
+            "metadata modify changed usage: {xml}"
+        );
+        assert!(
+            !xml.contains("preference"),
+            "metadata modify touched preferences: {xml}"
+        );
+        assert!(
+            !xml.contains("selection"),
+            "metadata modify touched selections: {xml}"
+        );
+    }
+    assert_eq!(
+        history
+            .iter()
+            .filter(|record| record.command_name() == "get_configs")
+            .count(),
+        2,
+        "each metadata update must retain read-back behavior"
+    );
 
     server.shutdown().await;
 }

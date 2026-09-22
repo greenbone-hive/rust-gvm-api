@@ -37,7 +37,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "./scan-configs.yaml#/components/schemas/CreateScanConfig"
+              $ref: "#/components/schemas/CreatePolicy"
       responses:
         "201":
           description: Policy created
@@ -116,3 +116,20 @@ paths:
           $ref: "./common.yaml#/components/responses/BadGateway"
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
+
+components:
+  schemas:
+    CreatePolicy:
+      type: object
+      required:
+        - name
+        - basePolicyId
+      properties:
+        name:
+          type: string
+        comment:
+          type: string
+        basePolicyId:
+          type: string
+          format: uuid
+          description: UUID of the active policy to copy from.

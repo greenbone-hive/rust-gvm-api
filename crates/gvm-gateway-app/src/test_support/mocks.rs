@@ -11,32 +11,32 @@ use gvm_gateway_domain::{
     AgentSupportBundleQuery, Alert, AlertPage, AlertPort, AlertQuery, AssetQuery, AuthPort,
     CertBundAdvisory, CertBundAdvisoryPage, Cpe, CpePage, CreateAgentGroupInput, CreateAlertInput,
     CreateCredentialInput, CreateFilterInput, CreateGroupInput, CreateHostInput, CreateNoteInput,
-    CreateOverrideInput, CreatePermissionInput, CreatePortListInput, CreateRoleInput,
-    CreateScanConfigInput, CreateScheduleInput, CreateTagInput, CreateTargetInput, CreateTaskInput,
-    CreateUserInput, Credential, CredentialPage, CredentialPort, CredentialQuery, CredentialStore,
-    Cve, CvePage, DfnCertAdvisory, DfnCertAdvisoryPage, FeedList, FeedPort, FeedQuery, Filter,
-    FilterPage, GatewayError, GenericAsset, GenericAssetPage, GenericConfig, GenericConfigPage,
-    GenericConfigQuery, GetReportOpts, Group, GroupPage, Host, HostPage, IdentityPort,
-    IdentityQuery, JobArtifact, ModifyAgentControlScanConfigInput, ModifyAgentGroupInput,
-    ModifyAgentInput, ModifyAlertInput, ModifyAssetInput, ModifyCredentialInput,
-    ModifyCredentialStoreInput, ModifyFilterInput, ModifyGroupInput, ModifyHostInput,
-    ModifyNoteInput, ModifyOperatingSystemInput, ModifyOverrideInput, ModifyPermissionInput,
-    ModifyPortListInput, ModifyRoleInput, ModifyScanConfigInput, ModifyScheduleInput,
-    ModifyTagInput, ModifyTargetInput, ModifyTaskInput, ModifyUserInput, ModifyUserSettingInput,
-    Note, NotePage, Nvt, NvtFamilyPage, NvtPage, NvtQuery, OperatingSystem, OperatingSystemPage,
-    Override, OverridePage, Permission, PermissionPage, PortList, PortListPage, PortListPort,
-    PortListQuery, ReadinessStatus, Report, ReportApplicationPage, ReportClosedCvePage,
-    ReportCvePage, ReportErrorPage, ReportExport, ReportExportRequest, ReportFormat,
-    ReportFormatPage, ReportHostPage, ReportOperatingSystemPage, ReportPage, ReportPort,
-    ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResourceRef, ResultPage, ResultPort,
-    ResultQuery, Role, RolePage, ScanConfig, ScanConfigNvtPage, ScanConfigNvtQuery, ScanConfigPage,
-    ScanConfigPort, ScanConfigPreference, ScanConfigPreferenceQuery, ScanConfigQuery, ScanResult,
-    Scanner, ScannerPage, ScannerPort, ScannerQuery, Schedule, SchedulePage, SchedulePort,
-    ScheduleQuery, SetScanConfigFamilySelectionInput, SupportingResourceMeta,
-    SupportingResourcePort, SupportingResourceQuery, SystemPort, Tag, TagPage, Target, TargetPage,
-    TargetPort, TargetQuery, Task, TaskAction, TaskPage, TaskPort, TaskQuery, Timezone,
-    TlsCertificateAsset, TlsCertificateAssetPage, TlsCertificatePage, User, UserPage, UserSetting,
-    UserSettingList, UserSettingQuery, VulnerabilityPage,
+    CreateOverrideInput, CreatePermissionInput, CreatePolicyInput, CreatePortListInput,
+    CreateRoleInput, CreateScanConfigInput, CreateScheduleInput, CreateTagInput, CreateTargetInput,
+    CreateTaskInput, CreateUserInput, Credential, CredentialPage, CredentialPort, CredentialQuery,
+    CredentialStore, Cve, CvePage, DfnCertAdvisory, DfnCertAdvisoryPage, FeedList, FeedPort,
+    FeedQuery, Filter, FilterPage, GatewayError, GenericAsset, GenericAssetPage, GenericConfig,
+    GenericConfigPage, GenericConfigQuery, GetReportOpts, Group, GroupPage, Host, HostPage,
+    IdentityPort, IdentityQuery, JobArtifact, ModifyAgentControlScanConfigInput,
+    ModifyAgentGroupInput, ModifyAgentInput, ModifyAlertInput, ModifyAssetInput,
+    ModifyCredentialInput, ModifyCredentialStoreInput, ModifyFilterInput, ModifyGroupInput,
+    ModifyHostInput, ModifyNoteInput, ModifyOperatingSystemInput, ModifyOverrideInput,
+    ModifyPermissionInput, ModifyPortListInput, ModifyRoleInput, ModifyScanConfigInput,
+    ModifyScheduleInput, ModifyTagInput, ModifyTargetInput, ModifyTaskInput, ModifyUserInput,
+    ModifyUserSettingInput, Note, NotePage, Nvt, NvtFamilyPage, NvtPage, NvtQuery, OperatingSystem,
+    OperatingSystemPage, Override, OverridePage, Permission, PermissionPage, PortList,
+    PortListPage, PortListPort, PortListQuery, ReadinessStatus, Report, ReportApplicationPage,
+    ReportClosedCvePage, ReportCvePage, ReportErrorPage, ReportExport, ReportExportRequest,
+    ReportFormat, ReportFormatPage, ReportHostPage, ReportOperatingSystemPage, ReportPage,
+    ReportPort, ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResourceRef, ResultPage,
+    ResultPort, ResultQuery, Role, RolePage, ScanConfig, ScanConfigNvtPage, ScanConfigNvtQuery,
+    ScanConfigPage, ScanConfigPort, ScanConfigPreference, ScanConfigPreferenceQuery,
+    ScanConfigQuery, ScanResult, Scanner, ScannerPage, ScannerPort, ScannerQuery, Schedule,
+    SchedulePage, SchedulePort, ScheduleQuery, SetScanConfigFamilySelectionInput,
+    SupportingResourceMeta, SupportingResourcePort, SupportingResourceQuery, SystemPort, Tag,
+    TagPage, Target, TargetPage, TargetPort, TargetQuery, Task, TaskAction, TaskPage, TaskPort,
+    TaskQuery, Timezone, TlsCertificateAsset, TlsCertificateAssetPage, TlsCertificatePage, User,
+    UserPage, UserSetting, UserSettingList, UserSettingQuery, VulnerabilityPage,
 };
 
 /// Mock system port for tests that need deterministic readiness/version responses.
@@ -1180,11 +1180,7 @@ impl ScanConfigPort for MockScanConfigPort {
         })
     }
 
-    async fn create_policy(
-        &self,
-        _: &str,
-        _: CreateScanConfigInput,
-    ) -> Result<String, GatewayError> {
+    async fn create_policy(&self, _: &str, _: CreatePolicyInput) -> Result<String, GatewayError> {
         Ok("mock-policy-id".to_string())
     }
 

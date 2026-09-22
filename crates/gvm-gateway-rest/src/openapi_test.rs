@@ -602,6 +602,42 @@ fn generated_and_curated_generic_resource_contracts_match_semantics() {
 }
 
 #[test]
+fn generated_and_curated_config_create_contracts_require_family_specific_bases() {
+    // Issue #518 intentionally corrects the Technology Preview create schema;
+    // keep generated docs and both curated component documents exact here.
+    let generated = build_openapi();
+    let generated_schemas = &generated["components"]["schemas"];
+    assert_eq!(
+        generated_schemas["CreateScanConfig"]["required"],
+        json!(["name", "baseScanConfigId"])
+    );
+    assert_eq!(
+        generated_schemas["CreatePolicy"]["required"],
+        json!(["name", "basePolicyId"])
+    );
+
+    let root_spec = root_spec_path();
+    let spec_dir = root_spec
+        .parent()
+        .expect("root spec should have a directory");
+    let scan_configs = read_yaml(&spec_dir.join("scan-configs.yaml"));
+    let policies = read_yaml(&spec_dir.join("policies.yaml"));
+    assert_eq!(
+        scan_configs["components"]["schemas"]["CreateScanConfig"]["required"],
+        json!(["name", "baseScanConfigId"])
+    );
+    assert_eq!(
+        policies["components"]["schemas"]["CreatePolicy"]["required"],
+        json!(["name", "basePolicyId"])
+    );
+    assert_eq!(
+        policies["paths"]["/policies"]["post"]["requestBody"]["content"]["application/json"]
+            ["schema"]["$ref"],
+        json!("#/components/schemas/CreatePolicy")
+    );
+}
+
+#[test]
 fn generated_openapi_declares_every_operation_tag() {
     let generated = build_openapi();
     let declared_tags = generated["tags"]
