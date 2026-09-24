@@ -132,7 +132,7 @@ services:
     # Pin the 26.36.1 all-features build: ENABLE_AGENTS and
     # ENABLE_CONTAINER_SCANNING make this backend advertise GMP 22.8, which
     # rust-gvm requires for the typed report-export operation.
-    image: ${GVMD_IMAGE:-ghcr.io/greenbone/gvmd:all-features-26.38.0@sha256:76a02b4ca8718fdd269efa30930c97c514511c5dd1ae3b87f010d327942cd94d}
+    image: ${GVMD_IMAGE:-ghcr.io/greenbone/gvmd:all-features-26.39.0@sha256:a1ccde5f4084464a868514b8d3369e459fcc3e98f49538c2b40bc82f1d54b666}
     volumes:
       - gvmd_data_vol:/var/lib/gvm
       - data_objects_vol:/var/lib/gvm/data-objects/gvmd
