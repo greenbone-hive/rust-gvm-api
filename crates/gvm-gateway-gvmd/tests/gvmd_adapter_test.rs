@@ -1451,14 +1451,14 @@ async fn gvmd_adapter_direct_lists_emit_backend_pagination_filter() {
         adapter.list_results(
             &token,
             &ResultQuery {
-                filter_string: Some("name~Target".to_string()),
+                filter_string: Some("name=Target".to_string()),
                 filter_id: None,
                 page: 2,
                 per_page: 10,
             }
         ),
         "get_results",
-        "filter=\"name~Target first=11 rows=10\""
+        "filter=\"name=Target first=11 rows=10\""
     );
     assert_backend_pagination!(
         adapter,
@@ -1467,14 +1467,14 @@ async fn gvmd_adapter_direct_lists_emit_backend_pagination_filter() {
             &token,
             "550e8400-e29b-41d4-a716-446655440000",
             &ResultQuery {
-                filter_string: Some("name~Target".to_string()),
+                filter_string: Some("name=Target".to_string()),
                 filter_id: None,
                 page: 2,
                 per_page: 10,
             }
         ),
         "get_results",
-        "filter=\"report_id=550e8400-e29b-41d4-a716-446655440000 name~Target first=11 rows=10\""
+        "filter=\"report_id=550e8400-e29b-41d4-a716-446655440000 name=Target first=11 rows=10\""
     );
     assert_backend_pagination!(
         adapter,

@@ -102,7 +102,7 @@ use gvm_gmp::{
             GetReportTlsCertificatesRequest, GetReportVulnsRequest, GetReportsOpts,
             GetReportsRequest,
         },
-        results::{GetResultRequest, GetResultsOpts, GetResultsRequest},
+        results::{GetResultRequest, GetResultsRequest},
         roles::{
             CreateRoleRequest, DeleteRoleRequest, GetRoleRequest, GetRolesRequest,
             ModifyRoleRequest,
