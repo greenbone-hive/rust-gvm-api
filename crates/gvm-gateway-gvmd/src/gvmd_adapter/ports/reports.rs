@@ -97,11 +97,16 @@ impl ReportPort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "reports.results",
-                GetResultsRequest::new(GetResultsOpts {
+                GetResultsRequest {
+                    result_id: None,
+                    task_id: None,
                     filter_string: filter,
                     filter_id: None,
                     details: Some(true),
-                }),
+                    notes_details: None,
+                    overrides_details: None,
+                    get_counts: None,
+                },
             )
             .await?;
         report.results = results_parsed
@@ -193,11 +198,16 @@ impl ReportPort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "reports.results",
-                GetResultsRequest::new(GetResultsOpts {
+                GetResultsRequest {
+                    result_id: None,
+                    task_id: None,
                     filter_string: filter,
                     filter_id: None,
                     details: Some(true),
-                }),
+                    notes_details: None,
+                    overrides_details: None,
+                    get_counts: None,
+                },
             )
             .await?;
         let items = parsed
