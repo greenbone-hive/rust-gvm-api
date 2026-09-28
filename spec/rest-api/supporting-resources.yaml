@@ -1087,8 +1087,6 @@ paths:
       summary: List NVTs
       description: Returns a paginated list of network vulnerability tests available in the feed catalog.
       parameters:
-        - $ref: "./common.yaml#/components/parameters/FilterString"
-        - $ref: "./common.yaml#/components/parameters/FilterId"
         - $ref: "./common.yaml#/components/parameters/Page"
         - $ref: "./common.yaml#/components/parameters/PerPage"
         - name: configId
