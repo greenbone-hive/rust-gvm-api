@@ -95,9 +95,8 @@ use gvm_gmp::{
             DeleteReportRequest, GetReportApplicationsRequest, GetReportClosedCvesRequest,
             GetReportCvesRequest, GetReportErrorsRequest,
             GetReportExportRequest as GmpGetReportExportRequest, GetReportHostsRequest,
-            GetReportOperatingSystemsRequest, GetReportPortsRequest,
-            GetReportTlsCertificatesRequest, GetReportVulnsRequest, GetReportsOpts,
-            GetReportsRequest,
+            GetReportOperatingSystemsRequest, GetReportPortsRequest, GetReportRequest,
+            GetReportTlsCertificatesRequest, GetReportVulnsRequest, GetReportsRequest,
         },
         results::{GetResultRequest, GetResultsRequest},
         roles::{

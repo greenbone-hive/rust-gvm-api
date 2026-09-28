@@ -602,6 +602,38 @@ fn generated_and_curated_generic_resource_contracts_match_semantics() {
 }
 
 #[test]
+fn generated_and_curated_report_delete_contract_is_permanent_without_selector() {
+    // Report deletion cannot be downgraded to trash semantics. Keep both
+    // published contracts free of `ultimate`, explicit about permanence, and
+    // honest about the 400 returned for obsolete legacy input.
+    let generated = build_openapi();
+    let generated_delete = op(&generated, "/reports/{id}", "delete");
+    assert!(generated_delete["parameters"]
+        .as_array()
+        .expect("generated report delete parameters")
+        .iter()
+        .all(|parameter| parameter["name"] != "ultimate"));
+    assert!(generated_delete["description"]
+        .as_str()
+        .is_some_and(|description| description.contains("Permanently deletes")
+            && description.contains("400 bad_request")));
+    assert!(generated_delete["responses"].get("400").is_some());
+
+    let reports_path = root_spec_path()
+        .parent()
+        .expect("root spec should have a directory")
+        .join("reports.yaml");
+    let curated = read_yaml(&reports_path);
+    let curated_delete = &curated["paths"]["/reports/{id}"]["delete"];
+    assert!(curated_delete.get("parameters").is_none());
+    assert!(curated_delete["description"]
+        .as_str()
+        .is_some_and(|description| description.contains("Permanently deletes")
+            && description.contains("400 bad_request")));
+    assert!(curated_delete["responses"].get("400").is_some());
+}
+
+#[test]
 fn generated_and_curated_config_create_contracts_require_family_specific_bases() {
     // Issue #518 intentionally corrects the Technology Preview create schema;
     // keep generated docs and both curated component documents exact here.

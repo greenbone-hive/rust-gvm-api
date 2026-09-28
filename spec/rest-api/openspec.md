@@ -175,7 +175,7 @@ Rules for these exceptions:
 | `GET` | `/api/v1/reports/{id}/tls-certificates` | Get TLS certificates observed in a report (paginated) |
 | `GET` | `/api/v1/reports/{id}/errors` | Get report error findings (paginated) |
 | `GET` | `/api/v1/reports/{id}/closed-cves` | Get closed CVE findings for a report (paginated) |
-| `DELETE` | `/api/v1/reports/{id}` | Delete report |
+| `DELETE` | `/api/v1/reports/{id}` | Permanently delete report (no trash or permanence selector) |
 
 Report export is intentionally modeled as a job because gvmd may need to
 materialize the full report and run report-format generation scripts before an
@@ -186,6 +186,9 @@ Export requests either reference a gvmd report format with `reportFormatId` or
 select the API JSON export with `format: "json"`.
 
 Report reads and result subresources use `page` and `perPage`.
+Report deletion is always permanent in gvmd. The REST endpoint exposes no
+caller-level permanence choice and rejects the obsolete `ultimate` query
+parameter with the standard RFC 9457 `400 bad_request` response.
 
 #### Jobs
 

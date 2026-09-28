@@ -4,11 +4,43 @@
 use serde_json::json;
 
 use super::{
-    GetReportQuery, ReportApplicationListResponse, ReportClosedCveListResponse,
-    ReportCveListResponse, ReportErrorListResponse, ReportHostListResponse,
-    ReportOperatingSystemListResponse, ReportPortListResponse, ReportResultsQuery,
-    ReportVulnerabilityListResponse,
+    reject_report_ultimate_query, GetReportQuery, ReportApplicationListResponse,
+    ReportClosedCveListResponse, ReportCveListResponse, ReportErrorListResponse,
+    ReportHostListResponse, ReportOperatingSystemListResponse, ReportPortListResponse,
+    ReportResultsQuery, ReportVulnerabilityListResponse,
 };
+
+#[test]
+fn report_delete_rejects_every_obsolete_ultimate_spelling_but_ignores_unrelated_queries() {
+    // Report deletion is permanently destructive. Both boolean values, a
+    // valueless key, and percent-encoded legacy input must fail closed so no
+    // client can mistake the operation for a trashcan move.
+    for query in [
+        "ultimate=true",
+        "ultimate=false",
+        "ultimate",
+        "reason=cleanup&ultimate=false",
+        "ult%69mate=true",
+    ] {
+        let error = reject_report_ultimate_query(Some(query))
+            .expect_err("obsolete report ultimate input must be rejected");
+        assert!(
+            matches!(
+                error,
+                gvm_gateway_domain::GatewayError::InvalidInput(ref detail)
+                    if detail == "the `ultimate` query parameter is obsolete for report deletion; report deletion is always permanent"
+            ),
+            "unexpected error for {query}: {error:?}"
+        );
+    }
+
+    // Unknown query behavior remains consistent with other repository
+    // handlers: unrelated keys are ignored rather than globally rejected.
+    reject_report_ultimate_query(None).expect("missing query should be accepted");
+    reject_report_ultimate_query(Some("")).expect("empty query should be accepted");
+    reject_report_ultimate_query(Some("reason=cleanup"))
+        .expect("unrelated query should be accepted");
+}
 use gvm_gateway_domain::{
     Pagination, ReportApplication, ReportApplicationPage, ReportClosedCve, ReportClosedCvePage,
     ReportCve, ReportCvePage, ReportError, ReportErrorPage, ReportHost, ReportHostPage,
