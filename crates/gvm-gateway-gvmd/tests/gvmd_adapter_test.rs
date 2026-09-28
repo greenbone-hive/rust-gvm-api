@@ -2237,10 +2237,7 @@ async fn gvmd_adapter_list_nvts_emits_complete_canonical_context() {
         .list_nvts(
             &token,
             &NvtQuery {
-                // Dedicated get_nvts does not accept generic filter attributes;
-                // this still exercises public filter validation without
-                // fabricating unsupported wire fields.
-                filter_string: Some("family=General".to_string()),
+                filter_string: None,
                 filter_id: None,
                 page: 1,
                 per_page: 25,
@@ -2266,14 +2263,6 @@ async fn gvmd_adapter_list_nvts_emits_complete_canonical_context() {
     assert!(xml.contains("<get_nvts"));
     assert!(xml.contains("config_id=\"daba56c8-73ec-11df-a475-002264764cea\""));
     assert!(xml.contains("family=\"General\""));
-    assert!(
-        !xml.contains(" filter="),
-        "get_nvts must not regain ignored filters: {xml}"
-    );
-    assert!(
-        !xml.contains("filt_id="),
-        "get_nvts must not regain ignored filters: {xml}"
-    );
     assert!(!xml.contains("preferences_config_id="));
     assert!(xml.contains("details=\"1\""));
     assert!(xml.contains("preferences=\"1\""));
@@ -2281,6 +2270,46 @@ async fn gvmd_adapter_list_nvts_emits_complete_canonical_context() {
     assert!(xml.contains("timeout=\"1\""));
     assert!(xml.contains("sort_order=\"ascending\""));
     assert!(xml.contains("sort_field=\"name\""));
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_list_nvts_rejects_unsupported_filters() {
+    let (adapter, server, token) = create_mock_adapter().await;
+
+    for (filter_string, filter_id, expected) in [
+        (Some("name~apache".to_string()), None, "filter"),
+        (
+            None,
+            Some("550e8400-e29b-41d4-a716-446655440000".to_string()),
+            "filterId",
+        ),
+    ] {
+        server.clear_history();
+        let error = adapter
+            .list_nvts(
+                &token,
+                &NvtQuery {
+                    filter_string,
+                    filter_id,
+                    page: 1,
+                    per_page: 25,
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect_err("unsupported NVT filters must fail closed");
+
+        assert_eq!(
+            error,
+            GatewayError::InvalidInput(format!("{expected} is not supported for NVT queries"))
+        );
+        assert!(
+            server.command_history().is_empty(),
+            "unsupported filters must be rejected before contacting gvmd"
+        );
+    }
 
     server.shutdown().await;
 }

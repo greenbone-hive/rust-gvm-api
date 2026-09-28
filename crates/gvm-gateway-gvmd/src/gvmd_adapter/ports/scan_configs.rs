@@ -274,7 +274,7 @@ impl ScanConfigPort for GvmdAdapter {
         } else {
             self.execute_with_session(
                 session_token,
-                "nvt_families.list",
+                "scan_configs.nvts.list",
                 GetNvtFamiliesRequest::new(),
             )
             .await?

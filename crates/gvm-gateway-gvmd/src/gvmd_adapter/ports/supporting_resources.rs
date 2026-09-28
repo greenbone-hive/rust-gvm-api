@@ -1017,29 +1017,16 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         query: &NvtQuery,
     ) -> Result<NvtPage, GatewayError> {
-        let filter_id = query
-            .filter_id
-            .as_deref()
-            .map(|value| {
-                EntityId::new(value)
-                    .map_err(|_| GatewayError::InvalidInput("invalid filterId".to_string()))
-            })
-            .transpose()?;
-        // Dedicated get_nvts does not consume generic GMP filter attributes.
-        // Resolve and validate the public filter inputs so saved-filter and
-        // reserved-pagination error behavior remains stable, then paginate the
-        // canonical unfiltered response locally.
-        let _resolved_filter = self
-            .paginated_filter_resolving_filter_id(
-                session_token,
-                None,
-                query.filter_string.as_deref(),
-                filter_id.as_ref(),
-                query.page,
-                query.per_page,
-                &[],
-            )
-            .await?;
+        if query.filter_string.is_some() {
+            return Err(GatewayError::InvalidInput(
+                "filter is not supported for NVT queries".to_string(),
+            ));
+        }
+        if query.filter_id.is_some() {
+            return Err(GatewayError::InvalidInput(
+                "filterId is not supported for NVT queries".to_string(),
+            ));
+        }
         let mut items = Vec::new();
         let total;
         if query.config_id.is_some() && query.family.is_none() {
