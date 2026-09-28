@@ -14,7 +14,7 @@ const RUST_GVM_COMPONENTS: &[&str] = &[
     "gvm-mock-server",
     "gvm-protocol",
 ];
-const RUST_GVM_BASELINE: &str = "b925b1791f996a453eebcf65e68208828aef9778";
+const RUST_GVM_BASELINE: &str = "eaa328b6b04838cea0275d7695e3cb7923ca9144";
 
 const REMOVED_CANONICAL_TRANSITION_TYPES: &[&str] = &[
     "CreateTargetOpts",
@@ -259,7 +259,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
     );
     assert_eq!(
         *expected, RUST_GVM_BASELINE,
-        "rust-gvm components must remain on the reviewed issue #518 scan-config baseline"
+        "rust-gvm components must remain on the reviewed issue #523 preference baseline"
     );
 
     let workspace_manifest =
@@ -271,7 +271,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
             .unwrap_or_else(|| panic!("{component} must be declared in workspace dependencies"));
         assert!(
             dependency.contains(&format!("rev = \"{RUST_GVM_BASELINE}\"")),
-            "{component} must pin the reviewed issue #518 baseline in Cargo.toml: {dependency}"
+            "{component} must pin the reviewed issue #523 baseline in Cargo.toml: {dependency}"
         );
         assert!(
             !dependency.contains("branch ="),

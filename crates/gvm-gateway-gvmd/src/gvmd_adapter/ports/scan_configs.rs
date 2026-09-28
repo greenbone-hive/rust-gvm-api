@@ -314,15 +314,11 @@ impl ScanConfigPort for GvmdAdapter {
         id: &str,
         query: &ScanConfigPreferenceQuery,
     ) -> Result<Vec<ScanConfigPreference>, GatewayError> {
+        let mut request = GetScanConfigPreferencesRequest::new();
+        request.nvt_oid = query.nvt_oid.clone();
+        request.config_id = Some(parse_entity_id(id)?);
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "scan_configs.preferences.list",
-                GetScanConfigPreferencesRequest::new(GetScanConfigPreferencesOpts {
-                    nvt_oid: query.nvt_oid.clone(),
-                    config_id: Some(parse_entity_id(id)?),
-                }),
-            )
+            .execute_with_session(session_token, "scan_configs.preferences.list", request)
             .await?;
         Ok(parsed.items.into_iter().map(preference_from_gmp).collect())
     }
@@ -334,23 +330,14 @@ impl ScanConfigPort for GvmdAdapter {
         name: &str,
         query: &ScanConfigPreferenceQuery,
     ) -> Result<ScanConfigPreference, GatewayError> {
+        let mut request = GetScanConfigPreferenceRequest::new(name);
+        request.nvt_oid = query.nvt_oid.clone();
+        request.config_id = Some(parse_entity_id(id)?);
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "scan_configs.preferences.get",
-                GetScanConfigPreferenceRequest::new(
-                    name,
-                    GetScanConfigPreferencesOpts {
-                        nvt_oid: query.nvt_oid.clone(),
-                        config_id: Some(parse_entity_id(id)?),
-                    },
-                ),
-            )
+            .execute_with_session(session_token, "scan_configs.preferences.get", request)
             .await?;
         parsed
-            .items
-            .into_iter()
-            .next()
+            .item
             .map(preference_from_gmp)
             .ok_or_else(|| GatewayError::NotFound(format!("preference {name} not found")))
     }
