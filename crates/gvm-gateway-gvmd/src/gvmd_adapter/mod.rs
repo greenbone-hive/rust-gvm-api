@@ -107,9 +107,8 @@ use gvm_gmp::{
         scan_configs::{
             CreatePolicyRequest, CreateScanConfigRequest, DeletePolicyRequest,
             DeleteScanConfigRequest, GetPoliciesRequest, GetPolicyRequest,
-            GetScanConfigPreferenceRequest, GetScanConfigPreferencesOpts,
-            GetScanConfigPreferencesRequest, GetScanConfigRequest, GetScanConfigsRequest,
-            ModifyPolicyRequest, ModifyScanConfigRequest,
+            GetScanConfigPreferenceRequest, GetScanConfigPreferencesRequest, GetScanConfigRequest,
+            GetScanConfigsRequest, ModifyPolicyRequest, ModifyScanConfigRequest,
             ModifyScanConfigSetFamilySelectionRequest, ModifyScanConfigSetNvtPreferenceRequest,
             ModifyScanConfigSetNvtSelectionRequest, ModifyScanConfigSetScannerPreferenceRequest,
             NvtFamilySelection,
