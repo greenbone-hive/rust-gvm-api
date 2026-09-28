@@ -83,9 +83,6 @@ impl NvtSortOrder {
 
 #[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]
 pub(crate) struct NvtListQueryParams {
-    filter: Option<String>,
-    #[serde(rename = "filterId")]
-    filter_id: Option<Uuid>,
     #[serde(default = "default_page")]
     #[schemars(default = "default_page", range(min = 1))]
     page: Option<u32>,
@@ -139,7 +136,12 @@ impl NvtListQuery {
 
         for (key, value) in decoded_query_pairs(query) {
             match key.as_ref() {
-                "filter" | "filterId" | "page" | "perPage" | "per_page" => {}
+                "page" | "perPage" | "per_page" => {}
+                "filter" | "filterId" => {
+                    return Err(GatewayError::InvalidInput(format!(
+                        "{key} is not supported for NVT queries"
+                    )))
+                }
                 "configId" => {
                     validate_uuid("configId", &value)?;
                     config_id = Some(value.into_owned());
