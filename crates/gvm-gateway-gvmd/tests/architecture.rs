@@ -14,7 +14,7 @@ const RUST_GVM_COMPONENTS: &[&str] = &[
     "gvm-mock-server",
     "gvm-protocol",
 ];
-const RUST_GVM_BASELINE: &str = "6ea4d0db89311c7093dcf1c5974f66d81790fe58";
+const RUST_GVM_BASELINE: &str = "fd5142f57ec980503acd2f9d29903f06e76e4389";
 
 const REMOVED_CANONICAL_TRANSITION_TYPES: &[&str] = &[
     "CreateTargetOpts",
@@ -257,7 +257,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
     );
     assert_eq!(
         *expected, RUST_GVM_BASELINE,
-        "rust-gvm components must remain on the reviewed issue #515 report-format baseline"
+        "rust-gvm components must remain on the reviewed issue #516 TLS-certificate baseline"
     );
 
     let workspace_manifest =
@@ -532,12 +532,16 @@ fn migrated_supporting_resource_families_stay_on_typed_execution() {
         !supporting.contains("GetReportFormatsOpts"),
         "report-format adapters must not restore the removed option bag"
     );
+    assert!(
+        !supporting.contains("GetTlsCertificatesOpts"),
+        "TLS-certificate adapters must not restore the removed option bag"
+    );
 
     for request in [
         "GetAssetsRequest::new",
         "GetHostsRequest",
         "GetOperatingSystemAssetsRequest",
-        "GetTlsCertificatesRequest::new",
+        "GetTlsCertificatesRequest {",
         "GetReportFormatsRequest {",
         "GetFiltersRequest",
         "GetTagsRequest",
