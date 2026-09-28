@@ -14,7 +14,7 @@ const RUST_GVM_COMPONENTS: &[&str] = &[
     "gvm-mock-server",
     "gvm-protocol",
 ];
-const RUST_GVM_BASELINE: &str = "4d992af6215ee4d794e1a555015abf19ff286c18";
+const RUST_GVM_BASELINE: &str = "5c18ef5bee860e3443b25f924b2765a0800d64b1";
 
 const REMOVED_CANONICAL_TRANSITION_TYPES: &[&str] = &[
     "CreateTargetOpts",
@@ -89,6 +89,8 @@ const REMOVED_CANONICAL_TRANSITION_TYPES: &[&str] = &[
     "GetNvtsOpts",
     "GetSecInfoOpts",
     "GetReportsOpts",
+    "GetReportDetailsOpts",
+    "GetReportExportOpts",
     "CreateAgentGroupTaskOpts",
     "CreateOciImageTargetTaskOpts",
     "CreateWebApplicationTaskOpts",
@@ -266,7 +268,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
     );
     assert_eq!(
         *expected, RUST_GVM_BASELINE,
-        "rust-gvm components must remain on the reviewed issue #526 canonical report-lifecycle baseline"
+        "rust-gvm components must remain on the reviewed issue #527 canonical report-projection/export baseline"
     );
 
     let workspace_manifest =
@@ -278,7 +280,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
             .unwrap_or_else(|| panic!("{component} must be declared in workspace dependencies"));
         assert!(
             dependency.contains(&format!("rev = \"{RUST_GVM_BASELINE}\"")),
-            "{component} must pin the reviewed issue #526 baseline in Cargo.toml: {dependency}"
+            "{component} must pin the reviewed issue #527 baseline in Cargo.toml: {dependency}"
         );
         assert!(
             !dependency.contains("branch ="),
@@ -340,7 +342,7 @@ fn report_configuration_administration_stays_omitted() {
     let reports = fs::read_to_string(manifest_dir.join("src/gvmd_adapter/ports/reports.rs"))
         .expect("read report adapter");
     assert!(
-        reports.contains("opts.report_config_id = request"),
+        reports.contains("export_request.report_config_id = request"),
         "reportConfigId must remain an export selector"
     );
 }
@@ -447,8 +449,12 @@ fn initial_adapter_slice_stays_on_typed_execution() {
         section_between(&reports, "async fn export_report", "async fn delete_report");
     assert_typed_section(
         report_export,
-        "GmpGetReportExportRequest::new",
+        "GetReportExportRequest::new",
         "report export",
+    );
+    assert!(
+        !report_export.contains("GmpGetReportExportRequest"),
+        "report export must retain the canonical upstream request spelling"
     );
 }
 
@@ -510,6 +516,104 @@ fn migrated_task_and_report_families_stay_on_typed_execution() {
         delete_report,
         "DeleteReportRequest::new",
         "permanent report deletion",
+    );
+
+    // Issue #527 adopts the canonical complete request values for all nine
+    // existing projection endpoints. Their constructors carry identity only;
+    // gateway-resolved filters and explicit detail semantics are assigned here.
+    for (function, next_function, request, description) in [
+        (
+            "async fn get_report_vulnerabilities",
+            "async fn get_report_hosts",
+            "GetReportVulnsRequest",
+            "report vulnerabilities",
+        ),
+        (
+            "async fn get_report_hosts",
+            "async fn get_report_ports",
+            "GetReportHostsRequest",
+            "report hosts",
+        ),
+        (
+            "async fn get_report_ports",
+            "async fn get_report_applications",
+            "GetReportPortsRequest",
+            "report ports",
+        ),
+        (
+            "async fn get_report_applications",
+            "async fn get_report_operating_systems",
+            "GetReportApplicationsRequest",
+            "report applications",
+        ),
+        (
+            "async fn get_report_operating_systems",
+            "async fn get_report_cves",
+            "GetReportOperatingSystemsRequest",
+            "report operating systems",
+        ),
+        (
+            "async fn get_report_cves",
+            "async fn get_report_tls_certificates",
+            "GetReportCvesRequest",
+            "report CVEs",
+        ),
+        (
+            "async fn get_report_tls_certificates",
+            "async fn get_report_errors",
+            "GetReportTlsCertificatesRequest",
+            "report TLS certificates",
+        ),
+        (
+            "async fn get_report_errors",
+            "async fn get_report_closed_cves",
+            "GetReportErrorsRequest",
+            "report errors",
+        ),
+        (
+            "async fn get_report_closed_cves",
+            "async fn report_projection_filter",
+            "GetReportClosedCvesRequest",
+            "report closed CVEs",
+        ),
+    ] {
+        let projection = section_between(&reports, function, next_function);
+        assert_typed_section(
+            projection,
+            &format!("{request}::new(report_id);"),
+            description,
+        );
+        assert!(
+            !projection.contains(&format!("{request}::new(report_id,")),
+            "{description} must not restore the removed two-argument constructor"
+        );
+        for assignment in [
+            "request.filter_string = filter_string;",
+            "request.filter_id = None;",
+            "request.ignore_pagination = None;",
+            "request.details = Some(true);",
+        ] {
+            assert!(
+                projection.contains(assignment),
+                "{description} must populate the canonical complete request field: {assignment}"
+            );
+        }
+    }
+
+    let hosts = section_between(
+        &reports,
+        "async fn get_report_hosts",
+        "async fn get_report_ports",
+    );
+    assert!(
+        hosts.contains("request.lean = None;"),
+        "report-host projection must preserve lean omission"
+    );
+
+    assert!(
+        reports.contains("async fn report_projection_filter(")
+            && reports.contains(") -> Result<Option<String>, GatewayError>"),
+        "gateway-owned report filter resolution must return only the resolved inline filter"
     );
 }
 
