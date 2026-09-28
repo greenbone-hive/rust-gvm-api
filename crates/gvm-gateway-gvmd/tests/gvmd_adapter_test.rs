@@ -2418,8 +2418,8 @@ async fn gvmd_adapter_get_policy_scopes_usage_type_policy() {
     let xml = String::from_utf8(command.raw_xml().to_vec()).expect("xml command");
     assert!(xml.contains("usage_type=\"policy\""), "xml={xml}");
     assert!(
-        xml.contains(&format!("uuid={policy_id}")),
-        "get_policy must filter to the requested id; xml={xml}"
+        xml.contains(&format!("config_id=\"{policy_id}\"")),
+        "get_policy must select the requested id; xml={xml}"
     );
 
     server.shutdown().await;
