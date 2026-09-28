@@ -14,9 +14,9 @@ const RUST_GVM_COMPONENTS: &[&str] = &[
     "gvm-mock-server",
     "gvm-protocol",
 ];
-// #527 must use the signed compatibility commit, which applies only the
-// operating-system projection parser fix to the reviewed #669 baseline.
-const RUST_GVM_BASELINE: &str = "8fd9711368947042c26d643455f310e245482689";
+// #528 uses the signed compatibility commit that applies the operating-system
+// parser correction to the reviewed #670 system-discovery baseline.
+const RUST_GVM_BASELINE: &str = "30f0334a0941407c9530aea5604f452eddf67da2";
 
 const REMOVED_CANONICAL_TRANSITION_TYPES: &[&str] = &[
     "CreateTargetOpts",
@@ -270,7 +270,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
     );
     assert_eq!(
         *expected, RUST_GVM_BASELINE,
-        "rust-gvm components must remain on the reviewed issue #527 canonical report-projection/export baseline"
+        "rust-gvm components must remain on the reviewed issue #528 canonical system-discovery baseline"
     );
 
     let workspace_manifest =
@@ -282,7 +282,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
             .unwrap_or_else(|| panic!("{component} must be declared in workspace dependencies"));
         assert!(
             dependency.contains(&format!("rev = \"{RUST_GVM_BASELINE}\"")),
-            "{component} must pin the reviewed issue #527 baseline in Cargo.toml: {dependency}"
+            "{component} must pin the reviewed issue #528 baseline in Cargo.toml: {dependency}"
         );
         assert!(
             !dependency.contains("branch ="),
@@ -388,6 +388,61 @@ fn nvt_secinfo_migration_dispositions_stay_bounded() {
             .expect("read upstream surface dispositions");
     assert!(dispositions.contains("Deferred to #523"));
     assert!(dispositions.contains("Generic SecInfo dispatch"));
+}
+
+#[test]
+fn system_discovery_migration_dispositions_stay_bounded() {
+    // Issue #528 adopts canonical typed discovery only for the pre-existing
+    // version, authentication, timezone, and feed operations. The other
+    // upstream system-discovery requests remain deliberately non-public under
+    // the #381/#401 surface inventory; their availability must not add routes.
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let production = fs::read_to_string(manifest_dir.join("src/gvmd_adapter/mod.rs"))
+        .expect("read gvmd adapter imports");
+    for request in [
+        "GetSettingsRequest",
+        "GetAggregatesRequest",
+        "GetFeaturesRequest",
+        "GetLicenseRequest",
+        "HelpRequest",
+        "GetResourceNamesRequest",
+        "GetResourceNameRequest",
+        "GetSystemReportsRequest",
+        "DescribeAuthRequest",
+    ] {
+        assert!(
+            !production.contains(request),
+            "system discovery is not a new public surface under #381/#401: {request}"
+        );
+    }
+
+    let feeds = fs::read_to_string(manifest_dir.join("src/gvmd_adapter/ports/feeds.rs"))
+        .expect("read feed adapter");
+    for mapping in [
+        "parsed.feed_owner_set.unwrap_or(false)",
+        "parsed.feed_roles_set.unwrap_or(false)",
+        "parsed.feed_resources_access.unwrap_or(false)",
+    ] {
+        assert!(
+            feeds.contains(mapping),
+            "optional canonical feed access metadata must preserve required REST booleans: {mapping}"
+        );
+    }
+
+    let dispositions =
+        fs::read_to_string(manifest_dir.join("../../docs/upstream-surface-dispositions.md"))
+            .expect("read upstream surface dispositions");
+    for disposition in [
+        "System discovery additions",
+        "#381/#401",
+        "feed-sync",
+        "auth-description",
+    ] {
+        assert!(
+            dispositions.contains(disposition),
+            "system-discovery disposition must remain documented: {disposition}"
+        );
+    }
 }
 
 #[test]

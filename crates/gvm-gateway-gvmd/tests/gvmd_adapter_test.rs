@@ -376,9 +376,16 @@ async fn gvmd_adapter_connect_session_auth_failure_returns_unauthorized() {
         .unwrap();
 
     let adapter = GvmdAdapter::unix_socket(server.socket_path().unwrap());
-    let result = adapter.connect_session("token", "admin", "wrong").await;
+    let result = adapter
+        .connect_session("token", "admin", "wrong-password-must-stay-redacted")
+        .await;
 
-    assert!(matches!(result, Err(GatewayError::Unauthorized(_))));
+    let error = result.expect_err("invalid credentials must fail");
+    assert!(matches!(error, GatewayError::Unauthorized(_)));
+    assert!(
+        !format!("{error:?}").contains("wrong-password-must-stay-redacted"),
+        "authentication errors must not reveal rejected credentials"
+    );
     let session_digest = SessionTokenDigest::from_token("token");
     let disconnect_result = adapter.disconnect_session(&session_digest).await;
     assert!(disconnect_result.is_ok());
@@ -4425,6 +4432,8 @@ async fn gvmd_adapter_audit_mutations_reject_scan_task_ids_before_writes() {
 
 #[tokio::test]
 async fn gvmd_adapter_feed_filter_uses_typed_command_and_preserves_access_flags() {
+    // A filtered feed response still carries all three independently typed
+    // access flags; mapping must not collapse or drop any of them.
     let (adapter, server, token) = create_mock_adapter().await;
     server.clear_history();
 
@@ -4441,6 +4450,9 @@ async fn gvmd_adapter_feed_filter_uses_typed_command_and_preserves_access_flags(
     let xml = recorded_xml(&server, "get_feeds");
     assert!(xml.contains("type=\"NVT\""));
     assert!(feeds.data.iter().all(|feed| feed.feed_type == "NVT"));
+    assert!(feeds.feed_owner_configured);
+    assert!(feeds.feed_roles_configured);
+    assert!(feeds.feed_resources_access);
 
     let error = adapter
         .list_feeds(
@@ -4452,6 +4464,41 @@ async fn gvmd_adapter_feed_filter_uses_typed_command_and_preserves_access_flags(
         .await
         .unwrap_err();
     assert!(matches!(error, GatewayError::InvalidInput(message) if message.contains("FUTURE")));
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_missing_feed_access_flags_map_to_required_false_booleans() {
+    // Older gvmd responses may omit the access metadata. Canonical parsing
+    // preserves that absence, while the stable REST contract requires all
+    // three fields, so the adapter must publish conservative false values.
+    let server = MockGmpServer::builder()
+        .mode(ServerMode::Fixture)
+        .version(MockVersion::V22_7)
+        .override_response(
+            "get_feeds",
+            r#"<get_feeds_response status="200" status_text="OK"><feed><type>NVT</type><name>NVT Feed</name><version>202609290000</version></feed></get_feeds_response>"#,
+        )
+        .unix_socket_auto()
+        .build()
+        .await
+        .expect("mock server should start");
+    let adapter = GvmdAdapter::unix_socket(server.socket_path().expect("mock socket"));
+    let token = "missing-feed-access-flags";
+    adapter
+        .connect_session(token, "admin", "admin")
+        .await
+        .expect("mock session should authenticate");
+
+    let feeds = adapter
+        .list_feeds(token, &FeedQuery::default())
+        .await
+        .expect("feed list with absent metadata");
+
+    assert!(!feeds.feed_owner_configured);
+    assert!(!feeds.feed_roles_configured);
+    assert!(!feeds.feed_resources_access);
 
     server.shutdown().await;
 }

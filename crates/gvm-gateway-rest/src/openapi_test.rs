@@ -376,18 +376,38 @@ fn generated_openapi_closes_every_request_object_without_closing_extension_maps(
 }
 
 #[test]
-fn generated_openapi_feed_version_matches_required_runtime_contract() {
+fn generated_openapi_feed_contract_matches_required_runtime_booleans() {
+    // Canonical GMP feed metadata may be absent, but the gateway compatibility
+    // mapping keeps all three downstream access flags required booleans.
     let generated = build_openapi();
-    let required = generated["components"]["schemas"]["Feed"]["required"]
+    let feed_required = generated["components"]["schemas"]["Feed"]["required"]
         .as_array()
         .unwrap()
         .iter()
         .filter_map(Value::as_str)
         .collect::<BTreeSet<_>>();
 
-    assert!(required.contains("type"));
-    assert!(required.contains("name"));
-    assert!(required.contains("version"));
+    assert!(feed_required.contains("type"));
+    assert!(feed_required.contains("name"));
+    assert!(feed_required.contains("version"));
+
+    let feed_list_required = generated["components"]["schemas"]["FeedList"]["required"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(Value::as_str)
+        .collect::<BTreeSet<_>>();
+    for field in [
+        "data",
+        "feedOwnerConfigured",
+        "feedRolesConfigured",
+        "feedResourcesAccess",
+    ] {
+        assert!(
+            feed_list_required.contains(field),
+            "FeedList must keep {field} required"
+        );
+    }
 }
 
 #[test]
