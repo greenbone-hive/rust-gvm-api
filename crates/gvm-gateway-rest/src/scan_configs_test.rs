@@ -4,9 +4,10 @@
 use serde_json::json;
 
 use super::{
-    parse_preference_query, parse_scan_config_nvt_query, ModifyScanConfigRequest,
-    ScanConfigPreferenceResponse, ScanConfigResponse, ScanConfigType, SetFamilySelectionRequest,
-    SetNvtSelectionRequest, SetPreferenceRequest,
+    parse_preference_query, parse_scan_config_nvt_query, CreatePolicyRequest,
+    CreateScanConfigRequest, ModifyScanConfigRequest, ScanConfigPreferenceResponse,
+    ScanConfigResponse, ScanConfigType, SetFamilySelectionRequest, SetNvtSelectionRequest,
+    SetPreferenceRequest,
 };
 use gvm_gateway_domain::{ScanConfig, ScanConfigPreference, ScanConfigPreferenceNvt};
 
@@ -84,6 +85,61 @@ fn modify_scan_config_request_preserves_rename() {
     .expect("rename-only scan config updates are valid");
 
     assert_eq!(input.name.as_deref(), Some("renamed config"));
+}
+
+#[test]
+fn create_requests_require_distinct_explicit_base_selectors() {
+    // Issue #518 corrects the Technology Preview contract: neither resource
+    // family may select an implicit base, and a policy cannot reuse the scan
+    // selector name (or vice versa).
+    let scan_missing_base: CreateScanConfigRequest =
+        serde_json::from_value(json!({"name": "Copied scan"})).expect("closed scan request");
+    assert_eq!(
+        scan_missing_base.validate().unwrap_err().detail(),
+        "baseScanConfigId is required"
+    );
+
+    let policy_missing_base: CreatePolicyRequest =
+        serde_json::from_value(json!({"name": "Copied policy"})).expect("closed policy request");
+    assert_eq!(
+        policy_missing_base.validate().unwrap_err().detail(),
+        "basePolicyId is required"
+    );
+
+    assert!(serde_json::from_value::<CreatePolicyRequest>(json!({
+        "name": "Copied policy",
+        "baseScanConfigId": "123e4567-e89b-12d3-a456-426614174000"
+    }))
+    .is_err());
+    assert!(serde_json::from_value::<CreateScanConfigRequest>(json!({
+        "name": "Copied scan",
+        "basePolicyId": "123e4567-e89b-12d3-a456-426614174000"
+    }))
+    .is_err());
+}
+
+#[test]
+fn create_requests_preserve_valid_explicit_bases() {
+    // Valid selectors must reach the domain unchanged so the adapter can
+    // perform the active-resource and usage-family checks before copying.
+    let id = "123e4567-e89b-12d3-a456-426614174000";
+    let scan = CreateScanConfigRequest {
+        name: Some("Copied scan".to_string()),
+        comment: Some("scan comment".to_string()),
+        base_scan_config_id: Some(id.to_string()),
+    }
+    .validate()
+    .expect("valid scan base");
+    assert_eq!(scan.base_scan_config_id, id);
+
+    let policy = CreatePolicyRequest {
+        name: Some("Copied policy".to_string()),
+        comment: Some("policy comment".to_string()),
+        base_policy_id: Some(id.to_string()),
+    }
+    .validate()
+    .expect("valid policy base");
+    assert_eq!(policy.base_policy_id, id);
 }
 
 #[test]

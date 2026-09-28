@@ -14,7 +14,7 @@ const RUST_GVM_COMPONENTS: &[&str] = &[
     "gvm-mock-server",
     "gvm-protocol",
 ];
-const RUST_GVM_BASELINE: &str = "034d0ce29ad54d93b328e83b85f6a29f2ba6daa5";
+const RUST_GVM_BASELINE: &str = "b925b1791f996a453eebcf65e68208828aef9778";
 
 const REMOVED_CANONICAL_TRANSITION_TYPES: &[&str] = &[
     "CreateTargetOpts",
@@ -259,7 +259,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
     );
     assert_eq!(
         *expected, RUST_GVM_BASELINE,
-        "rust-gvm components must remain on the reviewed issue #517 NVT/SecInfo baseline"
+        "rust-gvm components must remain on the reviewed issue #518 scan-config baseline"
     );
 
     let workspace_manifest =
@@ -271,7 +271,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
             .unwrap_or_else(|| panic!("{component} must be declared in workspace dependencies"));
         assert!(
             dependency.contains(&format!("rev = \"{RUST_GVM_BASELINE}\"")),
-            "{component} must pin the reviewed issue #517 baseline in Cargo.toml: {dependency}"
+            "{component} must pin the reviewed issue #518 baseline in Cargo.toml: {dependency}"
         );
         assert!(
             !dependency.contains("branch ="),
@@ -472,7 +472,7 @@ fn migrated_security_and_config_families_stay_on_typed_execution() {
         ("scanners.rs", "GetScannersRequest", "scanner family"),
         (
             "scan_configs.rs",
-            "GetScanConfigsRequest::new",
+            "GetScanConfigsRequest {",
             "config and policy family",
         ),
         ("port_lists.rs", "GetPortListsRequest", "port-list family"),

@@ -13,9 +13,9 @@ use axum::{
 };
 use gvm_gateway_app::GatewayService;
 use gvm_gateway_domain::{
-    CreateScanConfigInput, GatewayError, ModifyScanConfigInput, ScanConfigFamilySelection,
-    ScanConfigNvtQuery, ScanConfigPreference, ScanConfigPreferenceQuery, ScanConfigQuery,
-    SetScanConfigFamilySelectionInput,
+    CreatePolicyInput, CreateScanConfigInput, GatewayError, ModifyScanConfigInput,
+    ScanConfigFamilySelection, ScanConfigNvtQuery, ScanConfigPreference, ScanConfigPreferenceQuery,
+    ScanConfigQuery, SetScanConfigFamilySelectionInput,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -145,8 +145,9 @@ pub struct CreateScanConfigRequest {
     pub name: Option<String>,
     /// Optional comment.
     pub comment: Option<String>,
-    /// Optional base scan config identifier to copy from.
+    /// Required active base scan config identifier to copy from.
     #[serde(rename = "baseScanConfigId")]
+    #[schemars(required)]
     #[schemars(with = "Option<Uuid>")]
     pub base_scan_config_id: Option<String>,
 }
@@ -158,15 +159,59 @@ impl CreateScanConfigRequest {
             .name
             .filter(|value| !value.trim().is_empty())
             .ok_or_else(|| GatewayError::InvalidInput("name is required".to_string()))?;
-        if let Some(ref id) = self.base_scan_config_id {
-            validate_uuid("baseScanConfigId", id)?;
-        }
+        let base_scan_config_id = self.base_scan_config_id.ok_or_else(|| {
+            GatewayError::InvalidInput("baseScanConfigId is required".to_string())
+        })?;
+        validate_uuid("baseScanConfigId", &base_scan_config_id)?;
 
         Ok(CreateScanConfigInput {
             name,
             comment: self.comment,
-            base_scan_config_id: self.base_scan_config_id,
+            base_scan_config_id,
         })
+    }
+}
+
+/// Create-policy request payload.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[schemars(rename = "CreatePolicy")]
+#[serde(deny_unknown_fields)]
+pub struct CreatePolicyRequest {
+    /// Optional name so validation can return RFC 9457 instead of extractor failures.
+    #[schemars(required)]
+    pub name: Option<String>,
+    /// Optional comment.
+    pub comment: Option<String>,
+    /// Required active base policy identifier to copy from.
+    #[serde(rename = "basePolicyId")]
+    #[schemars(required)]
+    #[schemars(with = "Option<Uuid>")]
+    pub base_policy_id: Option<String>,
+}
+
+impl CreatePolicyRequest {
+    /// Validate the request and convert it into the application command.
+    pub fn validate(self) -> Result<CreatePolicyInput, GatewayError> {
+        let name = self
+            .name
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| GatewayError::InvalidInput("name is required".to_string()))?;
+        let base_policy_id = self
+            .base_policy_id
+            .ok_or_else(|| GatewayError::InvalidInput("basePolicyId is required".to_string()))?;
+        validate_uuid("basePolicyId", &base_policy_id)?;
+
+        Ok(CreatePolicyInput {
+            name,
+            comment: self.comment,
+            base_policy_id,
+        })
+    }
+}
+
+impl ValidateInto<CreatePolicyInput> for CreatePolicyRequest {
+    fn validate_into(self) -> Result<CreatePolicyInput, GatewayError> {
+        self.validate()
     }
 }
 
@@ -1027,7 +1072,7 @@ pub async fn create_policy(
     uri: OriginalUri,
     body: Bytes,
 ) -> Response {
-    create_resource::<CreateScanConfigInput, CreateScanConfigRequest, _, _>(
+    create_resource::<CreatePolicyInput, CreatePolicyRequest, _, _>(
         service,
         headers,
         uri,
@@ -1119,7 +1164,7 @@ pub(crate) fn create_policy_docs(op: TransformOperation<'_>) -> TransformOperati
         .summary("Create a policy")
         .description("Creates a new compliance policy.")
         .security_requirement("bearerAuth")
-        .input::<Json<CreateScanConfigRequest>>()
+        .input::<Json<CreatePolicyRequest>>()
         .response_with::<201, Json<ResourceCreatedResponse>, _>(created_json("Policy created"));
 
     let op = problem_response::<400>(op, "Invalid request");
