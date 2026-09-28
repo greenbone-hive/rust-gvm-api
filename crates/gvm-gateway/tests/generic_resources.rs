@@ -118,11 +118,9 @@ async fn generic_asset_rest_contract_scopes_reads_and_limits_mutation() {
 
 #[tokio::test]
 async fn generic_config_rest_contract_preserves_open_usage_clone_and_ultimate() {
-    // This contract covers an unknown usageType at HTTP command emission and
-    // typed single-response parsing, then verifies clone Location and supported
-    // permanent deletion. The pinned stateful mock treats pagination directives
-    // as resource filters for generic configs, so list payload fidelity is
-    // covered independently by response-conversion and compose-backed tests.
+    // This contract covers an unknown usageType through list and single-resource
+    // response parsing, then verifies clone Location and supported permanent
+    // deletion.
     let harness = specialized_target_harness(seed_generic_resources).await;
 
     let list = harness
@@ -135,7 +133,9 @@ async fn generic_config_rest_contract_preserves_open_usage_clone_and_ultimate() 
     assert_eq!(list.status(), StatusCode::OK);
     let list = list.json::<Value>().await.unwrap();
     assert_eq!(list["pagination"]["perPage"], 10);
-    assert_eq!(list["data"], json!([]));
+    assert_eq!(list["data"].as_array().map(Vec::len), Some(1));
+    assert_eq!(list["data"][0]["id"], FUTURE_CONFIG_ID);
+    assert_eq!(list["data"][0]["usageType"], "future_usage");
 
     let get = harness
         .client
@@ -183,7 +183,8 @@ async fn generic_config_rest_contract_preserves_open_usage_clone_and_ultimate() 
     let history = harness.server.command_history();
     assert!(history.iter().any(|record| {
         record.command_name() == "get_configs"
-            && String::from_utf8_lossy(record.raw_xml()).contains("usage_type=\"future_usage\"")
+            && String::from_utf8_lossy(record.raw_xml())
+                .contains("filter=\"usage_type=future_usage")
     }));
     assert!(history.iter().any(|record| {
         record.command_name() == "create_config"

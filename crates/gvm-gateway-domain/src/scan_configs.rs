@@ -70,8 +70,19 @@ pub struct CreateScanConfigInput {
     pub name: String,
     /// Optional comment.
     pub comment: Option<String>,
-    /// Optional base scan config identifier to copy from.
-    pub base_scan_config_id: Option<String>,
+    /// Required active scan config identifier to copy from.
+    pub base_scan_config_id: String,
+}
+
+/// Policy create command.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CreatePolicyInput {
+    /// Name.
+    pub name: String,
+    /// Optional comment.
+    pub comment: Option<String>,
+    /// Required active policy identifier to copy from.
+    pub base_policy_id: String,
 }
 
 /// Scan config update command.
