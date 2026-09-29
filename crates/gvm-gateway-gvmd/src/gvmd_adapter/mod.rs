@@ -137,10 +137,7 @@ use gvm_gmp::{
             StartTaskRequest, StopAuditRequest, StopTaskRequest, TaskPreference,
         },
         tls_certificates::{GetTlsCertificateRequest, GetTlsCertificatesRequest},
-        user_settings::{
-            GetUserSettingRequest, GetUserSettingsOpts, GetUserSettingsRequest,
-            ModifyUserSettingOpts, ModifyUserSettingRequest,
-        },
+        user_settings::{GetUserSettingRequest, GetUserSettingsRequest, ModifyUserSettingRequest},
         users::{
             CreateUserRequest, DeleteUserRequest, GetUserRequest, GetUsersRequest,
             ModifyUserRequest, UserHostAccess,

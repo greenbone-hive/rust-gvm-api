@@ -14,9 +14,9 @@ const RUST_GVM_COMPONENTS: &[&str] = &[
     "gvm-mock-server",
     "gvm-protocol",
 ];
-// #528 uses the signed compatibility commit that applies the operating-system
-// parser correction to the reviewed #670 system-discovery baseline.
-const RUST_GVM_BASELINE: &str = "30f0334a0941407c9530aea5604f452eddf67da2";
+// #529 uses the signed compatibility commit that applies the authoritative
+// operating-system parser correction to the exact reviewed #671 baseline.
+const RUST_GVM_BASELINE: &str = "f14a4590a74135b222589cb6347ae7655c9b8506";
 
 const REMOVED_CANONICAL_TRANSITION_TYPES: &[&str] = &[
     "CreateTargetOpts",
@@ -99,6 +99,8 @@ const REMOVED_CANONICAL_TRANSITION_TYPES: &[&str] = &[
     "CreateTaskOpts",
     "GetTasksOpts",
     "ModifyTaskOpts",
+    "GetUserSettingsOpts",
+    "ModifyUserSettingOpts",
 ];
 
 #[derive(Debug, Eq, PartialEq)]
@@ -270,7 +272,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
     );
     assert_eq!(
         *expected, RUST_GVM_BASELINE,
-        "rust-gvm components must remain on the reviewed issue #528 canonical system-discovery baseline"
+        "rust-gvm components must remain on the reviewed issue #529 canonical administration/cleanup baseline"
     );
 
     let workspace_manifest =
@@ -282,7 +284,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
             .unwrap_or_else(|| panic!("{component} must be declared in workspace dependencies"));
         assert!(
             dependency.contains(&format!("rev = \"{RUST_GVM_BASELINE}\"")),
-            "{component} must pin the reviewed issue #528 baseline in Cargo.toml: {dependency}"
+            "{component} must pin the reviewed issue #529 baseline in Cargo.toml: {dependency}"
         );
         assert!(
             !dependency.contains("branch ="),
@@ -292,23 +294,20 @@ fn rust_gvm_components_resolve_to_one_revision() {
 }
 
 #[test]
-fn removed_pre_result_transition_types_stay_absent() {
-    // Issue #512 adopts every canonical complete-request family through the
-    // asset baseline. Scanning adapter production and sidecar tests prevents a
-    // future upstream compatibility shim from silently restoring option bags
-    // or the removed operating-system-specific transition request downstream.
+fn removed_canonical_transition_types_stay_absent() {
+    // The ordered canonical migrations through issue #529 remove transitional
+    // request and option APIs. Scanning all workspace production prevents a
+    // future upstream compatibility shim from silently restoring them.
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut findings = Vec::new();
-    for root in [manifest_dir.join("src"), manifest_dir.join("tests")] {
-        for file in rust_files(&root) {
-            if file.ends_with("tests/architecture.rs") {
-                continue;
-            }
-            let contents = fs::read_to_string(&file).expect("read adapter Rust source");
-            for removed in REMOVED_CANONICAL_TRANSITION_TYPES {
-                if contents.contains(removed) {
-                    findings.push(format!("{} uses {removed}", file.display()));
-                }
+    for file in rust_files(&manifest_dir.join("../../crates")) {
+        if file.ends_with("tests/architecture.rs") {
+            continue;
+        }
+        let contents = fs::read_to_string(&file).expect("read workspace Rust source");
+        for removed in REMOVED_CANONICAL_TRANSITION_TYPES {
+            if contents.contains(removed) {
+                findings.push(format!("{} uses {removed}", file.display()));
             }
         }
     }
@@ -317,6 +316,58 @@ fn removed_pre_result_transition_types_stay_absent() {
         "removed pre-result canonical transition APIs must stay absent:\n{}",
         findings.join("\n")
     );
+}
+
+#[test]
+fn canonical_user_setting_requests_stay_complete_and_source_faithful() {
+    // Issue #529 adopts the canonical #671 request and response surface. Keep
+    // all query controls explicit, consume the source-faithful items field,
+    // and prevent compatibility option bags from returning.
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let identity = fs::read_to_string(manifest_dir.join("src/gvmd_adapter/ports/identity.rs"))
+        .expect("read identity adapter");
+    let list = section_between(
+        &identity,
+        "async fn list_user_settings",
+        "async fn get_user_setting",
+    );
+    for assignment in [
+        "request.filter_string = filter;",
+        "request.first = Some(1);",
+        "request.max = Some(-1);",
+        "request.sort_field = Some(\"name\".to_string());",
+        "request.sort_order = Some(SortOrder::Ascending);",
+    ] {
+        assert!(
+            list.contains(assignment),
+            "user-setting list must populate canonical field: {assignment}"
+        );
+    }
+    assert!(list.contains(".items"));
+    assert!(!list.contains(".settings"));
+
+    let detail = section_between(
+        &identity,
+        "async fn get_user_setting",
+        "async fn modify_user_setting",
+    );
+    assert!(detail.contains("GetUserSettingRequest::new"));
+    assert!(detail.contains(".items"));
+    assert!(detail.contains("GatewayError::NotFound"));
+    assert!(!detail.contains(".settings"));
+
+    let modify = identity
+        .split("async fn modify_user_setting")
+        .nth(1)
+        .expect("modify user-setting section");
+    assert!(modify.contains("ModifyUserSettingRequest::new(parse_entity_id(id)?, input.value)"));
+    assert!(!identity.contains("GetUserSettingsOpts"));
+    assert!(!identity.contains("ModifyUserSettingOpts"));
+
+    let conversions =
+        fs::read_to_string(manifest_dir.join("src/conversions.rs")).expect("read conversions");
+    assert!(conversions.contains("user_setting_from_gmp(setting: gvm_gmp::responses::Setting)"));
+    assert!(!conversions.contains("gvm_gmp::responses::UserSetting"));
 }
 
 #[test]
@@ -441,6 +492,68 @@ fn system_discovery_migration_dispositions_stay_bounded() {
         assert!(
             dispositions.contains(disposition),
             "system-discovery disposition must remain documented: {disposition}"
+        );
+    }
+}
+
+#[test]
+fn administration_and_cleanup_dispositions_stay_explicit_and_non_public() {
+    // Reviewed upstream availability does not authorize new downstream
+    // administration routes. Every remaining #664 family must retain its
+    // #381/#401 disposition and stay absent from production adapter imports.
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let production = fs::read_to_string(manifest_dir.join("src/gvmd_adapter/mod.rs"))
+        .expect("read gvmd adapter imports");
+    for omitted_request in [
+        "DescribeAuthRequest",
+        "ModifyAuthRequest",
+        "GetLicenseRequest",
+        "ModifyLicenseRequest",
+        "GetSettingsRequest",
+        "ModifySettingRequest",
+        "RunWizardRequest",
+        "EmptyTrashcanRequest",
+        "RestoreRequest",
+        "CreateScannerRequest",
+        "CloneScannerRequest",
+        "ModifyScannerRequest",
+        "DeleteScannerRequest",
+        "VerifyScannerRequest",
+    ] {
+        assert!(
+            !production.contains(omitted_request),
+            "administration/cleanup request must stay non-public: {omitted_request}"
+        );
+    }
+
+    let dispositions =
+        fs::read_to_string(manifest_dir.join("../../docs/upstream-surface-dispositions.md"))
+            .expect("read upstream surface dispositions");
+    for documented in [
+        "Authentication configuration",
+        "License administration",
+        "Global settings administration",
+        "Wizard execution",
+        "Trash cleanup and recovery",
+        "Scanner administration",
+        "Removed #664 compatibility surfaces",
+        "#381/#401",
+    ] {
+        assert!(
+            dispositions.contains(documented),
+            "administration/cleanup disposition must remain documented: {documented}"
+        );
+    }
+
+    let router = fs::read_to_string(manifest_dir.join("../gvm-gateway-rest/src/router.rs"))
+        .expect("read REST router");
+    let scanner_routes = section_between(&router, "// Scanners", "\"/api/v1/operating-systems\"");
+    assert_eq!(scanner_routes.matches("/api/v1/scanners").count(), 2);
+    assert_eq!(scanner_routes.matches("get_with(").count(), 2);
+    for mutating_route in ["post_with(", "put_with(", "delete_with("] {
+        assert!(
+            !scanner_routes.contains(mutating_route),
+            "scanner administration route must stay absent: {mutating_route}"
         );
     }
 }

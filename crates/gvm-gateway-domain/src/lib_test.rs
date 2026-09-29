@@ -244,6 +244,27 @@ fn modify_task_input_default_keeps_preferences_empty() {
     assert!(input.preferences.is_empty());
 }
 
+/// User-setting values can contain confidential preferences and must never be
+/// exposed by request or response diagnostics.
+#[test]
+fn user_setting_debug_redacts_values() {
+    let secret = "user-setting-secret-529";
+    let setting = UserSetting {
+        id: "123e4567-e89b-12d3-a456-426614174000".to_string(),
+        name: "confidential-setting".to_string(),
+        value: Some(secret.to_string()),
+        comment: None,
+    };
+    let input = ModifyUserSettingInput {
+        value: secret.to_string(),
+    };
+
+    for diagnostic in [format!("{setting:?}"), format!("{input:?}")] {
+        assert!(diagnostic.contains("<redacted>"));
+        assert!(!diagnostic.contains(secret));
+    }
+}
+
 /// Target only emits `excludeHosts` when there are actual excluded hosts.
 #[test]
 fn target_serializes_exclude_hosts_only_when_nonempty() {

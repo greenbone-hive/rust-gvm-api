@@ -172,6 +172,70 @@ async fn specialized_target_routes_require_authentication() {
 }
 
 #[tokio::test]
+async fn user_setting_routes_preserve_auth_validation_and_problem_contracts() {
+    // Current-user settings remain protected. Missing values fail as RFC 9457
+    // client errors, while an explicit empty clear passes validation and
+    // reaches the typed backend boundary.
+    let app = build_router(static_gateway_service());
+    let id = "123e4567-e89b-12d3-a456-426614174000";
+
+    let unauthorized = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/user-settings")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(unauthorized.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        unauthorized.headers().get(CONTENT_TYPE).unwrap(),
+        "application/problem+json"
+    );
+
+    let missing = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::PUT)
+                .uri(format!("/api/v1/user-settings/{id}"))
+                .header(axum::http::header::AUTHORIZATION, "Basic YWRtaW46c2VjcmV0")
+                .header(CONTENT_TYPE, "application/json")
+                .body(Body::from("{}"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(missing.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        missing.headers().get(CONTENT_TYPE).unwrap(),
+        "application/problem+json"
+    );
+    let body = axum::body::to_bytes(missing.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let problem: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(problem["code"], serde_json::json!("bad_request"));
+    assert_eq!(problem["detail"], serde_json::json!("value is required"));
+
+    let clear = app
+        .oneshot(
+            Request::builder()
+                .method(Method::PUT)
+                .uri(format!("/api/v1/user-settings/{id}"))
+                .header(axum::http::header::AUTHORIZATION, "Basic YWRtaW46c2VjcmV0")
+                .header(CONTENT_TYPE, "application/json")
+                .body(Body::from(r#"{"value":""}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(clear.status(), StatusCode::BAD_GATEWAY);
+}
+
+#[tokio::test]
 async fn generic_resource_routes_dispatch_to_typed_services() {
     // Static typed ports return the sanitized backend-unavailable response.
     // Seeing 502 on every implemented generic route proves the router no
@@ -456,6 +520,11 @@ async fn unsupported_methods_on_known_paths_return_problem_responses() {
             "/api/v1/scanners/123e4567-e89b-12d3-a456-426614174000",
         ),
         ("POST", "/api/v1/report-formats"),
+        ("POST", "/api/v1/user-settings"),
+        (
+            "DELETE",
+            "/api/v1/user-settings/123e4567-e89b-12d3-a456-426614174000",
+        ),
     ] {
         let response = app
             .clone()

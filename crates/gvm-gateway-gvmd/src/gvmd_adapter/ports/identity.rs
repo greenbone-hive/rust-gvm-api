@@ -532,18 +532,17 @@ impl IdentityPort for GvmdAdapter {
                 &[],
             )
             .await?;
+        let mut request = GetUserSettingsRequest::new();
+        request.filter_string = filter;
+        request.first = Some(1);
+        request.max = Some(-1);
+        request.sort_field = Some("name".to_string());
+        request.sort_order = Some(SortOrder::Ascending);
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "user_settings.list",
-                GetUserSettingsRequest::new(GetUserSettingsOpts {
-                    filter,
-                    filter_id: None,
-                }),
-            )
+            .execute_with_session(session_token, "user_settings.list", request)
             .await?;
         let mut items = parsed
-            .settings
+            .items
             .into_iter()
             .map(user_setting_from_gmp)
             .collect::<Vec<_>>();
@@ -565,7 +564,7 @@ impl IdentityPort for GvmdAdapter {
             )
             .await?;
         parsed
-            .settings
+            .items
             .into_iter()
             .next()
             .map(user_setting_from_gmp)
@@ -581,10 +580,7 @@ impl IdentityPort for GvmdAdapter {
         self.execute_with_session(
             session_token,
             "user_settings.modify",
-            ModifyUserSettingRequest::new(
-                parse_entity_id(id)?,
-                ModifyUserSettingOpts { value: input.value },
-            ),
+            ModifyUserSettingRequest::new(parse_entity_id(id)?, input.value),
         )
         .await?;
         self.get_user_setting(session_token, id).await

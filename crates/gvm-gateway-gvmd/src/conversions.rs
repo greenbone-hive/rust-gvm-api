@@ -322,7 +322,7 @@ pub(crate) fn permission_from_gmp(permission: gvm_gmp::responses::Permission) ->
     }
 }
 
-pub(crate) fn user_setting_from_gmp(setting: gvm_gmp::responses::UserSetting) -> UserSetting {
+pub(crate) fn user_setting_from_gmp(setting: gvm_gmp::responses::Setting) -> UserSetting {
     UserSetting {
         id: setting.id.to_string(),
         name: setting.name,

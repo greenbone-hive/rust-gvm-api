@@ -9,7 +9,7 @@ use gvm_gmp::responses::{
     GetPortListsResponse, GetReportClosedCvesResponse, GetReportOperatingSystemsResponse,
     GetReportTlsCertificatesResponse, GetReportVulnsResponse, GetReportsResponse,
     GetResultsResponse, GetScanConfigsResponse, GetScannersResponse, GetSchedulesResponse,
-    GetTargetsResponse, GetTasksResponse, GetUsersResponse,
+    GetSettingsResponse, GetTargetsResponse, GetTasksResponse, GetUsersResponse,
 };
 use gvm_protocol::Response as GmpResponse;
 
@@ -951,6 +951,31 @@ fn user_from_gmp_preserves_typed_owner_and_hosts_allow_fields() {
         Some("admin")
     );
     assert_eq!(user.hosts_allow, Some(false));
+}
+
+#[test]
+fn user_setting_from_gmp_consumes_the_canonical_setting_model() {
+    // User-setting list and detail now share the canonical system Setting
+    // response. The domain mapping must preserve its public fields while
+    // keeping its value redacted from diagnostics.
+    let parsed = GetSettingsResponse::from_response(&GmpResponse::from(
+        r#"<get_settings_response status="200" status_text="OK">
+                <setting id="123e4567-e89b-12d3-a456-426614174006">
+                    <name>timezone</name>
+                    <value>Europe/Berlin</value>
+                    <comment>User timezone</comment>
+                </setting>
+                <setting_count>1<filtered>1</filtered><page>1</page></setting_count>
+            </get_settings_response>"#,
+    ))
+    .expect("settings parse");
+
+    let setting = user_setting_from_gmp(parsed.items.into_iter().next().unwrap());
+
+    assert_eq!(setting.name, "timezone");
+    assert_eq!(setting.value.as_deref(), Some("Europe/Berlin"));
+    assert_eq!(setting.comment.as_deref(), Some("User timezone"));
+    assert!(!format!("{setting:?}").contains("Europe/Berlin"));
 }
 
 #[test]
