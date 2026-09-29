@@ -5,6 +5,8 @@ use super::{NvtListQuery, NvtSortOrder};
 
 #[test]
 fn nvt_query_maps_all_typed_options_and_rejects_invalid_values() {
+    // Preserve the complete typed NVT query contract while the parser moves
+    // behind the SecInfo module boundary.
     let parsed = NvtListQuery::try_from_query_string(
         "page=2&perPage=50&configId=550e8400-e29b-41d4-a716-446655440001&preferencesConfigId=550e8400-e29b-41d4-a716-446655440002&family=General&includePreferences=true&includePreferenceCount=false&includeTimeout=true&sortOrder=ascending&sortField=name",
     )
