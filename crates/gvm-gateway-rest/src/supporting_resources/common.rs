@@ -6,7 +6,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{dto::parse_uuid, query::parse_collection_query};
+use crate::{dto::parse_uuid, query::parse_collection_query, targets::validate_uuid};
 
 #[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]
 pub(crate) struct SupportingResourceListQueryParams {
@@ -164,6 +164,19 @@ pub(super) fn supporting_query(query: SupportingListQuery) -> SupportingResource
         page: query.page,
         per_page: query.per_page,
     }
+}
+
+pub(super) fn require_nvt_oid(value: Option<String>) -> Result<String, GatewayError> {
+    value
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| GatewayError::InvalidInput("nvtOid is required".to_string()))
+}
+
+pub(super) fn validate_optional_uuid(field: &str, value: Option<&str>) -> Result<(), GatewayError> {
+    if let Some(value) = value {
+        validate_uuid(field, value)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

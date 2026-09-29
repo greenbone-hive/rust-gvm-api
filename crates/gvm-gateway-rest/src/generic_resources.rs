@@ -26,7 +26,7 @@ use crate::{
     open_enum::open_string_enum,
     openapi::{created_json, ok_json, problem_response, ResourceIdPathDoc},
     query::{decoded_query_pairs, parse_collection_query, DeleteResourceQueryParams},
-    supporting_resources::SupportingResourceMetaResponse,
+    supporting_resources::common::SupportingResourceMetaResponse,
 };
 
 fn default_page() -> Option<u32> {

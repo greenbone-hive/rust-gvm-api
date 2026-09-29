@@ -186,6 +186,51 @@ fn unit_tests_must_use_sidecar_test_files() {
     );
 }
 
+/// The supporting-resource root is an ownership map, not an implementation
+/// file. Keeping it declaration-only prevents the legacy monolith from
+/// returning through handlers, DTOs, query/validation logic, or OpenAPI code.
+#[test]
+fn supporting_resources_barrel_must_remain_declaration_only() {
+    let rest_source = workspace_root().join("crates/gvm-gateway-rest/src");
+    let legacy_flat_file = rest_source.join("supporting_resources.rs");
+    assert!(
+        !legacy_flat_file.exists(),
+        "legacy flat supporting-resource implementation must not exist: {}",
+        legacy_flat_file.display()
+    );
+
+    let supporting_resources = rest_source.join("supporting_resources");
+    let legacy_monolithic_test = supporting_resources.join("mod_test.rs");
+    assert!(
+        !legacy_monolithic_test.exists(),
+        "legacy monolithic supporting-resource sidecar must not exist: {}",
+        legacy_monolithic_test.display()
+    );
+    let nvt_query_test = supporting_resources.join("secinfo/query_test.rs");
+    assert!(
+        nvt_query_test.is_file(),
+        "NVT query regression coverage must remain beside its owner: {}",
+        nvt_query_test.display()
+    );
+
+    let barrel_path = supporting_resources.join("mod.rs");
+    let barrel = std::fs::read_to_string(&barrel_path)
+        .unwrap_or_else(|error| panic!("read {}: {error}", barrel_path.display()));
+    for (index, line) in barrel.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with("//") {
+            continue;
+        }
+
+        assert!(
+            line.starts_with("pub mod ") && line.ends_with(';'),
+            "{}:{}: supporting-resource barrel may contain only module declarations; move handlers, DTOs, query/validation logic, and OpenAPI transforms to the owning module",
+            barrel_path.display(),
+            index + 1
+        );
+    }
+}
+
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
