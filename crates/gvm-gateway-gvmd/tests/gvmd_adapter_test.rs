@@ -4731,3 +4731,253 @@ async fn gvmd_adapter_list_timezones_returns_not_implemented_on_v22_7() {
 
     server.shutdown().await;
 }
+
+async fn create_user_setting_adapter() -> (GvmdAdapter, MockGmpServer, String) {
+    let filter_id =
+        uuid::Uuid::parse_str("123e4567-e89b-12d3-a456-426614175290").expect("valid filter id");
+    let server = MockGmpServer::builder()
+        .mode(ServerMode::Stateful)
+        .version(MockVersion::V22_8)
+        .seed(move |store| {
+            let mut filter = Resource::with_id("filter", "Timezone settings", filter_id);
+            filter.set_attr("term", "name=timezone");
+            store.create(filter);
+        })
+        .unix_socket_auto()
+        .build()
+        .await
+        .unwrap();
+    let adapter = GvmdAdapter::unix_socket(server.socket_path().unwrap());
+    let token = "user-setting-test-session";
+    adapter
+        .connect_session(token, "admin", "admin")
+        .await
+        .unwrap();
+    (adapter, server, token.to_string())
+}
+
+#[tokio::test]
+async fn gvmd_adapter_user_setting_list_preserves_filter_resolution_order_and_full_window() {
+    // The REST list remains unpaginated and name-sorted. Canonical requests
+    // must express that complete window explicitly, and saved filter IDs stay
+    // gateway-owned rather than crossing the GMP boundary.
+    let (adapter, server, token) = create_user_setting_adapter().await;
+
+    let all = adapter
+        .list_user_settings(
+            &token,
+            &UserSettingQuery {
+                filter_string: None,
+                filter_id: None,
+            },
+        )
+        .await
+        .expect("list all user settings");
+    assert_eq!(
+        all.data
+            .iter()
+            .map(|setting| setting.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["rows_per_page", "timezone"]
+    );
+
+    server.clear_history();
+    let filtered = adapter
+        .list_user_settings(
+            &token,
+            &UserSettingQuery {
+                filter_string: None,
+                filter_id: Some("123e4567-e89b-12d3-a456-426614175290".to_string()),
+            },
+        )
+        .await
+        .expect("resolve and apply saved user-setting filter");
+    assert_eq!(filtered.data.len(), 1);
+    assert_eq!(filtered.data[0].name, "timezone");
+
+    let history = server.command_history();
+    assert_eq!(
+        history
+            .iter()
+            .map(|record| record.command_name())
+            .collect::<Vec<_>>(),
+        vec!["get_filters", "get_settings"]
+    );
+    let xml = recorded_xml(&server, "get_settings");
+    for attribute in [
+        "filter=\"name=timezone\"",
+        "first=\"1\"",
+        "max=\"-1\"",
+        "sort_field=\"name\"",
+        "sort_order=\"ascending\"",
+    ] {
+        assert!(xml.contains(attribute), "missing {attribute}; xml={xml}");
+    }
+    assert!(
+        !xml.contains("filt_id="),
+        "saved filter ID leaked; xml={xml}"
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_user_setting_detail_maps_empty_items_to_not_found() {
+    // Canonical detail responses use the same items collection as list reads;
+    // an empty successful response is still the gateway's 404 condition.
+    let (adapter, server, token) = create_user_setting_adapter().await;
+
+    let setting = adapter
+        .get_user_setting(&token, "00000000-0000-0000-0000-000000000001")
+        .await
+        .expect("default timezone setting exists");
+    assert_eq!(setting.name, "timezone");
+
+    let missing = adapter
+        .get_user_setting(&token, "123e4567-e89b-12d3-a456-426614175299")
+        .await
+        .expect_err("empty detail response must be not found");
+    assert!(matches!(missing, GatewayError::NotFound(_)));
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_user_setting_modify_reads_back_the_canonical_result() {
+    // A successful mutation returns the authoritative post-write detail rather
+    // than fabricating a response from the submitted value.
+    let (adapter, server, token) = create_user_setting_adapter().await;
+    server.clear_history();
+
+    let setting = adapter
+        .modify_user_setting(
+            &token,
+            "00000000-0000-0000-0000-000000000001",
+            ModifyUserSettingInput {
+                value: "Europe/Berlin".to_string(),
+            },
+        )
+        .await
+        .expect("modify and read back timezone setting");
+
+    assert_eq!(setting.value.as_deref(), Some("Europe/Berlin"));
+    assert_eq!(
+        server
+            .command_history()
+            .iter()
+            .map(|record| record.command_name())
+            .collect::<Vec<_>>(),
+        vec!["modify_setting", "get_settings"]
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_user_setting_modify_preserves_explicit_empty_clear() {
+    // An empty string is a meaningful clear, not an omitted value. The typed
+    // builder must emit and the read-back must retain that empty value.
+    let (adapter, server, token) = create_user_setting_adapter().await;
+    server.clear_history();
+
+    let setting = adapter
+        .modify_user_setting(
+            &token,
+            "00000000-0000-0000-0000-000000000002",
+            ModifyUserSettingInput {
+                value: String::new(),
+            },
+        )
+        .await
+        .expect("clear rows-per-page setting");
+
+    assert!(
+        setting.value.is_none(),
+        "canonical response parsing represents an empty value as absent"
+    );
+    let xml = recorded_xml(&server, "modify_setting");
+    assert!(xml.contains("<value></value>"), "xml={xml}");
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_user_setting_values_stay_redacted_from_diagnostics() {
+    // Confidential setting values may enter request objects and read-back
+    // models, but neither tracing nor Debug diagnostics may reveal them.
+    let _guard = lock_tracing().await;
+    let logs = capture_tracing();
+    let (adapter, server, token) = create_user_setting_adapter().await;
+    let secret = "user-setting-trace-secret-529";
+
+    let setting = adapter
+        .modify_user_setting(
+            &token,
+            "00000000-0000-0000-0000-000000000001",
+            ModifyUserSettingInput {
+                value: secret.to_string(),
+            },
+        )
+        .await
+        .expect("modify user setting");
+
+    let output = String::from_utf8(logs.lock().unwrap().clone()).unwrap();
+    assert!(!output.contains(secret), "output={output}");
+    assert!(!format!("{setting:?}").contains(secret));
+    for record in server.command_history() {
+        assert!(!String::from_utf8_lossy(record.raw_xml()).contains(secret));
+    }
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_failed_user_setting_modify_short_circuits_read_back() {
+    // A rejected modify must surface its mapped error immediately and must not
+    // issue a detail read that could obscure the original failure.
+    let server = MockGmpServer::builder()
+        .mode(ServerMode::Stateful)
+        .version(MockVersion::V22_8)
+        .inject_fault(Fault::on_command(
+            "modify_setting",
+            FaultKind::ErrorStatus {
+                code: 503,
+                message: "user-setting modification unavailable".to_string(),
+            },
+        ))
+        .unix_socket_auto()
+        .build()
+        .await
+        .unwrap();
+    let adapter = GvmdAdapter::unix_socket(server.socket_path().unwrap());
+    let token = "user-setting-error-session";
+    adapter
+        .connect_session(token, "admin", "admin")
+        .await
+        .unwrap();
+    server.clear_history();
+
+    let error = adapter
+        .modify_user_setting(
+            token,
+            "00000000-0000-0000-0000-000000000001",
+            ModifyUserSettingInput {
+                value: "must-not-read-back".to_string(),
+            },
+        )
+        .await
+        .expect_err("faulted modification must fail");
+
+    assert!(matches!(error, GatewayError::BackendUnavailable(_)));
+    assert!(!format!("{error:?}").contains("must-not-read-back"));
+    assert_eq!(
+        server
+            .command_history()
+            .iter()
+            .map(|record| record.command_name())
+            .collect::<Vec<_>>(),
+        vec!["modify_setting"]
+    );
+
+    server.shutdown().await;
+}

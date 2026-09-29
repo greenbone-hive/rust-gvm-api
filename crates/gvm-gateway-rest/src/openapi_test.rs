@@ -284,6 +284,117 @@ fn generated_openapi_preserves_key_schema_fields() {
 }
 
 #[test]
+fn user_setting_modify_requires_value_allows_empty_and_exposes_no_create_or_delete() {
+    // A missing value is invalid, while an explicit empty string is the
+    // supported clear operation. The existing surface remains GET/GET/PUT.
+    let generated = build_openapi();
+    let generated_modify = &generated["components"]["schemas"]["ModifyUserSetting"];
+    assert_eq!(generated_modify["required"], json!(["value"]));
+    assert_eq!(generated_modify["properties"]["value"]["type"], "string");
+    assert!(generated_modify["properties"]["value"]
+        .get("minLength")
+        .is_none());
+    assert!(generated["paths"]["/user-settings"].get("post").is_none());
+    assert!(generated["paths"]["/user-settings"].get("delete").is_none());
+    assert!(generated["paths"]["/user-settings/{id}"]
+        .get("post")
+        .is_none());
+    assert!(generated["paths"]["/user-settings/{id}"]
+        .get("delete")
+        .is_none());
+
+    let identity = read_yaml(
+        root_spec_path()
+            .parent()
+            .expect("spec directory")
+            .join("identity.yaml")
+            .as_path(),
+    );
+    let curated_modify = &identity["components"]["schemas"]["ModifyUserSetting"];
+    assert_eq!(curated_modify["required"], json!(["value"]));
+    assert_eq!(curated_modify["properties"]["value"]["type"], "string");
+    assert!(curated_modify["properties"]["value"]
+        .get("minLength")
+        .is_none());
+    assert!(identity["paths"]["/user-settings"].get("post").is_none());
+    assert!(identity["paths"]["/user-settings"].get("delete").is_none());
+    assert!(identity["paths"]["/user-settings/{id}"]
+        .get("post")
+        .is_none());
+    assert!(identity["paths"]["/user-settings/{id}"]
+        .get("delete")
+        .is_none());
+}
+
+#[test]
+fn generated_openapi_keeps_administration_and_cleanup_operations_non_public() {
+    // Canonical upstream requests for system administration and cleanup do
+    // not create a REST product decision. Scanner administration also remains
+    // read-only while its typed requests are available upstream.
+    let generated = build_openapi();
+    for absent_path in [
+        "/auth-config",
+        "/license",
+        "/settings",
+        "/wizards",
+        "/trashcan",
+        "/restore",
+    ] {
+        assert!(
+            generated["paths"].get(absent_path).is_none(),
+            "administration/cleanup path must stay absent: {absent_path}"
+        );
+    }
+    for (path, forbidden_methods) in [
+        ("/scanners", ["post", "put", "delete"]),
+        ("/scanners/{id}", ["post", "put", "delete"]),
+    ] {
+        assert!(generated["paths"][path].get("get").is_some());
+        for method in forbidden_methods {
+            assert!(
+                generated["paths"][path].get(method).is_none(),
+                "scanner administration must stay absent: {method} {path}"
+            );
+        }
+    }
+
+    let operation_ids = generated["paths"]
+        .as_object()
+        .expect("paths object")
+        .values()
+        .flat_map(|path_item| {
+            path_item
+                .as_object()
+                .into_iter()
+                .flatten()
+                .map(|(_, value)| value)
+        })
+        .filter_map(|operation| operation["operationId"].as_str())
+        .collect::<BTreeSet<_>>();
+    for omitted in [
+        "describeAuth",
+        "modifyAuth",
+        "getLicense",
+        "modifyLicense",
+        "getSettings",
+        "modifySetting",
+        "runWizard",
+        "emptyTrashcan",
+        "restore",
+        "createScanner",
+        "cloneScanner",
+        "modifyScanner",
+        "deleteScanner",
+        "verifyScanner",
+    ] {
+        assert!(
+            !operation_ids.contains(omitted),
+            "administration/cleanup operation must stay absent: {omitted}"
+        );
+    }
+}
+
+#[test]
 fn generated_openapi_closes_every_request_object_without_closing_extension_maps() {
     let generated = build_openapi();
     let schemas = &generated["components"]["schemas"];
