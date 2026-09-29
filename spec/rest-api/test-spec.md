@@ -156,6 +156,8 @@ async fn test_server() -> TestServer {
 | `get_report_tls_certificates_paginated` | `GET /api/v1/reports/{id}/tls-certificates?page=1&perPage=50` | Report exists | 200, paginated TLS certificate observations |
 | `get_report_errors_paginated` | `GET /api/v1/reports/{id}/errors?page=1&perPage=50` | Report exists | 200, paginated report errors |
 | `get_report_closed_cves_paginated` | `GET /api/v1/reports/{id}/closed-cves?page=1&perPage=50` | Report exists | 200, paginated closed CVE findings |
+| `delete_report_is_permanent` | `DELETE /api/v1/reports/{id}` | Report exists | 204, report permanently removed |
+| `delete_report_rejects_obsolete_ultimate` | `DELETE /api/v1/reports/{id}?ultimate=false` | Report exists | 400 `bad_request`, report remains |
 | `create_report_export_job_pdf` | `POST /api/v1/reports/{id}/exports` + PDF `reportFormatId` | Report exists + PDF report format exists | 202 + `Location: /api/v1/jobs/{jobId}` |
 | `create_report_export_job_csv` | `POST /api/v1/reports/{id}/exports` + CSV `reportFormatId` | Report exists + CSV report format exists | 202 + `Location: /api/v1/jobs/{jobId}` |
 | `create_report_export_job_json` | `POST /api/v1/reports/{id}/exports` + `format=json` | Report exists | 202 + `Location: /api/v1/jobs/{jobId}` |

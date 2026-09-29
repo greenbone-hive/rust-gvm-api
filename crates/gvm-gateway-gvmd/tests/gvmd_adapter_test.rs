@@ -9,7 +9,10 @@ use std::{
 use gvm_gateway_domain::*;
 use gvm_gateway_gvmd::GvmdAdapter;
 use gvm_mock_server::{
-    response_gen::{REPORT_EXPORT_BINARY_FORMAT_ID, REPORT_EXPORT_XML_FORMAT_ID},
+    response_gen::{
+        generate_binary_report_export, generate_xml_report_export, REPORT_EXPORT_BINARY_FORMAT_ID,
+        REPORT_EXPORT_XML_FORMAT_ID,
+    },
     Fault, FaultKind, GmpVersion as MockVersion, MockGmpServer, Resource, ServerMode,
 };
 use tokio::sync::{Mutex as AsyncMutex, MutexGuard as AsyncMutexGuard};
@@ -139,7 +142,9 @@ async fn create_mock_adapter_v22_8() -> (GvmdAdapter, MockGmpServer, String) {
         .mode(ServerMode::Stateful)
         .version(MockVersion::V22_8)
         .seed(move |store| {
-            store.create(Resource::with_id("report", "Typed report", report_id));
+            let mut report = Resource::with_id("report", "Typed report", report_id);
+            report.set_attr("usage_type", "scan");
+            store.create(report);
             let mut filter = Resource::with_id("filter", "Saved alarm filter", filter_id);
             filter.set_attr("term", "threat=Alarm");
             store.create(filter);
@@ -1943,6 +1948,49 @@ async fn gvmd_adapter_list_reports_requests_summary_metadata_only() {
 }
 
 #[tokio::test]
+async fn gvmd_adapter_delete_report_permanently_removes_state_without_ultimate_attribute() {
+    let (adapter, server, token) = create_mock_adapter_v22_8().await;
+    let report_id = "550e8400-e29b-41d4-a716-446655440000";
+    server.clear_history();
+
+    // Reports have no gvmd trash lifecycle. The canonical one-argument
+    // request must remove the stateful resource and must never invent an
+    // `ultimate` wire attribute that gvmd does not parse for reports.
+    adapter
+        .delete_report(&token, report_id)
+        .await
+        .expect("canonical permanent report deletion should succeed");
+
+    let page = adapter
+        .list_reports(
+            &token,
+            &ReportQuery {
+                filter_string: None,
+                filter_id: None,
+                page: 1,
+                per_page: 25,
+            },
+        )
+        .await
+        .expect("reports should remain listable after deletion");
+    assert!(
+        page.data.iter().all(|report| report.id != report_id),
+        "deleted report must not remain in stateful backend state"
+    );
+
+    let history = server.command_history();
+    let delete = history
+        .iter()
+        .find(|record| record.command_name() == "delete_report")
+        .expect("delete_report command should be recorded");
+    let xml = String::from_utf8(delete.raw_xml().to_vec()).expect("XML command");
+    assert!(xml.contains(&format!("report_id=\"{report_id}\"")));
+    assert!(!xml.contains("ultimate"), "xml={xml}");
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn gvmd_adapter_list_hosts_emits_backend_pagination_filter() {
     let (adapter, server, token) = create_mock_adapter().await;
     server.clear_history();
@@ -3216,11 +3264,9 @@ async fn gvmd_adapter_get_report_embeds_requested_result_window_larger_than_25()
         .mode(ServerMode::Stateful)
         .version(MockVersion::V22_8)
         .seed(move |store| {
-            store.create(Resource::with_id(
-                "report",
-                "Large embedded report",
-                report_id,
-            ));
+            let mut report = Resource::with_id("report", "Large embedded report", report_id);
+            report.set_attr("usage_type", "scan");
+            store.create(report);
 
             // Regression coverage for issue #230: the single-report
             // path must honor the requested embedded-result window
@@ -3668,17 +3714,14 @@ async fn gvmd_adapter_list_targets_unauthorized() {
 #[tokio::test]
 async fn gvmd_adapter_export_report_binary_payload() {
     let report_id = uuid::Uuid::from_u128(0x11111111_1111_1111_1111_111111111111);
+    let response = generate_binary_report_export(report_id, REPORT_EXPORT_BINARY_FORMAT_ID);
     let server = MockGmpServer::builder()
-        .mode(ServerMode::Stateful)
+        .mode(ServerMode::Fixture)
         .version(MockVersion::V22_8)
+        // Export response parsing is independent of the stateful lifecycle
+        // mock; pin the exact binary fixture this regression intends to map.
+        .override_response("get_reports", &response)
         .unix_socket_auto()
-        .seed(move |store| {
-            store.create(Resource::with_id(
-                "report",
-                "Binary export report",
-                report_id,
-            ));
-        })
         .build()
         .await
         .unwrap();
@@ -3776,13 +3819,14 @@ async fn gvmd_adapter_export_report_emits_config_and_filter_options() {
 #[tokio::test]
 async fn gvmd_adapter_export_report_xml_payload() {
     let report_id = uuid::Uuid::from_u128(0x22222222_2222_2222_2222_222222222222);
+    let response = generate_xml_report_export(report_id, REPORT_EXPORT_XML_FORMAT_ID);
     let server = MockGmpServer::builder()
-        .mode(ServerMode::Stateful)
+        .mode(ServerMode::Fixture)
         .version(MockVersion::V22_8)
+        // Keep this focused on nested XML export response mapping rather than
+        // coupling it to the stateful report-lifecycle implementation.
+        .override_response("get_reports", &response)
         .unix_socket_auto()
-        .seed(move |store| {
-            store.create(Resource::with_id("report", "XML export report", report_id));
-        })
         .build()
         .await
         .unwrap();

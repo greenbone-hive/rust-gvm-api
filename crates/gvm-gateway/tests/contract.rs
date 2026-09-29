@@ -313,7 +313,8 @@ async fn update_task_preserves_preferences_through_handler() {
 
 #[tokio::test]
 async fn report_export_job_api_downloads_json_result() {
-    let (addr, token, handle) = spawn_report_server(Arc::new(JsonExportReportPort)).await;
+    let (addr, token, handle) =
+        spawn_report_server(Arc::new(JsonExportReportPort::default())).await;
     let report_id = "550e8400-e29b-41d4-a716-446655440000";
     let client = Client::new();
 
@@ -388,9 +389,74 @@ async fn report_export_job_api_downloads_json_result() {
 }
 
 #[tokio::test]
+async fn report_delete_rejects_obsolete_permanence_choice_before_permanent_delete() {
+    let deleted_ids = Arc::new(Mutex::new(Vec::new()));
+    let report_port = Arc::new(JsonExportReportPort {
+        deleted_ids: Arc::clone(&deleted_ids),
+    });
+    let (addr, token, handle) = spawn_report_server(report_port).await;
+    let report_id = "550e8400-e29b-41d4-a716-446655440000";
+    let client = Client::new();
+
+    // A legacy caller asking for non-ultimate deletion must receive a
+    // deterministic RFC 9457 error before the permanent domain operation can
+    // run. This prevents a successful response from implying trash semantics.
+    let rejected = client
+        .delete(format!(
+            "http://{addr}/api/v1/reports/{report_id}?ultimate=false"
+        ))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .expect("obsolete report delete response");
+    assert_eq!(rejected.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        rejected
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok()),
+        Some("application/problem+json")
+    );
+    let problem = rejected.json::<Value>().await.expect("RFC 9457 response");
+    assert_eq!(problem["code"], "bad_request");
+    assert_eq!(problem["status"], 400);
+    assert_eq!(problem["instance"], format!("/api/v1/reports/{report_id}"));
+    assert!(problem["detail"]
+        .as_str()
+        .is_some_and(|detail| detail.contains("always permanent")));
+    assert!(
+        deleted_ids
+            .lock()
+            .expect("deleted report mutex should not be poisoned")
+            .is_empty(),
+        "rejected legacy input must not reach permanent deletion"
+    );
+
+    // Unrelated queries retain the repository's ignore-unknown convention,
+    // and the no-choice delete contract reaches the port exactly once.
+    let deleted = client
+        .delete(format!(
+            "http://{addr}/api/v1/reports/{report_id}?reason=cleanup"
+        ))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .expect("permanent report delete response");
+    assert_eq!(deleted.status(), StatusCode::NO_CONTENT);
+    assert_eq!(
+        *deleted_ids
+            .lock()
+            .expect("deleted report mutex should not be poisoned"),
+        vec![report_id.to_string()]
+    );
+
+    handle.abort();
+}
+
+#[tokio::test]
 async fn report_export_jobs_are_hidden_from_other_users() {
     let (addr, owner_token, other_token, handle) =
-        spawn_report_server_with_users(Arc::new(JsonExportReportPort)).await;
+        spawn_report_server_with_users(Arc::new(JsonExportReportPort::default())).await;
     let report_id = "550e8400-e29b-41d4-a716-446655440000";
     let client = Client::new();
 
@@ -531,7 +597,7 @@ async fn representative_request_bodies_reject_unknown_fields_with_rfc9457_400() 
         Arc::new(CapturingTaskPort {
             captured: Arc::new(Mutex::new(None)),
         }),
-        Arc::new(JsonExportReportPort),
+        Arc::new(JsonExportReportPort::default()),
     )
     .await;
     let client = Client::new();
@@ -664,7 +730,7 @@ async fn representative_request_bodies_accept_valid_payloads() {
         Arc::new(CapturingTaskPort {
             captured: Arc::clone(&captured),
         }),
-        Arc::new(JsonExportReportPort),
+        Arc::new(JsonExportReportPort::default()),
     )
     .await;
     let client = Client::new();
@@ -971,7 +1037,10 @@ async fn spawn_report_server_with_users(
     (addr, token, other_token, handle)
 }
 
-struct JsonExportReportPort;
+#[derive(Default)]
+struct JsonExportReportPort {
+    deleted_ids: Arc<Mutex<Vec<String>>>,
+}
 
 struct AcceptingAlertPort;
 
@@ -1089,7 +1158,11 @@ impl ReportPort for JsonExportReportPort {
         ))
     }
 
-    async fn delete_report(&self, _: &str, _: &str, _: bool) -> Result<(), GatewayError> {
+    async fn delete_report(&self, _: &str, id: &str) -> Result<(), GatewayError> {
+        self.deleted_ids
+            .lock()
+            .expect("deleted report mutex should not be poisoned")
+            .push(id.to_string());
         Ok(())
     }
 
@@ -1352,7 +1425,7 @@ impl ReportPort for MissingReportPort {
         Err(GatewayError::NotFound(format!("report {id} not found")))
     }
 
-    async fn delete_report(&self, _: &str, id: &str, _: bool) -> Result<(), GatewayError> {
+    async fn delete_report(&self, _: &str, id: &str) -> Result<(), GatewayError> {
         Err(GatewayError::NotFound(format!("report {id} not found")))
     }
 

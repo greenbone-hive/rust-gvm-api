@@ -452,13 +452,8 @@ pub trait ReportPort: Send + Sync + 'static {
         request: &ReportExportRequest,
     ) -> Result<ReportExport, GatewayError>;
 
-    /// Delete a report by identifier.
-    async fn delete_report(
-        &self,
-        session_token: &str,
-        id: &str,
-        ultimate: bool,
-    ) -> Result<(), GatewayError>;
+    /// Permanently delete a report by identifier.
+    async fn delete_report(&self, session_token: &str, id: &str) -> Result<(), GatewayError>;
 
     /// List results for a specific report.
     async fn get_report_results(
