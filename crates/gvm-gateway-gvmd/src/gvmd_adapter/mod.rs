@@ -11,7 +11,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use gvm_client::{GetReportDetailsOpts, GetReportExportOpts, GmpClient, GvmError};
+use gvm_client::{GmpClient, GvmError};
 use gvm_connection::UnixSocketConnection;
 use gvm_gateway_domain::{
     Alert, AlertPage, AlertPort, AlertQuery, AssetQuery, AuthPort, CertBundAdvisory,
@@ -93,10 +93,10 @@ use gvm_gmp::{
         report_formats::{GetReportFormatRequest, GetReportFormatsRequest},
         reports::{
             DeleteReportRequest, GetReportApplicationsRequest, GetReportClosedCvesRequest,
-            GetReportCvesRequest, GetReportErrorsRequest,
-            GetReportExportRequest as GmpGetReportExportRequest, GetReportHostsRequest,
-            GetReportOperatingSystemsRequest, GetReportPortsRequest, GetReportRequest,
-            GetReportTlsCertificatesRequest, GetReportVulnsRequest, GetReportsRequest,
+            GetReportCvesRequest, GetReportErrorsRequest, GetReportExportRequest,
+            GetReportHostsRequest, GetReportOperatingSystemsRequest, GetReportPortsRequest,
+            GetReportRequest, GetReportTlsCertificatesRequest, GetReportVulnsRequest,
+            GetReportsRequest,
         },
         results::{GetResultRequest, GetResultsRequest},
         roles::{

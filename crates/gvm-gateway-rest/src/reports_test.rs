@@ -178,7 +178,7 @@ fn report_closed_cve_response_preserves_closed_cve_fields() {
 
 #[test]
 fn report_drill_downs_serialize_as_purpose_shaped_summaries() {
-    // Issue #344 requires five distinct summary DTOs. Keeping this assertion at
+    // Issue #344 requires purpose-shaped summary DTOs. Keeping this assertion at
     // the REST boundary prevents future reuse of generic result, asset, or
     // SecInfo response shapes for these report-scoped rows.
     let pagination = Pagination {
@@ -222,17 +222,6 @@ fn report_drill_downs_serialize_as_purpose_shaped_summaries() {
             pagination: pagination.clone(),
         }))
         .expect("application summary JSON"),
-        serde_json::to_value(ReportOperatingSystemListResponse::from(
-            ReportOperatingSystemPage {
-                data: vec![ReportOperatingSystem {
-                    id: Some("os-row".to_string()),
-                    name: Some("Debian".to_string()),
-                    severity: Some("4.0".to_string()),
-                }],
-                pagination: pagination.clone(),
-            },
-        ))
-        .expect("operating-system summary JSON"),
         serde_json::to_value(ReportCveListResponse::from(ReportCvePage {
             data: vec![ReportCve {
                 id: Some("cve-row".to_string()),
@@ -254,4 +243,35 @@ fn report_drill_downs_serialize_as_purpose_shaped_summaries() {
         assert!(row.get("results").is_none());
         assert!(row.get("hostsCount").is_none());
     }
+}
+
+#[test]
+fn report_operating_system_response_preserves_the_live_gvmd_row_shape() {
+    // Regression coverage for #527: a report OS row must expose its three
+    // authoritative fields and must never be serialized as the false generic
+    // id/name/severity summary that live gvmd cannot populate.
+    let value = serde_json::to_value(ReportOperatingSystemListResponse::from(
+        ReportOperatingSystemPage {
+            data: vec![ReportOperatingSystem {
+                best_os_cpe: Some("cpe:/o:debian:debian_linux:12".to_string()),
+                best_os_text: Some("Debian GNU/Linux 12 (bookworm)".to_string()),
+                hosts_count: Some(2),
+            }],
+            pagination: Pagination {
+                page: 1,
+                per_page: 25,
+                total: 1,
+                total_pages: 1,
+            },
+        },
+    ))
+    .expect("operating-system summary JSON");
+
+    let row = &value["data"][0];
+    assert_eq!(row["bestOsCpe"], "cpe:/o:debian:debian_linux:12");
+    assert_eq!(row["bestOsText"], "Debian GNU/Linux 12 (bookworm)");
+    assert_eq!(row["hostsCount"], 2);
+    assert!(row.get("id").is_none());
+    assert!(row.get("name").is_none());
+    assert!(row.get("severity").is_none());
 }

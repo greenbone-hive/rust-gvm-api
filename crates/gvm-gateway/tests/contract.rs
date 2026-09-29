@@ -82,7 +82,7 @@ async fn generated_openapi_endpoint_exposes_implemented_contract() {
 
 #[tokio::test]
 async fn report_drill_down_and_operating_system_routes_expose_typed_contracts() {
-    // End-to-end contract coverage for #344: all five report summary routes and
+    // End-to-end contract coverage for #344/#527: report summary routes and
     // all four OS operations must leave the reservation handler, preserve their
     // purpose-shaped JSON, and enforce backend-supported mutation semantics.
     let report_id =
@@ -112,7 +112,6 @@ async fn report_drill_down_and_operating_system_routes_expose_typed_contracts() 
         ("hosts", "192.0.2.10"),
         ("ports", "22/tcp"),
         ("applications", "OpenSSH"),
-        ("operating-systems", "Debian"),
         ("cves", "CVE-2026-0001"),
     ] {
         let response = harness
@@ -142,6 +141,39 @@ async fn report_drill_down_and_operating_system_routes_expose_typed_contracts() 
             "subresource={subresource} must remain purpose-shaped"
         );
     }
+
+    // #527: report operating-system summaries are a distinct projection, not
+    // generic id/name/severity rows. Assert their real gvmd fields at the HTTP
+    // boundary so an empty-object response cannot satisfy this contract test.
+    let response = harness
+        .client
+        .get(harness.url(&format!(
+            "/api/v1/reports/{report_id}/operating-systems?filter=severity%3E3&page=1&perPage=10"
+        )))
+        .bearer_auth(&harness.token)
+        .send()
+        .await
+        .expect("report operating-system response");
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response
+        .json::<Value>()
+        .await
+        .expect("report operating-system JSON");
+    let operating_system = &body["data"][0];
+    assert_eq!(
+        operating_system["bestOsCpe"],
+        Value::String("cpe:/o:debian:debian_linux".to_string())
+    );
+    assert_eq!(
+        operating_system["bestOsText"],
+        Value::String("Debian".to_string())
+    );
+    assert_eq!(operating_system["hostsCount"], Value::from(2));
+    assert!(operating_system.get("id").is_none());
+    assert!(operating_system.get("name").is_none());
+    assert!(operating_system.get("severity").is_none());
+    assert_eq!(body["pagination"]["page"], Value::from(1));
+    assert_eq!(body["pagination"]["perPage"], Value::from(10));
 
     let response = harness
         .client

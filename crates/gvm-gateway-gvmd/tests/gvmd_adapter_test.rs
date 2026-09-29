@@ -2784,16 +2784,12 @@ async fn gvmd_adapter_get_report_vulnerabilities_uses_typed_command() {
         vec!["CVE-2011-1473".to_string(), "CVE-2011-5094".to_string()]
     );
 
-    let history = server.command_history();
-    let command = history
-        .iter()
-        .find(|record| record.command_name() == "get_report_vulns")
-        .expect("get_report_vulns command should be recorded");
-    let xml = String::from_utf8(command.raw_xml().to_vec()).expect("xml command");
-    assert!(xml.contains("report_id=\"550e8400-e29b-41d4-a716-446655440000\""));
-    assert!(xml.contains("filter=\"threat=Alarm severity&gt;5 first=11 rows=10\""));
-    assert!(!xml.contains("filter_id"));
-    assert!(xml.contains("details=\"1\""));
+    let xml = recorded_xml(&server, "get_report_vulns");
+    assert_complete_report_projection_xml(
+        &xml,
+        "550e8400-e29b-41d4-a716-446655440000",
+        "threat=Alarm severity&gt;5 first=11 rows=10",
+    );
 
     server.shutdown().await;
 }
@@ -3208,14 +3204,12 @@ async fn gvmd_adapter_get_report_tls_certificates_uses_typed_command() {
         Some("2027-01-01T00:00:00Z")
     );
 
-    let history = server.command_history();
-    let command = history
-        .iter()
-        .find(|record| record.command_name() == "get_report_tls_certificates")
-        .expect("get_report_tls_certificates command should be recorded");
-    let xml = String::from_utf8(command.raw_xml().to_vec()).expect("xml command");
-    assert!(xml.contains("report_id=\"550e8400-e29b-41d4-a716-446655440000\""));
-    assert!(xml.contains("filter=\"subject~example first=1 rows=25\""));
+    let xml = recorded_xml(&server, "get_report_tls_certificates");
+    assert_complete_report_projection_xml(
+        &xml,
+        "550e8400-e29b-41d4-a716-446655440000",
+        "subject~example first=1 rows=25",
+    );
 
     server.shutdown().await;
 }
@@ -3365,13 +3359,12 @@ async fn gvmd_adapter_get_report_errors_uses_typed_command() {
     assert_eq!(page.data[0].nvt_name.as_deref(), Some("Ping Host"));
     assert_eq!(page.data[0].host.as_deref(), Some("192.0.2.20"));
 
-    let history = server.command_history();
-    let command = history
-        .iter()
-        .find(|record| record.command_name() == "get_report_errors")
-        .expect("get_report_errors command should be recorded");
-    let xml = String::from_utf8(command.raw_xml().to_vec()).expect("xml command");
-    assert!(xml.contains("filter=\"threat=Alarm first=1 rows=25\""));
+    let xml = recorded_xml(&server, "get_report_errors");
+    assert_complete_report_projection_xml(
+        &xml,
+        "550e8400-e29b-41d4-a716-446655440000",
+        "threat=Alarm first=1 rows=25",
+    );
 
     server.shutdown().await;
 }
@@ -3409,13 +3402,12 @@ async fn gvmd_adapter_get_report_closed_cves_uses_typed_command() {
         vec!["CVE-2025-9999".to_string()]
     );
 
-    let history = server.command_history();
-    let command = history
-        .iter()
-        .find(|record| record.command_name() == "get_report_closed_cves")
-        .expect("get_report_closed_cves command should be recorded");
-    let xml = String::from_utf8(command.raw_xml().to_vec()).expect("xml command");
-    assert!(xml.contains("filter=\"severity&gt;4 first=1 rows=25\""));
+    let xml = recorded_xml(&server, "get_report_closed_cves");
+    assert_complete_report_projection_xml(
+        &xml,
+        "550e8400-e29b-41d4-a716-446655440000",
+        "severity&gt;4 first=1 rows=25",
+    );
 
     server.shutdown().await;
 }
@@ -3423,14 +3415,15 @@ async fn gvmd_adapter_get_report_closed_cves_uses_typed_command() {
 #[tokio::test]
 async fn gvmd_adapter_report_summary_drill_downs_use_typed_commands() {
     // Issue #344 requires five distinct report-summary contracts. This test
-    // guards both their typed response mapping and their shared backend
-    // filter/pagination command shape without coercing them into generic assets.
+    // guards their typed response mapping and the complete canonical request
+    // shape, including gateway-side saved-filter resolution, without coercing
+    // them into generic assets.
     let (adapter, server, token) = create_mock_adapter_v22_8().await;
     server.clear_history();
     let report_id = "550e8400-e29b-41d4-a716-446655440000";
     let query = ResultQuery {
         filter_string: Some("severity>3".to_string()),
-        filter_id: None,
+        filter_id: Some("123e4567-e89b-12d3-a456-426614174000".to_string()),
         page: 1,
         per_page: 10,
     };
@@ -3459,7 +3452,15 @@ async fn gvmd_adapter_report_summary_drill_downs_use_typed_commands() {
     assert_eq!(hosts.data[0].name.as_deref(), Some("192.0.2.10"));
     assert_eq!(ports.data[0].name.as_deref(), Some("22/tcp"));
     assert_eq!(applications.data[0].name.as_deref(), Some("OpenSSH"));
-    assert_eq!(operating_systems.data[0].name.as_deref(), Some("Debian"));
+    assert_eq!(
+        operating_systems.data[0].best_os_cpe.as_deref(),
+        Some("cpe:/o:debian:debian_linux")
+    );
+    assert_eq!(
+        operating_systems.data[0].best_os_text.as_deref(),
+        Some("Debian")
+    );
+    assert_eq!(operating_systems.data[0].hosts_count, Some(2));
     assert_eq!(cves.data[0].name.as_deref(), Some("CVE-2026-0001"));
 
     for command_name in [
@@ -3470,16 +3471,54 @@ async fn gvmd_adapter_report_summary_drill_downs_use_typed_commands() {
         "get_report_cves",
     ] {
         let xml = recorded_xml(&server, command_name);
-        assert!(
-            xml.contains(&format!("report_id=\"{report_id}\"")),
-            "xml={xml}"
+        assert_complete_report_projection_xml(
+            &xml,
+            report_id,
+            "threat=Alarm severity&gt;3 first=1 rows=10",
         );
-        assert!(
-            xml.contains("filter=\"severity&gt;3 first=1 rows=10\""),
-            "xml={xml}"
-        );
-        assert!(xml.contains("details=\"1\""), "xml={xml}");
+        if command_name == "get_report_hosts" {
+            assert!(
+                !xml.contains("lean="),
+                "report hosts must preserve lean omission: xml={xml}"
+            );
+        }
     }
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_report_projection_rejects_caller_report_id_override() {
+    // The path report id owns projection scope. A caller-supplied report_id
+    // filter must remain rejected before any projection command reaches gvmd.
+    let (adapter, server, token) = create_mock_adapter_v22_8().await;
+    server.clear_history();
+
+    let error = adapter
+        .get_report_ports(
+            &token,
+            "550e8400-e29b-41d4-a716-446655440000",
+            &ResultQuery {
+                filter_string: Some("report_id=aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa".to_string()),
+                filter_id: None,
+                page: 1,
+                per_page: 25,
+            },
+        )
+        .await
+        .expect_err("caller report_id override must be rejected");
+
+    assert!(matches!(
+        error,
+        GatewayError::InvalidInput(detail) if detail.contains("report_id")
+    ));
+    assert!(
+        server
+            .command_history()
+            .iter()
+            .all(|record| record.command_name() != "get_report_ports"),
+        "invalid projection scope must not reach gvmd"
+    );
 
     server.shutdown().await;
 }
@@ -3751,6 +3790,16 @@ async fn gvmd_adapter_export_report_binary_payload() {
     assert_eq!(export.content_type.as_deref(), Some("application/pdf"));
     assert_eq!(export.extension.as_deref(), Some("pdf"));
 
+    // The canonical export constructor omits these booleans. The gateway must
+    // continue requesting a complete, unpaginated artifact even without any
+    // optional selector.
+    let xml = recorded_xml(&server, "get_reports");
+    assert!(xml.contains("details=\"1\""), "xml={xml}");
+    assert!(xml.contains("ignore_pagination=\"1\""), "xml={xml}");
+    assert!(!xml.contains("config_id="), "xml={xml}");
+    assert!(!xml.contains("filter="), "xml={xml}");
+    assert!(!xml.contains("filt_id="), "xml={xml}");
+
     server.shutdown().await;
 }
 
@@ -3812,6 +3861,17 @@ async fn gvmd_adapter_export_report_emits_config_and_filter_options() {
     assert!(xml.contains(&format!("report_id=\"{report_id}\"")));
     assert!(xml.contains("details=\"1\""));
     assert!(xml.contains("ignore_pagination=\"1\""));
+    for omitted in [
+        "lean=",
+        "notes_details=",
+        "overrides_details=",
+        "result_tags=",
+    ] {
+        assert!(
+            !xml.contains(omitted),
+            "unowned export option must retain canonical omission: {omitted}; xml={xml}"
+        );
+    }
 
     server.shutdown().await;
 }
@@ -4403,6 +4463,26 @@ fn recorded_xml(server: &MockGmpServer, command_name: &str) -> String {
         .find(|record| record.command_name() == command_name)
         .unwrap_or_else(|| panic!("{command_name} command should be recorded"));
     String::from_utf8(command.raw_xml().to_vec()).expect("xml command should be UTF-8")
+}
+
+fn assert_complete_report_projection_xml(xml: &str, report_id: &str, filter: &str) {
+    // Canonical projection constructors carry identity only. This assertion
+    // protects every adapter call site's explicit detail semantics and the
+    // resolved inline-filter contract while preserving omission defaults.
+    assert!(
+        xml.contains(&format!("report_id=\"{report_id}\"")),
+        "xml={xml}"
+    );
+    assert!(xml.contains(&format!("filter=\"{filter}\"")), "xml={xml}");
+    assert!(xml.contains("details=\"1\""), "xml={xml}");
+    assert!(
+        !xml.contains("filt_id="),
+        "saved filters must be resolved inline: xml={xml}"
+    );
+    assert!(
+        !xml.contains("ignore_pagination="),
+        "projection pagination must remain in the inline filter: xml={xml}"
+    );
 }
 
 #[tokio::test]

@@ -650,7 +650,7 @@ dependencies = [
 [[package]]
 name = "gvm-client"
 version = "0.7.0"
-source = "git+https://github.com/greenbone-hive/rust-gvm?rev=4d992af6215ee4d794e1a555015abf19ff286c18#4d992af6215ee4d794e1a555015abf19ff286c18"
+source = "git+https://github.com/greenbone-hive/rust-gvm?rev=8fd9711368947042c26d643455f310e245482689#8fd9711368947042c26d643455f310e245482689"
 dependencies = [
  "async-trait",
  "gvm-connection",
@@ -664,7 +664,7 @@ dependencies = [
 [[package]]
 name = "gvm-connection"
 version = "0.7.0"
-source = "git+https://github.com/greenbone-hive/rust-gvm?rev=4d992af6215ee4d794e1a555015abf19ff286c18#4d992af6215ee4d794e1a555015abf19ff286c18"
+source = "git+https://github.com/greenbone-hive/rust-gvm?rev=8fd9711368947042c26d643455f310e245482689#8fd9711368947042c26d643455f310e245482689"
 dependencies = [
  "async-trait",
  "gvm-protocol",
@@ -800,7 +800,7 @@ dependencies = [
 [[package]]
 name = "gvm-gmp"
 version = "0.7.0"
-source = "git+https://github.com/greenbone-hive/rust-gvm?rev=4d992af6215ee4d794e1a555015abf19ff286c18#4d992af6215ee4d794e1a555015abf19ff286c18"
+source = "git+https://github.com/greenbone-hive/rust-gvm?rev=8fd9711368947042c26d643455f310e245482689#8fd9711368947042c26d643455f310e245482689"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -814,7 +814,7 @@ dependencies = [
 [[package]]
 name = "gvm-mock-server"
 version = "0.7.0"
-source = "git+https://github.com/greenbone-hive/rust-gvm?rev=4d992af6215ee4d794e1a555015abf19ff286c18#4d992af6215ee4d794e1a555015abf19ff286c18"
+source = "git+https://github.com/greenbone-hive/rust-gvm?rev=8fd9711368947042c26d643455f310e245482689#8fd9711368947042c26d643455f310e245482689"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -833,7 +833,7 @@ dependencies = [
 [[package]]
 name = "gvm-protocol"
 version = "0.7.0"
-source = "git+https://github.com/greenbone-hive/rust-gvm?rev=4d992af6215ee4d794e1a555015abf19ff286c18#4d992af6215ee4d794e1a555015abf19ff286c18"
+source = "git+https://github.com/greenbone-hive/rust-gvm?rev=8fd9711368947042c26d643455f310e245482689#8fd9711368947042c26d643455f310e245482689"
 dependencies = [
  "quick-xml",
  "thiserror",
