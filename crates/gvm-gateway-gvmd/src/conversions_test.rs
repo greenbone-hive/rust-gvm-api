@@ -6,10 +6,10 @@ use gvm_gmp::responses::{
     GetAgentGroupsResponse, GetAgentInstallerInstructionResponse, GetAgentSupportBundleResponse,
     GetAgentsResponse, GetAlertsResponse, GetAssetsResponse, GetConfigsResponse,
     GetCredentialsResponse, GetFeedsResponse, GetNotesResponse, GetOverridesResponse,
-    GetPortListsResponse, GetReportClosedCvesResponse, GetReportTlsCertificatesResponse,
-    GetReportVulnsResponse, GetReportsResponse, GetResultsResponse, GetScanConfigsResponse,
-    GetScannersResponse, GetSchedulesResponse, GetTargetsResponse, GetTasksResponse,
-    GetUsersResponse,
+    GetPortListsResponse, GetReportClosedCvesResponse, GetReportOperatingSystemsResponse,
+    GetReportTlsCertificatesResponse, GetReportVulnsResponse, GetReportsResponse,
+    GetResultsResponse, GetScanConfigsResponse, GetScannersResponse, GetSchedulesResponse,
+    GetTargetsResponse, GetTasksResponse, GetUsersResponse,
 };
 use gvm_protocol::Response as GmpResponse;
 
@@ -809,6 +809,45 @@ fn aggregate_vulnerability_preserves_counts_and_nested_nvt_identity() {
         result.nvt.as_ref().map(|nvt| nvt.cves.clone()),
         Some(vec!["CVE-2026-0001".to_string()])
     );
+}
+
+#[test]
+fn report_operating_system_maps_the_authoritative_gvmd_row_shape() {
+    // Regression coverage for #527: gvmd operating-system summaries expose
+    // best_os_cpe, best_os_txt, and hosts_count, not generic id/name/severity
+    // fields. Parse the exact live row shape through rust-gvm before mapping it
+    // into the gateway's public domain contract.
+    let parsed = GetReportOperatingSystemsResponse::from_response(&GmpResponse::from(
+        r#"<get_report_operating_systems_response status="200" status_text="OK">
+            <operating_systems>
+                <operating_system>
+                    <best_os_cpe>cpe:/o:debian:debian_linux:12</best_os_cpe>
+                    <best_os_txt>Debian GNU/Linux 12 (bookworm)</best_os_txt>
+                    <hosts_count>2</hosts_count>
+                </operating_system>
+            </operating_systems>
+            <report_operating_system_count>1<filtered>1</filtered></report_operating_system_count>
+        </get_report_operating_systems_response>"#,
+    ))
+    .expect("operating-system projection parses");
+
+    let operating_system = report_operating_system_from_gmp(
+        parsed
+            .items
+            .into_iter()
+            .next()
+            .expect("operating-system row"),
+    );
+
+    assert_eq!(
+        operating_system.best_os_cpe.as_deref(),
+        Some("cpe:/o:debian:debian_linux:12")
+    );
+    assert_eq!(
+        operating_system.best_os_text.as_deref(),
+        Some("Debian GNU/Linux 12 (bookworm)")
+    );
+    assert_eq!(operating_system.hosts_count, Some(2));
 }
 
 #[test]

@@ -655,15 +655,15 @@ components:
     ReportOperatingSystem:
       type: object
       properties:
-        id:
+        bestOsCpe:
           type: string
-          description: Backend row identifier when available.
-        name:
+          description: Best matching operating-system CPE reported by gvmd.
+        bestOsText:
           type: string
-          description: Operating-system label from the report summary row.
-        severity:
-          type: string
-          description: Backend severity summary for the operating-system row.
+          description: Human-readable best matching operating-system text reported by gvmd.
+        hostsCount:
+          type: integer
+          description: Number of report hosts with this best operating-system match.
 
     ReportOperatingSystemList:
       type: object

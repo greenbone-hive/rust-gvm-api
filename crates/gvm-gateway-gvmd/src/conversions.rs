@@ -780,9 +780,9 @@ pub(crate) fn report_operating_system_from_gmp(
     operating_system: gvm_gmp::responses::ReportOperatingSystemSummary,
 ) -> ReportOperatingSystem {
     ReportOperatingSystem {
-        id: operating_system.id,
-        name: operating_system.name,
-        severity: operating_system.severity,
+        best_os_cpe: operating_system.best_os_cpe,
+        best_os_text: operating_system.best_os_txt,
+        hosts_count: operating_system.hosts_count,
     }
 }
 

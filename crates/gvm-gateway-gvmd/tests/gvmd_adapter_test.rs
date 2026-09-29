@@ -3452,7 +3452,15 @@ async fn gvmd_adapter_report_summary_drill_downs_use_typed_commands() {
     assert_eq!(hosts.data[0].name.as_deref(), Some("192.0.2.10"));
     assert_eq!(ports.data[0].name.as_deref(), Some("22/tcp"));
     assert_eq!(applications.data[0].name.as_deref(), Some("OpenSSH"));
-    assert_eq!(operating_systems.data[0].name.as_deref(), Some("Debian"));
+    assert_eq!(
+        operating_systems.data[0].best_os_cpe.as_deref(),
+        Some("cpe:/o:debian:debian_linux")
+    );
+    assert_eq!(
+        operating_systems.data[0].best_os_text.as_deref(),
+        Some("Debian")
+    );
+    assert_eq!(operating_systems.data[0].hosts_count, Some(2));
     assert_eq!(cves.data[0].name.as_deref(), Some("CVE-2026-0001"));
 
     for command_name in [

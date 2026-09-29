@@ -14,7 +14,9 @@ const RUST_GVM_COMPONENTS: &[&str] = &[
     "gvm-mock-server",
     "gvm-protocol",
 ];
-const RUST_GVM_BASELINE: &str = "5c18ef5bee860e3443b25f924b2765a0800d64b1";
+// #527 must use the signed compatibility commit, which applies only the
+// operating-system projection parser fix to the reviewed #669 baseline.
+const RUST_GVM_BASELINE: &str = "8fd9711368947042c26d643455f310e245482689";
 
 const REMOVED_CANONICAL_TRANSITION_TYPES: &[&str] = &[
     "CreateTargetOpts",

@@ -481,6 +481,17 @@ pub struct ReportSummaryRow {
     pub severity: Option<String>,
 }
 
+/// The purpose-shaped summary row returned by a report operating-system projection.
+#[derive(Clone, Debug, Deserialize)]
+pub struct ReportOperatingSystemSummary {
+    #[serde(rename = "bestOsCpe")]
+    pub best_os_cpe: Option<String>,
+    #[serde(rename = "bestOsText")]
+    pub best_os_text: Option<String>,
+    #[serde(rename = "hostsCount")]
+    pub hosts_count: Option<u32>,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct OperatingSystemAsset {
     pub id: String,
