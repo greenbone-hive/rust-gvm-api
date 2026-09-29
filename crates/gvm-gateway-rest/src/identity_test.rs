@@ -4,9 +4,10 @@
 use serde_json::json;
 
 use super::{
-    AuthenticationType, IdentityListQuery, ModifyUserRequest, UserResponse, UserSettingsListQuery,
+    AuthenticationType, IdentityListQuery, ModifyUserRequest, ModifyUserSettingRequest,
+    UserResponse, UserSettingResponse, UserSettingsListQuery,
 };
-use gvm_gateway_domain::{IdentityOwner, IdentityResourceMeta, User};
+use gvm_gateway_domain::{IdentityOwner, IdentityResourceMeta, User, UserSetting};
 
 #[test]
 fn identity_queries_decode_filters_and_filter_ids() {
@@ -97,6 +98,39 @@ fn modify_user_request_preserves_rename_and_explicit_role_clear() {
     assert_eq!(clear.name.as_deref(), Some("renamed-user"));
     assert_eq!(clear.role_ids, Some(Vec::new()));
     assert_eq!(omitted.role_ids, None);
+}
+
+#[test]
+fn modify_user_setting_requires_value_but_preserves_an_explicit_empty_clear() {
+    // The PUT contract distinguishes a missing value (invalid) from an empty
+    // string, which is the canonical request's explicit clear operation.
+    let clear: ModifyUserSettingRequest =
+        serde_json::from_value(json!({ "value": "" })).expect("empty clear should deserialize");
+    assert_eq!(clear.validate().expect("empty clear is valid").value, "");
+
+    let missing: ModifyUserSettingRequest =
+        serde_json::from_value(json!({})).expect("missing value reaches validation");
+    assert!(missing.validate().is_err());
+}
+
+#[test]
+fn user_setting_rest_diagnostics_redact_values() {
+    // REST request/response DTOs must not reintroduce values into debug output
+    // after the upstream and domain layers have redacted them.
+    let secret = "rest-user-setting-secret-529";
+    let request: ModifyUserSettingRequest =
+        serde_json::from_value(json!({ "value": secret })).expect("request should deserialize");
+    let response = UserSettingResponse::from(UserSetting {
+        id: "123e4567-e89b-12d3-a456-426614174000".to_string(),
+        name: "confidential-setting".to_string(),
+        value: Some(secret.to_string()),
+        comment: None,
+    });
+
+    for diagnostic in [format!("{request:?}"), format!("{response:?}")] {
+        assert!(diagnostic.contains("<redacted>"));
+        assert!(!diagnostic.contains(secret));
+    }
 }
 
 #[test]
