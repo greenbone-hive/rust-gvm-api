@@ -813,7 +813,7 @@ impl ReportPort for MockReportPort {
         )))
     }
 
-    async fn delete_report(&self, _: &str, id: &str, _: bool) -> Result<(), GatewayError> {
+    async fn delete_report(&self, _: &str, id: &str) -> Result<(), GatewayError> {
         Err(GatewayError::NotFound(format!("report {id} not found")))
     }
 

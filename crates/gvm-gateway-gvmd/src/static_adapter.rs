@@ -663,7 +663,7 @@ impl ReportPort for StaticGvmdAdapter {
         ))
     }
 
-    async fn delete_report(&self, _: &str, _: &str, _: bool) -> Result<(), GatewayError> {
+    async fn delete_report(&self, _: &str, _: &str) -> Result<(), GatewayError> {
         Err(GatewayError::BackendUnavailable(
             "static adapter does not support reports".to_string(),
         ))

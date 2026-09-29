@@ -53,12 +53,12 @@ paths:
       operationId: deleteReport
       tags: [Reports]
       summary: Delete a report
-      description: Deletes a report. Pass `ultimate=true` to request permanent backend deletion instead of the default non-ultimate delete.
-      parameters:
-        - $ref: "./common.yaml#/components/parameters/UltimateDelete"
+      description: Permanently deletes a report. Report deletion cannot be undone and has no trash or caller-selectable permanence mode. The obsolete `ultimate` query parameter is rejected with `400 bad_request`.
       responses:
         "204":
           description: Report deleted
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
         "502":

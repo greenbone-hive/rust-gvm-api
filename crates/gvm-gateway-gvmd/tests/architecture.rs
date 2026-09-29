@@ -14,7 +14,7 @@ const RUST_GVM_COMPONENTS: &[&str] = &[
     "gvm-mock-server",
     "gvm-protocol",
 ];
-const RUST_GVM_BASELINE: &str = "63a8daf0e259a1574f1c54208efe31c72ed4fcb0";
+const RUST_GVM_BASELINE: &str = "4d992af6215ee4d794e1a555015abf19ff286c18";
 
 const REMOVED_CANONICAL_TRANSITION_TYPES: &[&str] = &[
     "CreateTargetOpts",
@@ -88,6 +88,7 @@ const REMOVED_CANONICAL_TRANSITION_TYPES: &[&str] = &[
     "ModifyReportConfigOpts",
     "GetNvtsOpts",
     "GetSecInfoOpts",
+    "GetReportsOpts",
     "CreateAgentGroupTaskOpts",
     "CreateOciImageTargetTaskOpts",
     "CreateWebApplicationTaskOpts",
@@ -265,7 +266,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
     );
     assert_eq!(
         *expected, RUST_GVM_BASELINE,
-        "rust-gvm components must remain on the reviewed issue #525 specialized-task/audit baseline"
+        "rust-gvm components must remain on the reviewed issue #526 canonical report-lifecycle baseline"
     );
 
     let workspace_manifest =
@@ -277,7 +278,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
             .unwrap_or_else(|| panic!("{component} must be declared in workspace dependencies"));
         assert!(
             dependency.contains(&format!("rev = \"{RUST_GVM_BASELINE}\"")),
-            "{component} must pin the reviewed issue #525 baseline in Cargo.toml: {dependency}"
+            "{component} must pin the reviewed issue #526 baseline in Cargo.toml: {dependency}"
         );
         assert!(
             !dependency.contains("branch ="),
@@ -486,7 +487,30 @@ fn migrated_task_and_report_families_stay_on_typed_execution() {
 
     let reports =
         fs::read_to_string(ports_dir.join("reports.rs")).expect("read report adapter module");
-    assert_typed_section(&reports, "GetReportsRequest::new", "report family");
+    let list_reports = section_between(&reports, "async fn list_reports", "async fn get_report");
+    assert_typed_section(list_reports, "GetReportsRequest {", "report listing");
+    assert!(
+        !list_reports.contains("GetReportsRequest::new"),
+        "report listing must use the canonical complete request value"
+    );
+
+    let get_report = section_between(&reports, "async fn get_report", "async fn export_report");
+    assert_typed_section(get_report, "GetReportRequest::new", "report detail");
+    assert!(
+        get_report.contains("request.details = Some(false)"),
+        "report detail must suppress canonical default details because results use a separate window"
+    );
+
+    let delete_report = section_between(
+        &reports,
+        "async fn delete_report",
+        "async fn get_report_results",
+    );
+    assert_typed_section(
+        delete_report,
+        "DeleteReportRequest::new",
+        "permanent report deletion",
+    );
 }
 
 #[test]

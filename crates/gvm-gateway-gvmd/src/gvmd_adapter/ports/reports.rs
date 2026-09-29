@@ -32,13 +32,16 @@ impl ReportPort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "reports.list",
-                GetReportsRequest::new(GetReportsOpts {
-                    report_id: None,
+                GetReportsRequest {
                     filter_string,
                     filter_id: None,
                     details: Some(false),
                     ignore_pagination: None,
-                }),
+                    notes_details: None,
+                    overrides_details: None,
+                    result_tags: None,
+                    lean: None,
+                },
             )
             .await?;
         let items = parsed
@@ -65,18 +68,10 @@ impl ReportPort for GvmdAdapter {
 
         // Fetch only report metadata; embedded results are loaded below through
         // the explicit result-window request.
+        let mut request = GetReportRequest::new(report_id);
+        request.details = Some(false);
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "reports.get",
-                GetReportsRequest::new(GetReportsOpts {
-                    report_id: Some(report_id),
-                    filter_string: None,
-                    filter_id: None,
-                    details: Some(false),
-                    ignore_pagination: None,
-                }),
-            )
+            .execute_with_session(session_token, "reports.get", request)
             .await?;
         let mut report = parsed
             .items
@@ -153,16 +148,11 @@ impl ReportPort for GvmdAdapter {
         })
     }
 
-    async fn delete_report(
-        &self,
-        session_token: &str,
-        id: &str,
-        ultimate: bool,
-    ) -> Result<(), GatewayError> {
+    async fn delete_report(&self, session_token: &str, id: &str) -> Result<(), GatewayError> {
         self.execute_with_session(
             session_token,
             "reports.delete",
-            DeleteReportRequest::new(parse_entity_id(id)?, ultimate),
+            DeleteReportRequest::new(parse_entity_id(id)?),
         )
         .await?;
         Ok(())
