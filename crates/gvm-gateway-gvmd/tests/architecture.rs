@@ -14,7 +14,7 @@ const RUST_GVM_COMPONENTS: &[&str] = &[
     "gvm-mock-server",
     "gvm-protocol",
 ];
-const RUST_GVM_BASELINE: &str = "e4b40f9196173d77e475b595f55b0425a47c4dff";
+const RUST_GVM_BASELINE: &str = "63a8daf0e259a1574f1c54208efe31c72ed4fcb0";
 
 const REMOVED_CANONICAL_TRANSITION_TYPES: &[&str] = &[
     "CreateTargetOpts",
@@ -88,6 +88,12 @@ const REMOVED_CANONICAL_TRANSITION_TYPES: &[&str] = &[
     "ModifyReportConfigOpts",
     "GetNvtsOpts",
     "GetSecInfoOpts",
+    "CreateAgentGroupTaskOpts",
+    "CreateOciImageTargetTaskOpts",
+    "CreateWebApplicationTaskOpts",
+    "CreateTaskOpts",
+    "GetTasksOpts",
+    "ModifyTaskOpts",
 ];
 
 #[derive(Debug, Eq, PartialEq)]
@@ -259,7 +265,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
     );
     assert_eq!(
         *expected, RUST_GVM_BASELINE,
-        "rust-gvm components must remain on the reviewed issue #524 standard-task baseline"
+        "rust-gvm components must remain on the reviewed issue #525 specialized-task/audit baseline"
     );
 
     let workspace_manifest =
@@ -271,7 +277,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
             .unwrap_or_else(|| panic!("{component} must be declared in workspace dependencies"));
         assert!(
             dependency.contains(&format!("rev = \"{RUST_GVM_BASELINE}\"")),
-            "{component} must pin the reviewed issue #524 baseline in Cargo.toml: {dependency}"
+            "{component} must pin the reviewed issue #525 baseline in Cargo.toml: {dependency}"
         );
         assert!(
             !dependency.contains("branch ="),
@@ -451,7 +457,32 @@ fn migrated_task_and_report_families_stay_on_typed_execution() {
     let ports_dir = manifest_dir.join("src/gvmd_adapter/ports");
 
     let tasks = fs::read_to_string(ports_dir.join("tasks.rs")).expect("read task adapter module");
-    assert_typed_section(&tasks, "GetTasksRequest {", "standard task family");
+    for (request, description) in [
+        ("GetTasksRequest {", "standard task family"),
+        (
+            "CreateAgentGroupTaskRequest::new",
+            "agent-group task creation",
+        ),
+        (
+            "CreateOciImageTargetTaskRequest::new",
+            "OCI-image task creation",
+        ),
+        (
+            "CreateWebApplicationTaskRequest::new",
+            "web-application task creation",
+        ),
+        ("CreateImportTaskRequest::new", "import task creation"),
+        ("GetAuditsRequest {", "audit listing"),
+        ("GetAuditRequest::new", "audit detail"),
+        ("CreateAuditRequest::new", "audit creation"),
+        ("ModifyAuditRequest::new", "audit modification"),
+        ("DeleteAuditRequest::new", "audit deletion"),
+        ("StartAuditRequest::new", "audit start"),
+        ("StopAuditRequest::new", "audit stop"),
+        ("ResumeAuditRequest::new", "audit resume"),
+    ] {
+        assert_typed_section(&tasks, request, description);
+    }
 
     let reports =
         fs::read_to_string(ports_dir.join("reports.rs")).expect("read report adapter module");
