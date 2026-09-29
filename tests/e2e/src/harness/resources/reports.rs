@@ -26,6 +26,27 @@ impl E2eHarness {
         .await
     }
 
+    pub async fn get_report_operating_systems_page(
+        &self,
+        token: &str,
+        report_id: &str,
+        page: u32,
+        per_page: u32,
+    ) -> Result<ListResponse<ReportOperatingSystemSummary>> {
+        self.send_json(
+            self.authed(
+                Method::GET,
+                &format!(
+                    "/api/v1/reports/{report_id}/operating-systems?page={page}&perPage={per_page}"
+                ),
+                token,
+            ),
+            StatusCode::OK,
+            "get report operating-system summary page",
+        )
+        .await
+    }
+
     pub async fn get_report(&self, token: &str, report_id: &str) -> Result<Report> {
         self.send_json(
             self.authed(

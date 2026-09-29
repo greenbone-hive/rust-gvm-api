@@ -313,20 +313,20 @@ impl From<ReportApplicationPage> for ReportApplicationListResponse {
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 #[schemars(rename = "ReportOperatingSystem")]
 pub(crate) struct ReportOperatingSystemResponse {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    severity: Option<String>,
+    #[serde(rename = "bestOsCpe", skip_serializing_if = "Option::is_none")]
+    best_os_cpe: Option<String>,
+    #[serde(rename = "bestOsText", skip_serializing_if = "Option::is_none")]
+    best_os_text: Option<String>,
+    #[serde(rename = "hostsCount", skip_serializing_if = "Option::is_none")]
+    hosts_count: Option<u32>,
 }
 
 impl From<ReportOperatingSystem> for ReportOperatingSystemResponse {
     fn from(operating_system: ReportOperatingSystem) -> Self {
         Self {
-            id: operating_system.id,
-            name: operating_system.name,
-            severity: operating_system.severity,
+            best_os_cpe: operating_system.best_os_cpe,
+            best_os_text: operating_system.best_os_text,
+            hosts_count: operating_system.hosts_count,
         }
     }
 }

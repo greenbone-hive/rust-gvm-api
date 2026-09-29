@@ -206,6 +206,44 @@ fn generated_openapi_preserves_key_schema_fields() {
     assert!(report_vulnerability_props.get("hostsCount").is_some());
     assert!(report_vulnerability_props.get("occurrences").is_some());
 
+    let report_operating_system_props = &schemas["ReportOperatingSystem"]["properties"];
+    for property in ["bestOsCpe", "bestOsText", "hostsCount"] {
+        assert!(
+            report_operating_system_props.get(property).is_some(),
+            "generated report operating-system schema is missing {property}"
+        );
+    }
+    for removed_property in ["id", "name", "severity"] {
+        assert!(
+            report_operating_system_props
+                .get(removed_property)
+                .is_none(),
+            "generated report operating-system schema retains false {removed_property} field"
+        );
+    }
+
+    // The curated OpenAPI source must publish the identical real gvmd row
+    // shape, rather than only verifying the generated endpoint contract.
+    let curated_reports = read_yaml(&root_spec_path().parent().unwrap().join("reports.yaml"));
+    let curated_report_operating_system_props =
+        &curated_reports["components"]["schemas"]["ReportOperatingSystem"]["properties"];
+    for property in ["bestOsCpe", "bestOsText", "hostsCount"] {
+        assert!(
+            curated_report_operating_system_props
+                .get(property)
+                .is_some(),
+            "curated report operating-system schema is missing {property}"
+        );
+    }
+    for removed_property in ["id", "name", "severity"] {
+        assert!(
+            curated_report_operating_system_props
+                .get(removed_property)
+                .is_none(),
+            "curated report operating-system schema retains false {removed_property} field"
+        );
+    }
+
     let report_error_props = &schemas["ReportError"]["properties"];
     assert!(report_error_props.get("nvtName").is_some());
     assert!(report_error_props.get("threat").is_none());

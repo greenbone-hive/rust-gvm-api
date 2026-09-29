@@ -181,15 +181,15 @@ pub struct ReportApplicationPage {
 /// Operating-system summary returned by a report drill-down.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ReportOperatingSystem {
-    /// Backend row identifier when available.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
-    /// Backend operating-system label.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    /// Backend severity summary.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub severity: Option<String>,
+    /// Best matching operating-system CPE reported by gvmd.
+    #[serde(rename = "bestOsCpe", skip_serializing_if = "Option::is_none")]
+    pub best_os_cpe: Option<String>,
+    /// Human-readable best matching operating-system text reported by gvmd.
+    #[serde(rename = "bestOsText", skip_serializing_if = "Option::is_none")]
+    pub best_os_text: Option<String>,
+    /// Number of report hosts with this best operating-system match.
+    #[serde(rename = "hostsCount", skip_serializing_if = "Option::is_none")]
+    pub hosts_count: Option<u32>,
 }
 
 /// Paginated report-operating-system response.
