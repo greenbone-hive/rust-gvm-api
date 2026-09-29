@@ -32,7 +32,7 @@ use crate::{
     openapi::{created_json, ok_json, problem_response, ResourceIdPathDoc, ScanConfigListQueryDoc},
     query::{decoded_query_pairs, parse_collection_query, DeleteResourceQueryParams},
     router::bearer_token,
-    supporting_resources::{NvtListResponse, NvtResponse},
+    supporting_resources::secinfo::nvts::{NvtListResponse, NvtResponse},
     targets::validate_uuid,
 };
 

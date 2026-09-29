@@ -15,12 +15,9 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::{
-    common::{
-        supporting_query, SupportingListQuery, SupportingResourceListQueryParams,
-        SupportingResourceMetaResponse,
-    },
-    require_nvt_oid, validate_optional_uuid,
+use super::common::{
+    require_nvt_oid, supporting_query, validate_optional_uuid, SupportingListQuery,
+    SupportingResourceListQueryParams, SupportingResourceMetaResponse,
 };
 use crate::{
     dto::{PaginationResponse, ResourceCreatedResponse, ResourceRefResponse},
