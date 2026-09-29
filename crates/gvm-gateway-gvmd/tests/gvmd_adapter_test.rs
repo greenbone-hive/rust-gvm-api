@@ -159,6 +159,29 @@ async fn create_mock_adapter_v22_8() -> (GvmdAdapter, MockGmpServer, String) {
     (adapter, server, token.to_string())
 }
 
+async fn create_task_target(adapter: &GvmdAdapter, token: &str, name: &str) -> String {
+    adapter
+        .create_target(
+            token,
+            CreateTargetInput {
+                name: name.to_string(),
+                comment: None,
+                hosts: vec!["192.0.2.10".to_string()],
+                exclude_hosts: vec![],
+                alive_test: None,
+                port_list_id: None,
+                reverse_lookup_only: None,
+                reverse_lookup_unify: None,
+                ssh_credential_id: None,
+                smb_credential_id: None,
+                esxi_credential_id: None,
+                snmp_credential_id: None,
+            },
+        )
+        .await
+        .expect("task target should be created")
+}
+
 async fn create_mock_adapter_v22_8_with_credential_store_error(
     message: &str,
 ) -> (GvmdAdapter, MockGmpServer, String) {
@@ -871,26 +894,48 @@ async fn gvmd_adapter_modify_task_forwards_alterable() {
 
 #[tokio::test]
 async fn gvmd_adapter_modify_audit_forwards_alterable() {
-    let (adapter, server, token) = create_mock_adapter().await;
+    let (adapter, server, token) = create_mock_adapter_v22_8().await;
+    let target_id = create_task_target(&adapter, &token, "Audit modify target").await;
+    let audit_id = adapter
+        .create_audit(
+            &token,
+            CreateTaskInput {
+                name: "Audit before modify".to_string(),
+                comment: None,
+                target: CreateTaskTarget::Classic {
+                    target_id,
+                    scan_config_id: "00000000-0000-0000-0000-000000000301".to_string(),
+                    scanner_id: "08b69003-5fc2-4037-a479-93b440211c73".to_string(),
+                },
+                schedule_id: None,
+                alert_ids: vec![],
+                alterable: None,
+                observers: vec![],
+                schedule_periods: None,
+                preferences: vec![],
+            },
+        )
+        .await
+        .expect("audit should be created");
     server.clear_history();
 
-    // Shared audit updates reuse ModifyTaskInput, so the adapter must not drop
-    // alterable there either.
+    // Canonical audit updates reuse ModifyTaskInput, retain explicit false,
+    // verify audit identity before mutation, and read the updated audit back.
     let result = adapter
         .modify_audit(
             &token,
-            "550e8400-e29b-41d4-a716-446655440011",
+            &audit_id,
             ModifyTaskInput {
+                name: Some("Audit after modify".to_string()),
                 alterable: Some(false),
                 ..Default::default()
             },
         )
         .await;
 
-    assert!(
-        result.is_err(),
-        "mock backend may reject the unknown audit, but the command should still be emitted"
-    );
+    let audit = result.expect("canonical audit modification should succeed");
+    assert_eq!(audit.name, "Audit after modify");
+    assert_eq!(audit.usage_type.as_deref(), Some("audit"));
     let history = server.command_history();
     let command = history
         .iter()
@@ -898,7 +943,19 @@ async fn gvmd_adapter_modify_audit_forwards_alterable() {
         .expect("modify_task command should be recorded");
     let xml = String::from_utf8(command.raw_xml().to_vec()).expect("xml command");
     assert!(xml.contains("<alterable>0</alterable>"));
-    assert!(xml.contains("<usage_type>audit</usage_type>"));
+    assert!(xml.contains(&format!("task_id=\"{audit_id}\"")));
+    assert!(
+        !xml.contains("usage_type"),
+        "gvmd does not accept a usage_type child on modify_task: {xml}"
+    );
+    assert!(
+        history
+            .iter()
+            .filter(|record| record.command_name() == "get_tasks")
+            .count()
+            >= 2,
+        "audit modification must verify scope and read the updated value back"
+    );
 
     server.shutdown().await;
 }
@@ -2431,9 +2488,11 @@ async fn gvmd_adapter_get_audit_scopes_usage_type_audit() {
     let xml = String::from_utf8(command.raw_xml().to_vec()).expect("xml command");
     assert!(xml.contains("usage_type=\"audit\""), "xml={xml}");
     assert!(
-        xml.contains(&format!("uuid={audit_id}")),
-        "get_audit must filter to the requested id; xml={xml}"
+        xml.contains(&format!("task_id=\"{audit_id}\"")),
+        "get_audit must use the canonical id selector; xml={xml}"
     );
+    assert!(xml.contains("details=\"1\""), "xml={xml}");
+    assert!(!xml.contains("filter="), "xml={xml}");
 
     server.shutdown().await;
 }
@@ -2480,7 +2539,7 @@ async fn gvmd_adapter_start_audit_verifies_audit_scope_before_acting() {
     let xml = String::from_utf8(verify.raw_xml().to_vec()).expect("xml command");
     assert!(xml.contains("usage_type=\"audit\""), "xml={xml}");
     assert!(
-        xml.contains(&format!("uuid={audit_id}")),
+        xml.contains(&format!("task_id=\"{audit_id}\"")),
         "start_audit must verify the requested audit id; xml={xml}"
     );
 
@@ -3817,16 +3876,18 @@ async fn gvmd_adapter_create_task_emits_each_typed_target_variant() {
     let scanner_id = "11111111-1111-1111-1111-111111111111";
     let target_id = "22222222-2222-2222-2222-222222222222";
     let config_id = "33333333-3333-3333-3333-333333333333";
+    let alert_id = "44444444-4444-4444-4444-444444444444";
     let input = |name: &str, target| CreateTaskInput {
         name: name.to_string(),
         comment: Some("typed selector".to_string()),
         target,
         schedule_id: None,
-        alert_ids: vec![],
-        alterable: Some(true),
-        observers: vec![],
-        schedule_periods: None,
-        preferences: vec![],
+        alert_ids: vec![alert_id.to_string()],
+        alterable: Some(false),
+        observers: vec!["alice".to_string()],
+        // Canonical complete values preserve this independently of scheduleId.
+        schedule_periods: Some(3),
+        preferences: vec![("auto_delete".to_string(), "keep".to_string())],
     };
 
     server.clear_history();
@@ -3863,6 +3924,11 @@ async fn gvmd_adapter_create_task_emits_each_typed_target_variant() {
     assert!(
         recorded_xml(&server, "create_task").contains(&format!("<agent_group id=\"{target_id}\""))
     );
+    assert_complete_specialized_task_xml(
+        &recorded_xml(&server, "create_task"),
+        scanner_id,
+        alert_id,
+    );
 
     server.clear_history();
     let _ = adapter
@@ -3877,8 +3943,9 @@ async fn gvmd_adapter_create_task_emits_each_typed_target_variant() {
             ),
         )
         .await;
-    assert!(recorded_xml(&server, "create_task")
-        .contains(&format!("<oci_image_target id=\"{target_id}\"")));
+    let xml = recorded_xml(&server, "create_task");
+    assert!(xml.contains(&format!("<oci_image_target id=\"{target_id}\"")));
+    assert_complete_specialized_task_xml(&xml, scanner_id, alert_id);
 
     server.clear_history();
     let _ = adapter
@@ -3893,8 +3960,9 @@ async fn gvmd_adapter_create_task_emits_each_typed_target_variant() {
             ),
         )
         .await;
-    assert!(recorded_xml(&server, "create_task")
-        .contains(&format!("<web_application_target id=\"{target_id}\"")));
+    let xml = recorded_xml(&server, "create_task");
+    assert!(xml.contains(&format!("<web_application_target id=\"{target_id}\"")));
+    assert_complete_specialized_task_xml(&xml, scanner_id, alert_id);
 
     server.clear_history();
     let import = CreateTaskInput {
@@ -3911,7 +3979,344 @@ async fn gvmd_adapter_create_task_emits_each_typed_target_variant() {
     let _ = adapter.create_task(&token, import).await;
     let xml = recorded_xml(&server, "create_task");
     assert!(xml.contains("<target id=\"0\""));
+    assert!(xml.contains("<comment>report owner</comment>"));
     assert!(!xml.contains("<scanner"));
+
+    server.shutdown().await;
+}
+
+fn assert_complete_specialized_task_xml(xml: &str, scanner_id: &str, alert_id: &str) {
+    // The adapter must populate every public common field on each canonical
+    // specialized request instead of only constructing its target selector.
+    assert!(xml.contains("<usage_type>scan</usage_type>"), "xml={xml}");
+    assert!(
+        xml.contains(&format!("<scanner id=\"{scanner_id}\"")),
+        "xml={xml}"
+    );
+    assert!(
+        xml.contains("<comment>typed selector</comment>"),
+        "xml={xml}"
+    );
+    assert!(xml.contains("<alterable>0</alterable>"), "xml={xml}");
+    assert!(
+        xml.contains("<schedule_periods>3</schedule_periods>"),
+        "xml={xml}"
+    );
+    assert!(
+        xml.contains(&format!("<alert id=\"{alert_id}\"")),
+        "xml={xml}"
+    );
+    assert!(xml.contains("<observers>alice</observers>"), "xml={xml}");
+    assert!(
+        xml.contains("<scanner_name>auto_delete</scanner_name>"),
+        "xml={xml}"
+    );
+    assert!(xml.contains("<value>keep</value>"), "xml={xml}");
+}
+
+#[tokio::test]
+async fn gvmd_adapter_specialized_tasks_keep_gmp_22_8_capability_gates() {
+    let (adapter, server, token) = create_mock_adapter().await;
+    let scanner_id = "11111111-1111-1111-1111-111111111111";
+    let target_id = "22222222-2222-2222-2222-222222222222";
+    let variants = [
+        CreateTaskTarget::AgentGroup {
+            agent_group_id: target_id.to_string(),
+            scanner_id: scanner_id.to_string(),
+        },
+        CreateTaskTarget::OciImage {
+            oci_image_target_id: target_id.to_string(),
+            scanner_id: scanner_id.to_string(),
+        },
+        CreateTaskTarget::WebApplication {
+            web_application_target_id: target_id.to_string(),
+            scanner_id: scanner_id.to_string(),
+        },
+    ];
+
+    // Each specialized semantic request must be rejected before transport on
+    // GMP 22.7; canonicalization must not turn it into an ungated create_task.
+    for (index, target) in variants.into_iter().enumerate() {
+        server.clear_history();
+        let error = adapter
+            .create_task(
+                &token,
+                CreateTaskInput {
+                    name: format!("Gated specialized task {index}"),
+                    comment: None,
+                    target,
+                    schedule_id: None,
+                    alert_ids: vec![],
+                    alterable: None,
+                    observers: vec![],
+                    schedule_periods: None,
+                    preferences: vec![],
+                },
+            )
+            .await
+            .expect_err("GMP 22.7 must reject specialized task creation");
+        assert!(
+            matches!(error, GatewayError::NotImplemented(_)),
+            "unexpected gate error: {error:?}"
+        );
+        assert!(
+            server
+                .command_history()
+                .iter()
+                .all(|record| record.command_name() != "create_task"),
+            "unsupported specialized requests must not reach gvmd"
+        );
+    }
+
+    // Import tasks are not part of the GMP 22.8 specialized capability gate.
+    let imported = adapter
+        .create_task(
+            &token,
+            CreateTaskInput {
+                name: "Ungated import".to_string(),
+                comment: Some("existing import semantics".to_string()),
+                target: CreateTaskTarget::Import,
+                schedule_id: None,
+                alert_ids: vec![],
+                alterable: None,
+                observers: vec![],
+                schedule_periods: None,
+                preferences: vec![],
+            },
+        )
+        .await
+        .expect("import task should remain available before GMP 22.8");
+    assert!(!imported.is_empty());
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_specialized_task_preferences_stay_redacted_from_traces() {
+    let _trace_lock = lock_tracing().await;
+    let logs = capture_tracing();
+    let (adapter, server, token) = create_mock_adapter_v22_8().await;
+    let secret = "specialized-preference-secret-525";
+
+    let _ = adapter
+        .create_task(
+            &token,
+            CreateTaskInput {
+                name: "Redacted web task".to_string(),
+                comment: None,
+                target: CreateTaskTarget::WebApplication {
+                    web_application_target_id: "22222222-2222-2222-2222-222222222222".to_string(),
+                    scanner_id: "11111111-1111-1111-1111-111111111111".to_string(),
+                },
+                schedule_id: None,
+                alert_ids: vec![],
+                alterable: None,
+                observers: vec![],
+                schedule_periods: None,
+                preferences: vec![("extension.preference".to_string(), secret.to_string())],
+            },
+        )
+        .await;
+
+    let output = String::from_utf8(logs.lock().unwrap().clone()).expect("trace output is UTF-8");
+    assert!(output.contains("tasks.create"), "output={output}");
+    assert!(!output.contains(secret), "output={output}");
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_canonical_audit_lifecycle_preserves_public_contract() {
+    let (adapter, server, token) = create_mock_adapter_v22_8().await;
+    let target_id = create_task_target(&adapter, &token, "Canonical audit target").await;
+    server.clear_history();
+
+    // This lifecycle covers canonical create/list/get/modify/delete and all
+    // existing actions while asserting pagination, read-back, and report IDs.
+    let audit_id = adapter
+        .create_audit(
+            &token,
+            CreateTaskInput {
+                name: "Canonical audit".to_string(),
+                comment: Some("created through REST-domain input".to_string()),
+                target: CreateTaskTarget::Classic {
+                    target_id,
+                    scan_config_id: "00000000-0000-0000-0000-000000000301".to_string(),
+                    scanner_id: "08b69003-5fc2-4037-a479-93b440211c73".to_string(),
+                },
+                schedule_id: None,
+                alert_ids: vec![],
+                alterable: Some(true),
+                observers: vec!["alice".to_string()],
+                schedule_periods: Some(4),
+                preferences: vec![("auto_delete".to_string(), "keep".to_string())],
+            },
+        )
+        .await
+        .expect("canonical audit creation should succeed");
+    let create_xml = recorded_xml(&server, "create_task");
+    assert!(create_xml.contains("<usage_type>audit</usage_type>"));
+    assert!(create_xml.contains("<comment>created through REST-domain input</comment>"));
+    assert!(create_xml.contains("<alterable>1</alterable>"));
+    assert!(create_xml.contains("<schedule_periods>4</schedule_periods>"));
+    assert!(create_xml.contains("<observers>alice</observers>"));
+    assert!(create_xml.contains("<scanner_name>auto_delete</scanner_name>"));
+
+    let detail = adapter
+        .get_audit(&token, &audit_id)
+        .await
+        .expect("canonical audit detail should decode");
+    assert_eq!(detail.id, audit_id);
+    assert_eq!(
+        detail.comment.as_deref(),
+        Some("created through REST-domain input")
+    );
+
+    let page = adapter
+        .list_audits(
+            &token,
+            &TaskQuery {
+                filter_string: None,
+                filter_id: None,
+                page: 1,
+                per_page: 1,
+            },
+        )
+        .await
+        .expect("canonical audit list should decode typed counts");
+    assert_eq!(page.pagination.page, 1);
+    assert_eq!(page.pagination.per_page, 1);
+    // PR #667's stateful mock treats first/rows as resource predicates; this
+    // known fixture limitation returns an empty page. Assert that the adapter
+    // still sends the canonical pagination contract. Count precedence and
+    // page arithmetic have direct unit coverage in filters_test.rs.
+    assert_eq!(page.pagination.total, 0);
+    assert_eq!(page.pagination.total_pages, 0);
+    assert!(page.data.is_empty());
+    let list_xml = server
+        .command_history()
+        .iter()
+        .rev()
+        .find(|record| {
+            record.command_name() == "get_tasks"
+                && String::from_utf8_lossy(record.raw_xml()).contains("filter=")
+        })
+        .map(|record| String::from_utf8_lossy(record.raw_xml()).into_owned())
+        .expect("audit list command should be recorded");
+    assert!(list_xml.contains("usage_type=\"audit\""), "xml={list_xml}");
+    assert!(
+        list_xml.contains("filter=\"first=1 rows=1\""),
+        "xml={list_xml}"
+    );
+
+    let modified = adapter
+        .modify_audit(
+            &token,
+            &audit_id,
+            ModifyTaskInput {
+                name: Some("Canonical audit updated".to_string()),
+                comment: Some("read back".to_string()),
+                preferences: vec![("auto_delete".to_string(), "no".to_string())],
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("canonical audit modify should return the read-back value");
+    assert_eq!(modified.name, "Canonical audit updated");
+    assert_eq!(modified.comment.as_deref(), Some("read back"));
+    assert_eq!(modified.usage_type.as_deref(), Some("audit"));
+
+    let started = adapter
+        .start_audit(&token, &audit_id)
+        .await
+        .expect("audit should start");
+    assert!(!started.report_id.is_empty());
+    adapter
+        .stop_audit(&token, &audit_id)
+        .await
+        .expect("running audit should stop");
+    let resumed = adapter
+        .resume_audit(&token, &audit_id)
+        .await
+        .expect("stopped audit should resume");
+    assert_eq!(resumed.report_id, started.report_id);
+    adapter
+        .stop_audit(&token, &audit_id)
+        .await
+        .expect("resumed audit should stop before deletion");
+
+    server.clear_history();
+    adapter
+        .delete_audit(&token, &audit_id)
+        .await
+        .expect("audit should be deleted non-ultimately");
+    let delete_xml = recorded_xml(&server, "delete_task");
+    assert!(delete_xml.contains(&format!("task_id=\"{audit_id}\"")));
+    assert!(delete_xml.contains("ultimate=\"0\""));
+    assert!(matches!(
+        adapter.get_audit(&token, &audit_id).await,
+        Err(GatewayError::NotFound(_))
+    ));
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_audit_mutations_reject_scan_task_ids_before_writes() {
+    let (adapter, server, token) = create_mock_adapter_v22_8().await;
+    let target_id = create_task_target(&adapter, &token, "Scan-only target").await;
+    let task_id = adapter
+        .create_task(
+            &token,
+            CreateTaskInput {
+                name: "Scan-only task".to_string(),
+                comment: None,
+                target: CreateTaskTarget::Classic {
+                    target_id,
+                    scan_config_id: "daba56c8-73ec-11df-a475-002264764cea".to_string(),
+                    scanner_id: "08b69003-5fc2-4037-a479-93b440211c73".to_string(),
+                },
+                schedule_id: None,
+                alert_ids: vec![],
+                alterable: None,
+                observers: vec![],
+                schedule_periods: None,
+                preferences: vec![],
+            },
+        )
+        .await
+        .expect("scan task should be created");
+
+    server.clear_history();
+    assert!(matches!(
+        adapter
+            .modify_audit(
+                &token,
+                &task_id,
+                ModifyTaskInput {
+                    name: Some("must not be applied".to_string()),
+                    ..Default::default()
+                },
+            )
+            .await,
+        Err(GatewayError::NotFound(_))
+    ));
+    assert!(matches!(
+        adapter.delete_audit(&token, &task_id).await,
+        Err(GatewayError::NotFound(_))
+    ));
+    assert!(
+        server
+            .command_history()
+            .iter()
+            .all(|record| !matches!(record.command_name(), "modify_task" | "delete_task")),
+        "audit routes must reject scan ids before mutation"
+    );
+    let task = adapter
+        .get_task(&token, &task_id)
+        .await
+        .expect("scan task should remain unchanged");
+    assert_eq!(task.name, "Scan-only task");
 
     server.shutdown().await;
 }
