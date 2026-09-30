@@ -29,9 +29,9 @@ gvm-gmp = { git = "https://github.com/greenbone-hive/rust-gvm", tag = "v0.7.0", 
 gvm-mock-server = { git = "https://github.com/greenbone-hive/rust-gvm", tag = "v0.7.0" }
 gvm-protocol = { git = "https://github.com/greenbone-hive/rust-gvm", tag = "v0.7.0" }
 http = "1.4.1"
-opentelemetry = { version = "0.32.0", features = ["trace"] }
-opentelemetry-otlp = { version = "0.32.0", features = ["grpc-tonic", "trace"] }
-opentelemetry_sdk = { version = "0.32.1", features = ["rt-tokio"] }
+opentelemetry = { version = "0.33.0", features = ["trace"] }
+opentelemetry-otlp = { version = "0.33.0", features = ["grpc-tonic", "trace"] }
+opentelemetry_sdk = { version = "0.33.0", features = ["rt-tokio"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.150"
 sha2 = "0.11.0"
@@ -42,7 +42,7 @@ tower = { version = "0.5.2", features = ["util"] }
 tower-http = { version = "0.6.11", features = ["trace"] }
 tracing = "0.1.41"
 tracing-journald = "0.3.2"
-tracing-opentelemetry = "0.33.0"
+tracing-opentelemetry = "0.34.0"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt", "std"] }
 uuid = { version = "1.23.2", features = ["v4", "serde"] }
 

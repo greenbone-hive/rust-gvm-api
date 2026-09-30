@@ -1,6 +1,15 @@
 # `next` Development Branch
 
-The long-lived `next` branch is the downstream integration lane for
+## Current status
+
+The typed request/response migration owned by rust-gvm-api #457 and rust-gvm
+#523 is complete on protected `main` through the bounded promotion tracked by
+#560. The `next` branch is retained as a protected, quiescent integration lane;
+new work targets `main` by default unless a separate issue explicitly requires
+`next`. Draft BDD PR #521 remains separate and must be rebased and revalidated
+under its own authorization before it can leave draft status.
+
+Historically, the long-lived `next` branch was the downstream integration lane for
 [rust-gvm-api issue #457](https://github.com/greenbone-hive/rust-gvm-api/issues/457)
 and the typed request/associated-response work owned by
 [rust-gvm issue #523](https://github.com/greenbone-hive/rust-gvm/issues/523).

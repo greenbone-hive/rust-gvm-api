@@ -7,6 +7,13 @@
 > **Technology Preview:** This code is provided as a Technology Preview only.
 > All APIs are still subject to change and must not be considered stable.
 
+> [!IMPORTANT]
+> **Breaking Technology Preview change:** GMP ticket discovery is not exposed by
+> `rust-gvm-api`; the former `/api/v1/tickets` routes were removed under
+> [issue #500](https://github.com/greenbone-hive/rust-gvm-api/issues/500).
+> Direct GMP consumers may continue using `rust-gvm`, while gateway integrations
+> should manage tickets through their external ticketing system.
+
 > [!NOTE]
 > **Releases** use a PR-gated GitHub Actions flow. Run the "Prepare Release"
 > workflow with the target version, label the generated PR `release`, and merge
@@ -16,9 +23,9 @@
 
 Gateway API surfaces for [Greenbone Vulnerability Management (GVM)](https://greenbone.github.io/docs/latest/), built on top of [rust-gvm](https://github.com/greenbone-hive/rust-gvm). REST is implemented on `main`; gRPC and MCP remain planned peer adapters over the same shared core.
 
-Forward-looking adoption of rust-gvm's typed request/response execution model
-is developed on the paired [`next`](docs/NEXT_BRANCH.md) branch without
-blocking feature and release work on `main`.
+The rust-gvm typed request/response execution migration is complete on `main`.
+The protected [`next`](docs/NEXT_BRANCH.md) branch is retained as a quiescent
+integration lane for separately authorized follow-up work.
 
 ## Overview
 
@@ -226,6 +233,7 @@ Useful follow-up commands:
 - [REST API OpenSpec](spec/rest-api/openspec.md)
 - [gRPC API OpenSpec](spec/grpc-api/openspec.md)
 - [Gateway Architecture](docs/gateway-architecture.md)
+- [GMP to REST Translation Model](docs/gmp-rest-translation.md)
 - [GMP API Proxy Analysis](docs/gmp-api-proxy-analysis.md)
 - [Proxy Access Control Analysis](docs/proxy-access-control-analysis.md)
 - [MCP Implementation Roadmap](docs/mcp-implementation-roadmap.md)
