@@ -184,6 +184,274 @@ fn rust_gvm_components_resolve_to_one_revision() {
     );
 }
 
+#[test]
+fn initial_adapter_slice_stays_on_typed_execution() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let adapter_dir = manifest_dir.join("src/gvmd_adapter");
+
+    let adapter = fs::read_to_string(adapter_dir.join("mod.rs")).expect("read adapter module");
+    let version_probe = section_between(
+        &adapter,
+        "pub async fn probe_version",
+        "/// Open and authenticate a session-bound GMP connection.",
+    );
+    assert_typed_section(
+        version_probe,
+        "GetVersionRequest::new()",
+        "backend version probe",
+    );
+
+    let session = fs::read_to_string(adapter_dir.join("session.rs")).expect("read session module");
+    let authentication = section_between(
+        &session,
+        "pub(super) async fn connect_authenticated_client",
+        "pub(super) type SharedClient",
+    );
+    assert_typed_section(
+        authentication,
+        "AuthenticateRequest::new(username, password)",
+        "session authentication",
+    );
+
+    let targets = fs::read_to_string(adapter_dir.join("ports/targets.rs"))
+        .expect("read target adapter module");
+    let standard_targets = section_between(
+        &targets,
+        "impl TargetPort for GvmdAdapter",
+        "async fn list_oci_image_targets",
+    );
+    for request in [
+        "GetTargetsRequest::new",
+        "GetTargetRequest::new",
+        "CreateTargetRequest::new",
+        "ModifyTargetRequest::new",
+        "DeleteTargetRequest::new",
+        "CloneTargetRequest::new",
+    ] {
+        assert!(
+            standard_targets.contains(request),
+            "standard target operations must use semantic request {request}"
+        );
+    }
+    assert_typed_section(
+        standard_targets,
+        "execute_with_session",
+        "standard target operations",
+    );
+
+    let reports = fs::read_to_string(adapter_dir.join("ports/reports.rs"))
+        .expect("read report adapter module");
+    let report_export =
+        section_between(&reports, "async fn export_report", "async fn delete_report");
+    assert_typed_section(
+        report_export,
+        "GmpGetReportExportRequest::new",
+        "report export",
+    );
+}
+
+#[test]
+fn migrated_task_and_report_families_stay_on_typed_execution() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let ports_dir = manifest_dir.join("src/gvmd_adapter/ports");
+
+    let tasks = fs::read_to_string(ports_dir.join("tasks.rs")).expect("read task adapter module");
+    assert_typed_section(&tasks, "GetTasksRequest::new", "task and audit family");
+
+    let reports =
+        fs::read_to_string(ports_dir.join("reports.rs")).expect("read report adapter module");
+    assert_typed_section(&reports, "GetReportsRequest::new", "report family");
+}
+
+#[test]
+fn migrated_security_and_config_families_stay_on_typed_execution() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let ports_dir = manifest_dir.join("src/gvmd_adapter/ports");
+
+    for (file, request, description) in [
+        (
+            "credentials.rs",
+            "GetCredentialsRequest::new",
+            "credential family",
+        ),
+        ("scanners.rs", "GetScannersRequest::new", "scanner family"),
+        (
+            "scan_configs.rs",
+            "GetScanConfigsRequest::new",
+            "config and policy family",
+        ),
+        (
+            "port_lists.rs",
+            "GetPortListsRequest::new",
+            "port-list family",
+        ),
+    ] {
+        let contents = fs::read_to_string(ports_dir.join(file))
+            .unwrap_or_else(|error| panic!("read {description} adapter module: {error}"));
+        assert_typed_section(&contents, request, description);
+    }
+}
+
+#[test]
+fn migrated_automation_families_stay_on_typed_execution() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let ports_dir = manifest_dir.join("src/gvmd_adapter/ports");
+
+    for (file, request, description) in [
+        ("alerts.rs", "GetAlertsRequest::new", "alert family"),
+        (
+            "schedules.rs",
+            "GetSchedulesRequest::new",
+            "schedule family",
+        ),
+    ] {
+        let contents = fs::read_to_string(ports_dir.join(file))
+            .unwrap_or_else(|error| panic!("read {description} adapter module: {error}"));
+        assert_typed_section(&contents, request, description);
+    }
+}
+
+#[test]
+fn migrated_identity_families_stay_on_typed_execution() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let identity = fs::read_to_string(manifest_dir.join("src/gvmd_adapter/ports/identity.rs"))
+        .expect("read identity adapter module");
+
+    for request in [
+        "GetUsersRequest::new",
+        "GetGroupsRequest::new",
+        "GetRolesRequest::new",
+        "GetPermissionsRequest::new",
+        "GetUserSettingsRequest::new",
+    ] {
+        assert!(
+            identity.contains(request),
+            "identity operations must use semantic request {request}"
+        );
+    }
+    assert_typed_section(&identity, "execute_with_session", "identity families");
+}
+
+#[test]
+fn remaining_adapter_families_and_raw_call_inventory_stay_typed() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let adapter_dir = manifest_dir.join("src/gvmd_adapter");
+    let ports_dir = adapter_dir.join("ports");
+
+    for (file, request, description) in [
+        ("feeds.rs", "GetFeedsRequest::new", "feed family"),
+        ("system.rs", "GetTimezonesRequest::new", "system family"),
+        ("agents.rs", "GetAgentsRequest::new", "agent family"),
+    ] {
+        let contents = fs::read_to_string(ports_dir.join(file))
+            .unwrap_or_else(|error| panic!("read {description} adapter module: {error}"));
+        assert_typed_section(&contents, request, description);
+    }
+
+    let targets =
+        fs::read_to_string(ports_dir.join("targets.rs")).expect("read target adapter module");
+    assert!(
+        targets.contains("GetOciImageTargetsRequest::new")
+            && targets.contains("GetWebApplicationTargetsRequest::new"),
+        "specialized target families must construct semantic requests"
+    );
+    assert_typed_section(&targets, "execute_with_session", "all target families");
+
+    let mut raw_calls = 0;
+    let mut manual_parsers = 0;
+    let mut raw_helpers = 0;
+    for file in rust_files(&adapter_dir) {
+        let contents = fs::read_to_string(file).expect("read production adapter source");
+        raw_calls += contents.matches(".call(").count();
+        manual_parsers += contents.matches("::from_response(").count();
+        raw_helpers += contents.matches("call_with_session").count();
+    }
+    assert_eq!(raw_calls, 0, "production adapters must stay fully typed");
+    assert_eq!(
+        manual_parsers, 0,
+        "production adapters must not manually parse GMP responses"
+    );
+    assert_eq!(
+        raw_helpers, 0,
+        "the obsolete raw session helper must stay removed"
+    );
+}
+
+#[test]
+fn migrated_supporting_resource_families_stay_on_typed_execution() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let ports_dir = manifest_dir.join("src/gvmd_adapter/ports");
+    let supporting = fs::read_to_string(ports_dir.join("supporting_resources.rs"))
+        .expect("read supporting-resource adapter module");
+
+    for request in [
+        "GetAssetsRequest::new",
+        "GetHostsRequest::new",
+        "GetOperatingSystemAssetsRequest::new",
+        "GetTlsCertificatesRequest::new",
+        "GetReportFormatsRequest::new",
+        "GetFiltersRequest::new",
+        "GetTagsRequest::new",
+        "GetNotesRequest::new",
+        "GetOverridesRequest::new",
+        "GetNvtsRequest::new",
+        "GetVulnsRequest::new",
+        "GetCvesRequest::new",
+    ] {
+        assert!(
+            supporting.contains(request),
+            "supporting-resource operations must use semantic request {request}"
+        );
+    }
+    assert!(
+        !supporting.contains("call_with_session"),
+        "supporting resources must not use the raw session helper"
+    );
+    assert_eq!(
+        supporting.matches(".call(").count(),
+        0,
+        "supporting resources must not bypass typed execution with raw calls"
+    );
+    assert_eq!(
+        supporting.matches("::from_response").count(),
+        0,
+        "supporting resources must not parse GMP responses manually"
+    );
+
+    let results =
+        fs::read_to_string(ports_dir.join("results.rs")).expect("read result adapter module");
+    assert_typed_section(&results, "GetResultsRequest::new", "result family");
+}
+
+fn section_between<'a>(contents: &'a str, start: &str, end: &str) -> &'a str {
+    contents
+        .split_once(start)
+        .unwrap_or_else(|| panic!("missing section start: {start}"))
+        .1
+        .split_once(end)
+        .unwrap_or_else(|| panic!("missing section end: {end}"))
+        .0
+}
+
+fn assert_typed_section(section: &str, semantic_request: &str, description: &str) {
+    assert!(
+        section.contains(semantic_request),
+        "{description} must construct {semantic_request}"
+    );
+    assert!(
+        section.contains(".execute(") || section.contains("execute_with_session"),
+        "{description} must use typed execution"
+    );
+    assert!(
+        !section.contains(".call(") && !section.contains("call_with_session"),
+        "{description} must not use the raw call boundary"
+    );
+    assert!(
+        !section.contains("::from_response("),
+        "{description} must not manually pair a response parser"
+    );
+}
+
 fn find_forbidden_gmp_wire_handling(manifest_dir: &Path, dir: &Path) -> Vec<Finding> {
     let mut findings = Vec::new();
     for file in rust_files(dir) {

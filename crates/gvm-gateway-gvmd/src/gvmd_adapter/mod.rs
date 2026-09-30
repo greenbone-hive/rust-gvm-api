@@ -11,7 +11,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use gvm_client::{GetReportDetailsOpts, GetReportExportOpts, GmpClient};
+use gvm_client::{GetReportDetailsOpts, GetReportExportOpts, GmpClient, GvmError};
 use gvm_connection::UnixSocketConnection;
 use gvm_gateway_domain::{
     Alert, AlertPage, AlertPort, AlertQuery, AssetQuery, AuthPort, CertBundAdvisory,
@@ -48,134 +48,145 @@ use gvm_gateway_domain::{
 use gvm_gmp::{
     commands::{
         alerts::{
-            create_alert, delete_alert, get_alert, get_alerts, modify_alert, AlertData, AlertOpts,
-            GetAlertsOpts,
+            AlertData, AlertOpts, CreateAlertRequest, DeleteAlertRequest, GetAlertRequest,
+            GetAlertsOpts, GetAlertsRequest, ModifyAlertRequest,
         },
         assets::{
-            delete_asset, get_assets, modify_asset, DeleteAssetOpts, GetAssetsOpts, ModifyAssetOpts,
+            DeleteAssetOpts, DeleteAssetRequest, GetAssetRequest, GetAssetsOpts, GetAssetsRequest,
+            ModifyAssetOpts, ModifyAssetRequest,
         },
         configs::{
-            clone_config, delete_config, get_config, get_configs,
-            modify_config as modify_config_generic, CloneConfigOpts, ConfigUsageType,
-            DeleteConfigOpts, GetConfigOpts, GetConfigsOpts, ModifyConfigOpts,
+            CloneConfigOpts, CloneConfigRequest, ConfigUsageType, DeleteConfigOpts,
+            DeleteConfigRequest, GetConfigOpts, GetConfigRequest, GetConfigsOpts,
+            GetConfigsRequest, ModifyConfigOpts, ModifyConfigRequest,
         },
         credentials::{
-            create_credential, create_credential_store_credential, delete_credential,
-            get_credential, get_credentials, modify_credential, modify_credential_store,
-            modify_credential_store_credential, CredentialOpts, CredentialStoreCredentialOpts,
-            CredentialStorePreference, GetCredentialsOpts, ModifyCredentialOpts,
-            ModifyCredentialStoreCredentialOpts, ModifyCredentialStoreOpts,
+            CreateCredentialRequest, CreateCredentialStoreCredentialRequest, CredentialOpts,
+            CredentialStoreCredentialOpts, CredentialStorePreference, DeleteCredentialRequest,
+            GetCredentialRequest, GetCredentialStoreRequest, GetCredentialStoresOpts,
+            GetCredentialStoresRequest, GetCredentialsOpts, GetCredentialsRequest,
+            ModifyCredentialOpts, ModifyCredentialRequest, ModifyCredentialStoreCredentialOpts,
+            ModifyCredentialStoreCredentialRequest, ModifyCredentialStoreOpts,
+            ModifyCredentialStoreRequest, VerifyCredentialStoreRequest,
         },
-        feed::{get_feed, get_feeds},
+        feed::{GetFeedRequest, GetFeedsRequest},
         filters::{
-            clone_filter, create_filter, delete_filter, get_filter, get_filters, modify_filter,
-            GetFiltersOpts,
+            CloneFilterRequest, CreateFilterRequest, DeleteFilterRequest, GetFilterRequest,
+            GetFiltersOpts, GetFiltersRequest, ModifyFilterRequest,
         },
         groups::{
-            create_group, delete_group, get_group, get_groups, modify_group, GetGroupsOpts,
-            GroupOpts,
+            CreateGroupRequest, DeleteGroupRequest, GetGroupRequest, GetGroupsOpts,
+            GetGroupsRequest, GroupOpts, ModifyGroupRequest,
         },
-        hosts::{create_host, delete_host, get_host, get_hosts, modify_host, GetHostsOpts},
-        notes::{create_note, delete_note, get_notes, modify_note, GetNotesOpts},
-        nvts::{get_nvt, get_nvt_families, get_nvts, get_scan_config_nvts, GetNvtsOpts},
+        hosts::{
+            CreateHostRequest, DeleteHostRequest, GetHostRequest, GetHostsOpts, GetHostsRequest,
+            ModifyHostRequest,
+        },
+        notes::{
+            CreateNoteRequest, DeleteNoteRequest, GetNotesOpts, GetNotesRequest, ModifyNoteRequest,
+        },
+        nvts::{
+            GetNvtFamiliesRequest, GetNvtRequest, GetNvtsOpts, GetNvtsRequest,
+            GetScanConfigNvtsRequest,
+        },
         oci_image_targets::{
-            clone_oci_image_target, create_oci_image_target, delete_oci_image_target,
-            get_oci_image_target, get_oci_image_targets, modify_oci_image_target,
-            CreateOciImageTargetOpts, GetOciImageTargetsOpts, ModifyOciImageTargetOpts,
+            CloneOciImageTargetRequest, CreateOciImageTargetOpts, CreateOciImageTargetRequest,
+            DeleteOciImageTargetRequest, GetOciImageTargetRequest, GetOciImageTargetsOpts,
+            GetOciImageTargetsRequest, ModifyOciImageTargetOpts, ModifyOciImageTargetRequest,
         },
         operating_systems::{
-            delete_operating_system, get_operating_system, get_operating_systems,
-            modify_operating_system, GetOperatingSystemsOpts,
+            DeleteOperatingSystemAssetRequest, GetOperatingSystemAssetRequest,
+            GetOperatingSystemAssetsRequest, GetOperatingSystemsOpts,
+            ModifyOperatingSystemAssetRequest,
         },
         overrides::{
-            create_override, delete_override, get_overrides, modify_override, GetOverridesOpts,
+            CreateOverrideRequest, DeleteOverrideRequest, GetOverridesOpts, GetOverridesRequest,
+            ModifyOverrideRequest,
         },
         permissions::{
-            create_permission, delete_permission, get_permission, get_permissions,
-            modify_permission, GetPermissionsOpts, PermissionOpts,
+            CreatePermissionRequest, DeletePermissionRequest, GetPermissionRequest,
+            GetPermissionsOpts, GetPermissionsRequest, ModifyPermissionRequest, PermissionOpts,
         },
         port_lists::{
-            create_port_list, delete_port_list, get_port_list, get_port_lists, modify_port_list,
-            GetPortListsOpts, ModifyPortListOpts, PortListOpts,
+            CreatePortListRequest, DeletePortListRequest, GetPortListRequest, GetPortListsOpts,
+            GetPortListsRequest, ModifyPortListOpts, ModifyPortListRequest, PortListOpts,
         },
-        report_formats::{get_report_format, get_report_formats, GetReportFormatsOpts},
-        reports::{delete_report, get_reports, GetReportsOpts},
-        results::{get_result, get_results, GetResultsOpts},
+        report_formats::{GetReportFormatRequest, GetReportFormatsOpts, GetReportFormatsRequest},
+        reports::{
+            DeleteReportRequest, GetReportApplicationsRequest, GetReportClosedCvesRequest,
+            GetReportCvesRequest, GetReportErrorsRequest,
+            GetReportExportRequest as GmpGetReportExportRequest, GetReportHostsRequest,
+            GetReportOperatingSystemsRequest, GetReportPortsRequest,
+            GetReportTlsCertificatesRequest, GetReportVulnsRequest, GetReportsOpts,
+            GetReportsRequest,
+        },
+        results::{GetResultRequest, GetResultsOpts, GetResultsRequest},
         roles::{
-            create_role, delete_role, get_role, get_roles, modify_role, GetRolesOpts, RoleOpts,
+            CreateRoleRequest, DeleteRoleRequest, GetRoleRequest, GetRolesOpts, GetRolesRequest,
+            ModifyRoleRequest, RoleOpts,
         },
         scan_configs::{
-            create_policy, create_scan_config, delete_policy as delete_policy_cmd,
-            delete_scan_config, get_policies, get_scan_config, get_scan_config_preference,
-            get_scan_config_preferences, get_scan_configs, modify_scan_config_set_family_selection,
-            modify_scan_config_set_nvt_preference, modify_scan_config_set_nvt_selection,
-            modify_scan_config_set_scanner_preference, ConfigOpts, GetScanConfigPreferencesOpts,
-            GetScanConfigsOpts, NvtFamilySelection,
+            ConfigOpts, CreatePolicyRequest, CreateScanConfigRequest, DeletePolicyRequest,
+            DeleteScanConfigRequest, GetPoliciesRequest, GetScanConfigPreferenceRequest,
+            GetScanConfigPreferencesOpts, GetScanConfigPreferencesRequest, GetScanConfigRequest,
+            GetScanConfigsOpts, GetScanConfigsRequest, ModifyScanConfigSetFamilySelectionRequest,
+            ModifyScanConfigSetNvtPreferenceRequest, ModifyScanConfigSetNvtSelectionRequest,
+            ModifyScanConfigSetScannerPreferenceRequest, NvtFamilySelection,
         },
-        scanners::{get_scanner, get_scanners, GetScannersOpts},
+        scanners::{GetScannerRequest, GetScannersOpts, GetScannersRequest},
         schedules::{
-            create_schedule, delete_schedule, get_schedule, get_schedules, modify_schedule,
-            GetSchedulesOpts, ScheduleOpts,
+            CreateScheduleRequest, DeleteScheduleRequest, GetScheduleRequest, GetSchedulesOpts,
+            GetSchedulesRequest, ModifyScheduleRequest, ScheduleOpts,
         },
-        secinfo::GetSecInfoOpts,
-        system::{get_timezones, get_vulns, FilteredGetOpts},
-        tags::{clone_tag, create_tag, delete_tag, get_tag, get_tags, modify_tag, GetTagsOpts},
+        secinfo::{
+            GetCertBundAdvisoriesRequest, GetCertBundAdvisoryRequest, GetCpeRequest,
+            GetCpesRequest, GetCveRequest, GetCvesRequest, GetDfnCertAdvisoriesRequest,
+            GetDfnCertAdvisoryRequest, GetSecInfoOpts,
+        },
+        system::{FilteredGetOpts, GetTimezonesRequest, GetVulnsRequest},
+        tags::{
+            CloneTagRequest, CreateTagRequest, DeleteTagRequest, GetTagRequest, GetTagsOpts,
+            GetTagsRequest, ModifyTagRequest,
+        },
         targets::{
-            clone_target, create_target, delete_target, get_target, get_targets, modify_target,
-            CreateTargetOpts, GetTargetsOpts, ModifyTargetOpts,
+            CloneTargetRequest, CreateTargetOpts, CreateTargetRequest, DeleteTargetRequest,
+            GetTargetRequest, GetTargetsOpts, GetTargetsRequest, ModifyTargetOpts,
+            ModifyTargetRequest,
         },
         tasks::{
-            clone_task, create_agent_group_task, create_audit, create_import_task,
-            create_oci_image_target_task, create_task, create_web_application_task,
-            delete_audit as delete_audit_cmd, delete_task as delete_task_cmd, get_audits,
-            get_task as get_task_cmd, get_tasks, modify_audit as modify_audit_cmd,
-            modify_task as modify_task_cmd, resume_audit as resume_audit_cmd,
-            resume_task as resume_task_cmd, start_audit as start_audit_cmd,
-            start_task as start_task_cmd, stop_audit as stop_audit_cmd, stop_task as stop_task_cmd,
-            CreateAgentGroupTaskOpts, CreateOciImageTargetTaskOpts, CreateTaskOpts,
-            CreateWebApplicationTaskOpts, GetTasksOpts, ModifyTaskOpts,
+            CloneTaskRequest, CreateAgentGroupTaskOpts, CreateAgentGroupTaskRequest,
+            CreateAuditRequest, CreateImportTaskRequest, CreateOciImageTargetTaskOpts,
+            CreateOciImageTargetTaskRequest, CreateTaskOpts, CreateTaskRequest,
+            CreateWebApplicationTaskOpts, CreateWebApplicationTaskRequest, DeleteAuditRequest,
+            DeleteTaskRequest, GetAuditsRequest, GetTaskRequest, GetTasksOpts, GetTasksRequest,
+            ModifyAuditRequest, ModifyTaskOpts, ModifyTaskRequest, ResumeAuditRequest,
+            ResumeTaskRequest, StartAuditRequest, StartTaskRequest, StopAuditRequest,
+            StopTaskRequest,
         },
-        tls_certificates::{get_tls_certificate, get_tls_certificates, GetTlsCertificatesOpts},
+        tls_certificates::{
+            GetTlsCertificateRequest, GetTlsCertificatesOpts, GetTlsCertificatesRequest,
+        },
         user_settings::{
-            get_user_setting, get_user_settings, modify_user_setting, GetUserSettingsOpts,
-            ModifyUserSettingOpts,
+            GetUserSettingRequest, GetUserSettingsOpts, GetUserSettingsRequest,
+            ModifyUserSettingOpts, ModifyUserSettingRequest,
         },
         users::{
-            create_user, delete_user, get_user, get_users, modify_user, GetUsersOpts,
-            ModifyUserOpts, UserHostAccess, UserOpts,
+            CreateUserRequest, DeleteUserRequest, GetUserRequest, GetUsersOpts, GetUsersRequest,
+            ModifyUserOpts, ModifyUserRequest, UserHostAccess, UserOpts,
         },
         web_application_targets::{
-            clone_web_application_target, create_web_application_target,
-            delete_web_application_target, get_web_application_target, get_web_application_targets,
-            modify_web_application_target, CreateWebApplicationTargetOpts,
-            GetWebApplicationTargetsOpts, ModifyWebApplicationTargetOpts,
+            CloneWebApplicationTargetRequest, CreateWebApplicationTargetOpts,
+            CreateWebApplicationTargetRequest, DeleteWebApplicationTargetRequest,
+            GetWebApplicationTargetRequest, GetWebApplicationTargetsOpts,
+            GetWebApplicationTargetsRequest, ModifyWebApplicationTargetOpts,
+            ModifyWebApplicationTargetRequest,
         },
     },
-    responses::{
-        ActionResponse, CreateAlertResponse, CreateConfigResponse, CreateCredentialResponse,
-        CreateFilterResponse, CreateGroupResponse, CreateHostResponse, CreateNoteResponse,
-        CreateOciImageTargetResponse, CreateOverrideResponse, CreatePermissionResponse,
-        CreatePortListResponse, CreateRoleResponse, CreateScanConfigResponse,
-        CreateScheduleResponse, CreateTagResponse, CreateTargetResponse, CreateTaskResponse,
-        CreateUserResponse, CreateWebApplicationTargetResponse, GetAlertsResponse,
-        GetAssetsResponse, GetConfigsResponse, GetCredentialsResponse, GetFeedsResponse,
-        GetFiltersResponse, GetGroupsResponse, GetHostsResponse, GetNotesResponse,
-        GetNvtFamiliesResponse, GetNvtsResponse, GetOciImageTargetsResponse,
-        GetOperatingSystemAssetsResponse, GetOverridesResponse, GetPermissionsResponse,
-        GetPortListsResponse, GetPreferencesResponse, GetReportApplicationsResponse,
-        GetReportCvesResponse, GetReportFormatsResponse, GetReportHostsResponse,
-        GetReportOperatingSystemsResponse, GetReportPortsResponse, GetReportsResponse,
-        GetResultsResponse, GetRolesResponse, GetScanConfigsResponse, GetScannersResponse,
-        GetSchedulesResponse, GetTagsResponse, GetTargetsResponse, GetTasksResponse,
-        GetTimezonesResponse, GetTlsCertificatesResponse, GetUserSettingsResponse,
-        GetUsersResponse, GetVersionResponse, GetVulnerabilitiesResponse,
-        GetWebApplicationTargetsResponse, ModifyUserSettingResponse, ResumeTaskResponse,
-        StartTaskResponse, User as GmpUser,
-    },
-    CollectionUpdate, CredentialStoreCredentialType, EntityId, Pagination as GmpPagination,
-    ScalarUpdate, TargetHost, TargetHosts, TargetPortRange, TargetPortSelection,
+    responses::User as GmpUser,
+    CollectionUpdate, CredentialStoreCredentialType, EntityId, GmpRequest,
+    Pagination as GmpPagination, ScalarUpdate, TargetHost, TargetHosts, TargetPortRange,
+    TargetPortSelection,
 };
-use gvm_protocol::{Request, Response};
 use tracing::{field, info_span, Instrument};
 
 mod filters;
@@ -192,11 +203,11 @@ mod mod_test;
 use crate::conversions::{
     alert_from_gmp, cert_bund_advisory_from_gmp, cpe_from_gmp, credential_from_gmp, cve_from_gmp,
     dfn_cert_advisory_from_gmp, feed_from_gmp, filter_from_gmp, generic_asset_from_gmp,
-    generic_config_from_gmp, group_from_gmp, host_from_gmp, map_gvm_error, map_parse_error,
-    note_from_gmp, nvt_family_from_gmp, nvt_from_gmp, oci_image_target_from_gmp,
-    operating_system_from_gmp, override_from_gmp, parse_alert_condition, parse_alert_event,
-    parse_alert_method, parse_alive_test, parse_asset_type, parse_config_usage_type,
-    parse_credential_type, parse_entity_id, parse_hosts_ordering, parse_permission_subject_type,
+    generic_config_from_gmp, group_from_gmp, host_from_gmp, map_gvm_error, note_from_gmp,
+    nvt_family_from_gmp, nvt_from_gmp, oci_image_target_from_gmp, operating_system_from_gmp,
+    override_from_gmp, parse_alert_condition, parse_alert_event, parse_alert_method,
+    parse_alive_test, parse_asset_type, parse_config_usage_type, parse_credential_type,
+    parse_entity_id, parse_hosts_ordering, parse_permission_subject_type,
     parse_snmp_auth_algorithm, parse_snmp_privacy_algorithm, parse_user_auth_type,
     permission_from_gmp, port_list_from_gmp, report_application_from_gmp,
     report_closed_cve_from_gmp, report_cve_from_gmp, report_error_from_gmp, report_format_from_gmp,
@@ -261,11 +272,10 @@ impl GvmdAdapter {
                 .await
                 .map_err(map_gvm_error)?;
             let negotiated = client.version().to_string();
-            let response = client
-                .call(gvm_gmp::commands::version::get_version())
+            let parsed = client
+                .execute(gvm_gmp::commands::version::GetVersionRequest::new())
                 .await
                 .map_err(map_gvm_error)?;
-            let parsed = GetVersionResponse::from_response(&response).map_err(map_parse_error)?;
 
             if parsed.version.trim().is_empty() {
                 Ok(negotiated)
@@ -345,12 +355,27 @@ impl GvmdAdapter {
             .ok_or_else(|| GatewayError::SessionInvalidated("missing gvmd session".to_string()))
     }
 
-    async fn call_with_session<R: Request>(
+    async fn execute_with_session<R: GmpRequest>(
         &self,
         session_token: &str,
         operation: &'static str,
         request: R,
-    ) -> Result<Response, GatewayError> {
+    ) -> Result<R::Response, GatewayError> {
+        self.execute_with_session_mapped(session_token, operation, request, map_gvm_error)
+            .await
+    }
+
+    async fn execute_with_session_mapped<R, F>(
+        &self,
+        session_token: &str,
+        operation: &'static str,
+        request: R,
+        map_error: F,
+    ) -> Result<R::Response, GatewayError>
+    where
+        R: GmpRequest,
+        F: FnOnce(GvmError) -> GatewayError,
+    {
         let client = self.session_client(session_token)?;
         let span = info_span!(
             "gvmd.request",
@@ -365,9 +390,9 @@ impl GvmdAdapter {
             let response = client
                 .lock()
                 .await?
-                .call(request)
+                .execute(request)
                 .await
-                .map_err(map_gvm_error)?;
+                .map_err(map_error)?;
             tracing::Span::current().record("gvmd_status", field::display("ok"));
             Ok(response)
         }
@@ -376,10 +401,13 @@ impl GvmdAdapter {
     }
 
     async fn get_gmp_user(&self, session_token: &str, id: &str) -> Result<GmpUser, GatewayError> {
-        let response = self
-            .call_with_session(session_token, "users.get", get_user(&parse_entity_id(id)?))
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "users.get",
+                GetUserRequest::new(parse_entity_id(id)?),
+            )
             .await?;
-        let parsed = GetUsersResponse::from_response(&response).map_err(map_parse_error)?;
         parsed
             .items
             .into_iter()
@@ -396,10 +424,13 @@ impl GvmdAdapter {
             return Ok(None);
         };
 
-        let response = self
-            .call_with_session(session_token, "filters.get", get_filter(filter_id))
+        let parsed = self
+            .execute_with_session(
+                session_token,
+                "filters.get",
+                GetFilterRequest::new(filter_id.clone()),
+            )
             .await?;
-        let parsed = GetFiltersResponse::from_response(&response).map_err(map_parse_error)?;
         parsed
             .items
             .into_iter()

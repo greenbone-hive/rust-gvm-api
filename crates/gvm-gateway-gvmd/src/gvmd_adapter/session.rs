@@ -10,10 +10,10 @@ use std::{
 use gvm_client::GmpClient;
 use gvm_connection::UnixSocketConnection;
 use gvm_gateway_domain::GatewayError;
-use gvm_gmp::{commands::authentication::authenticate, responses::AuthenticateResponse};
+use gvm_gmp::commands::authentication::AuthenticateRequest;
 use tokio::sync::{Mutex as AsyncMutex, OwnedSemaphorePermit, Semaphore};
 
-use crate::conversions::{map_gvm_error, map_parse_error};
+use crate::conversions::map_gvm_error;
 
 const MAX_SESSION_COMMANDS_IN_FLIGHT_OR_WAITING: usize = 64;
 
@@ -85,11 +85,10 @@ pub(super) async fn connect_authenticated_client(
     let mut client = GmpClient::connect(connection)
         .await
         .map_err(map_gvm_error)?;
-    let response = client
-        .call(authenticate(username, password))
+    client
+        .execute(AuthenticateRequest::new(username, password))
         .await
         .map_err(map_gvm_error)?;
-    AuthenticateResponse::from_response(&response).map_err(map_parse_error)?;
     Ok(client)
 }
 
