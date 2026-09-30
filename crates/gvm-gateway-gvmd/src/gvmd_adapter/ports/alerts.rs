@@ -32,12 +32,12 @@ impl AlertPort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "alerts.list",
-                GetAlertsRequest::new(GetAlertsOpts {
+                GetAlertsRequest {
                     filter_string,
                     filter_id: None,
                     trash: None,
                     details: Some(true),
-                }),
+                },
             )
             .await?;
         let items = parsed
@@ -58,38 +58,33 @@ impl AlertPort for GvmdAdapter {
         session_token: &str,
         input: CreateAlertInput,
     ) -> Result<String, GatewayError> {
+        let event = input
+            .event
+            .as_deref()
+            .ok_or_else(|| GatewayError::InvalidInput("event is required".to_string()))
+            .and_then(parse_alert_event)?;
+        let condition = input
+            .condition
+            .as_deref()
+            .ok_or_else(|| GatewayError::InvalidInput("condition is required".to_string()))
+            .and_then(parse_alert_condition)?;
+        let method = input
+            .method
+            .as_deref()
+            .ok_or_else(|| GatewayError::InvalidInput("method is required".to_string()))
+            .and_then(parse_alert_method)?;
+        let mut request = CreateAlertRequest::new(input.name, event, condition, method);
+        request.comment = input.comment;
+        request.event_data = alert_data(input.event_data);
+        request.condition_data = alert_data(input.condition_data);
+        request.method_data = alert_data(input.method_data);
+        request.filter_id = input
+            .filter_id
+            .as_deref()
+            .map(parse_entity_id)
+            .transpose()?;
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "alerts.create",
-                CreateAlertRequest::new(
-                    input.name,
-                    AlertOpts {
-                        name: None,
-                        comment: input.comment,
-                        event: input.event.as_deref().map(parse_alert_event).transpose()?,
-                        event_data: alert_data(input.event_data),
-                        condition: input
-                            .condition
-                            .as_deref()
-                            .map(parse_alert_condition)
-                            .transpose()?,
-                        condition_data: alert_data(input.condition_data),
-                        method: input
-                            .method
-                            .as_deref()
-                            .map(parse_alert_method)
-                            .transpose()?,
-                        method_data: alert_data(input.method_data),
-                        filter_id: input
-                            .filter_id
-                            .as_deref()
-                            .map(parse_entity_id)
-                            .transpose()?,
-                        active: None,
-                    },
-                ),
-            )
+            .execute_with_session(session_token, "alerts.create", request)
             .await?;
         Ok(parsed.id.to_string())
     }
@@ -116,38 +111,30 @@ impl AlertPort for GvmdAdapter {
         id: &str,
         input: ModifyAlertInput,
     ) -> Result<Alert, GatewayError> {
-        self.execute_with_session(
-            session_token,
-            "alerts.modify",
-            ModifyAlertRequest::new(
-                parse_entity_id(id)?,
-                AlertOpts {
-                    name: input.name,
-                    comment: input.comment,
-                    event: input.event.as_deref().map(parse_alert_event).transpose()?,
-                    event_data: alert_data(input.event_data.unwrap_or_default()),
-                    condition: input
-                        .condition
-                        .as_deref()
-                        .map(parse_alert_condition)
-                        .transpose()?,
-                    condition_data: alert_data(input.condition_data.unwrap_or_default()),
-                    method: input
-                        .method
-                        .as_deref()
-                        .map(parse_alert_method)
-                        .transpose()?,
-                    method_data: alert_data(input.method_data.unwrap_or_default()),
-                    filter_id: input
-                        .filter_id
-                        .as_deref()
-                        .map(parse_entity_id)
-                        .transpose()?,
-                    active: None,
-                },
-            ),
-        )
-        .await?;
+        let mut request = ModifyAlertRequest::new(parse_entity_id(id)?);
+        request.name = input.name;
+        request.comment = input.comment;
+        request.event = input.event.as_deref().map(parse_alert_event).transpose()?;
+        request.event_data = alert_data(input.event_data.unwrap_or_default());
+        request.condition = input
+            .condition
+            .as_deref()
+            .map(parse_alert_condition)
+            .transpose()?;
+        request.condition_data = alert_data(input.condition_data.unwrap_or_default());
+        request.method = input
+            .method
+            .as_deref()
+            .map(parse_alert_method)
+            .transpose()?;
+        request.method_data = alert_data(input.method_data.unwrap_or_default());
+        request.filter_id = input
+            .filter_id
+            .as_deref()
+            .map(parse_entity_id)
+            .transpose()?;
+        self.execute_with_session(session_token, "alerts.modify", request)
+            .await?;
         self.get_alert(session_token, id).await
     }
 

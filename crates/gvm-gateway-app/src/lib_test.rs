@@ -781,7 +781,7 @@ impl ReportPort for BlockingReportPort {
         })
     }
 
-    async fn delete_report(&self, _: &str, _: &str, _: bool) -> Result<(), GatewayError> {
+    async fn delete_report(&self, _: &str, _: &str) -> Result<(), GatewayError> {
         Ok(())
     }
 
@@ -923,7 +923,7 @@ impl ReportPort for ExistingReportPort {
         })
     }
 
-    async fn delete_report(&self, _: &str, _: &str, _: bool) -> Result<(), GatewayError> {
+    async fn delete_report(&self, _: &str, _: &str) -> Result<(), GatewayError> {
         Ok(())
     }
 
@@ -1070,7 +1070,7 @@ impl ReportPort for CapturingReportPort {
         })
     }
 
-    async fn delete_report(&self, _: &str, _: &str, _: bool) -> Result<(), GatewayError> {
+    async fn delete_report(&self, _: &str, _: &str) -> Result<(), GatewayError> {
         Ok(())
     }
 
@@ -1207,7 +1207,7 @@ impl ReportPort for MissingReportPort {
         Err(GatewayError::NotFound(format!("report {id} not found")))
     }
 
-    async fn delete_report(&self, _: &str, id: &str, _: bool) -> Result<(), GatewayError> {
+    async fn delete_report(&self, _: &str, id: &str) -> Result<(), GatewayError> {
         Err(GatewayError::NotFound(format!("report {id} not found")))
     }
 
@@ -1422,9 +1422,7 @@ fn empty_report_cve_page(query: &ResultQuery) -> ReportCvePage {
 #[tokio::test]
 async fn service_delete_report_requires_valid_session() {
     let service = create_test_service();
-    let result = service
-        .delete_report("invalid-token", "some-id", false)
-        .await;
+    let result = service.delete_report("invalid-token", "some-id").await;
     assert!(matches!(result, Err(GatewayError::SessionInvalidated(_))));
 }
 

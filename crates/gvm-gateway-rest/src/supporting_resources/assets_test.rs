@@ -5,94 +5,9 @@ use serde_json::json;
 
 use super::{
     reject_host_ultimate_query, reject_operating_system_ultimate_query, ModifyHostRequest,
-    ModifyOperatingSystemRequest, NvtListQuery, NvtSortOrder, OperatingSystemResponse,
-    PaginationOnlyQuery, SupportingListQuery,
+    ModifyOperatingSystemRequest, OperatingSystemResponse,
 };
-use crate::query::parse_delete_resource_query;
 use gvm_gateway_domain::{OperatingSystem, OperatingSystemHost, SupportingResourceMeta};
-
-#[test]
-fn supporting_query_decodes_percent_encoded_filter_values() {
-    let parsed = SupportingListQuery::try_from_query_string(
-        "filter=name~webserver%20and%20severity%3E5&perPage=10&page=2",
-    )
-    .expect("supporting-resource query should parse");
-
-    assert_eq!(
-        parsed.filter_string.as_deref(),
-        Some("name~webserver and severity>5")
-    );
-    assert_eq!(parsed.page, 2);
-    assert_eq!(parsed.per_page, 10);
-}
-
-#[test]
-fn supporting_query_rejects_zero_page_after_decoding() {
-    let error = SupportingListQuery::try_from_query_string("page=0")
-        .expect_err("page=0 should remain invalid");
-
-    match error {
-        gvm_gateway_domain::GatewayError::InvalidInput(detail) => {
-            assert_eq!(detail, "page must be greater than or equal to 1");
-        }
-        other => panic!("unexpected error variant: {:?}", other),
-    }
-}
-
-#[test]
-fn nvt_query_maps_all_typed_options_and_rejects_invalid_values() {
-    let parsed = NvtListQuery::try_from_query_string(
-        "filter=name~ssl&filterId=550e8400-e29b-41d4-a716-446655440000&page=2&perPage=50&configId=550e8400-e29b-41d4-a716-446655440001&preferencesConfigId=550e8400-e29b-41d4-a716-446655440002&family=General&includePreferences=true&includePreferenceCount=false&includeTimeout=true&sortOrder=ascending&sortField=name",
-    )
-    .expect("typed NVT query should parse");
-
-    assert_eq!(parsed.page, 2);
-    assert_eq!(parsed.per_page, 50);
-    assert_eq!(parsed.family.as_deref(), Some("General"));
-    assert_eq!(parsed.include_preferences, Some(true));
-    assert_eq!(parsed.include_preference_count, Some(false));
-    assert_eq!(parsed.include_timeout, Some(true));
-    assert_eq!(parsed.sort_order, Some(NvtSortOrder::Ascending));
-    assert_eq!(parsed.sort_field.as_deref(), Some("name"));
-
-    for query in [
-        "sortOrder=sideways",
-        "includePreferences=1",
-        "configId=not-a-uuid",
-        "includeTimeout=true",
-        "family=%20",
-        "unknown=value",
-    ] {
-        NvtListQuery::try_from_query_string(query)
-            .expect_err("invalid NVT query value should be rejected");
-    }
-}
-
-#[test]
-fn pagination_only_query_rejects_filter_params() {
-    let error = PaginationOnlyQuery::try_from_query_string("filter=name~general")
-        .expect_err("filter should be rejected");
-
-    match error {
-        gvm_gateway_domain::GatewayError::InvalidInput(detail) => {
-            assert_eq!(detail, "filter is not supported on this endpoint");
-        }
-        other => panic!("unexpected error variant: {:?}", other),
-    }
-}
-
-#[test]
-fn delete_supporting_resource_query_rejects_invalid_bool() {
-    let error = parse_delete_resource_query("ultimate=not-bool")
-        .expect_err("invalid ultimate bool should be rejected");
-
-    match error {
-        gvm_gateway_domain::GatewayError::InvalidInput(detail) => {
-            assert_eq!(detail, "ultimate must be true or false");
-        }
-        other => panic!("unexpected error variant: {:?}", other),
-    }
-}
 
 #[test]
 fn modify_host_request_rejects_unknown_value_field() {

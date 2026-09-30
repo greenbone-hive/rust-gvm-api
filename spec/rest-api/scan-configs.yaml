@@ -333,6 +333,7 @@ components:
       type: object
       required:
         - name
+        - baseScanConfigId
       properties:
         name:
           type: string
@@ -341,7 +342,7 @@ components:
         baseScanConfigId:
           type: string
           format: uuid
-          description: UUID of the config to copy from.
+          description: UUID of the active scan configuration to copy from.
 
     ModifyScanConfig:
       type: object

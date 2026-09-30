@@ -6,10 +6,10 @@ use gvm_gmp::responses::{
     GetAgentGroupsResponse, GetAgentInstallerInstructionResponse, GetAgentSupportBundleResponse,
     GetAgentsResponse, GetAlertsResponse, GetAssetsResponse, GetConfigsResponse,
     GetCredentialsResponse, GetFeedsResponse, GetNotesResponse, GetOverridesResponse,
-    GetPortListsResponse, GetReportClosedCvesResponse, GetReportTlsCertificatesResponse,
-    GetReportVulnsResponse, GetReportsResponse, GetResultsResponse, GetScanConfigsResponse,
-    GetScannersResponse, GetSchedulesResponse, GetTargetsResponse, GetTasksResponse,
-    GetUsersResponse,
+    GetPortListsResponse, GetReportClosedCvesResponse, GetReportOperatingSystemsResponse,
+    GetReportTlsCertificatesResponse, GetReportVulnsResponse, GetReportsResponse,
+    GetResultsResponse, GetScanConfigsResponse, GetScannersResponse, GetSchedulesResponse,
+    GetSettingsResponse, GetTargetsResponse, GetTasksResponse, GetUsersResponse,
 };
 use gvm_protocol::Response as GmpResponse;
 
@@ -51,6 +51,20 @@ fn map_gvm_error_400_to_invalid_input() {
     };
     let mapped = map_gvm_error(error);
     assert!(matches!(mapped, GatewayError::InvalidInput(_)));
+}
+
+#[test]
+fn map_gvm_request_validation_to_invalid_input() {
+    // Canonical request validation happens client-side, but remains a caller
+    // input error rather than becoming a backend availability failure.
+    let error = gvm_client::GvmError::Request(gvm_gmp::GmpRequestError::invalid_field(
+        "name",
+        "must not be empty",
+    ));
+
+    let mapped = map_gvm_error(error);
+
+    assert!(matches!(mapped, GatewayError::InvalidInput(detail) if detail.contains("name")));
 }
 
 #[test]
@@ -553,9 +567,9 @@ fn result_from_gmp_omits_missing_reference_names() {
 }
 
 #[test]
-fn port_list_from_gmp_uses_structured_protocol_counts() {
-    // Mixed-protocol port lists need the typed TCP/UDP counts; inferring
-    // counts from the first port_range character loses UDP data.
+fn port_list_from_gmp_projects_structured_ranges_and_protocol_counts() {
+    // The REST contract retains its compact expression while rust-gvm exposes
+    // the current gvmd response as typed ranges with authoritative counts.
     let response = GmpResponse::from(
         r#"<get_port_lists_response status="200" status_text="OK">
             <port_list id="550e8400-e29b-41d4-a716-446655440000">
@@ -565,7 +579,14 @@ fn port_list_from_gmp_uses_structured_protocol_counts() {
                     <tcp>2</tcp>
                     <udp>1</udp>
                 </port_count>
-                <port_range>T:22,80,U:53</port_range>
+                <port_ranges>
+                    <port_range id="11111111-1111-1111-1111-111111111111">
+                        <start>22</start><end>80</end><type>TCP</type><comment></comment>
+                    </port_range>
+                    <port_range id="22222222-2222-2222-2222-222222222222">
+                        <start>53</start><end>53</end><type>UDP</type><comment>DNS</comment>
+                    </port_range>
+                </port_ranges>
             </port_list>
             <port_list_count>1<filtered>1</filtered></port_list_count>
         </get_port_lists_response>"#,
@@ -577,6 +598,7 @@ fn port_list_from_gmp_uses_structured_protocol_counts() {
     assert_eq!(port_list.port_count, Some(3));
     assert_eq!(port_list.tcp_count, Some(2));
     assert_eq!(port_list.udp_count, Some(1));
+    assert_eq!(port_list.port_range.as_deref(), Some("T:22-80,U:53"));
 }
 
 #[test]
@@ -798,6 +820,45 @@ fn aggregate_vulnerability_preserves_counts_and_nested_nvt_identity() {
 }
 
 #[test]
+fn report_operating_system_maps_the_authoritative_gvmd_row_shape() {
+    // Regression coverage for #527: gvmd operating-system summaries expose
+    // best_os_cpe, best_os_txt, and hosts_count, not generic id/name/severity
+    // fields. Parse the exact live row shape through rust-gvm before mapping it
+    // into the gateway's public domain contract.
+    let parsed = GetReportOperatingSystemsResponse::from_response(&GmpResponse::from(
+        r#"<get_report_operating_systems_response status="200" status_text="OK">
+            <operating_systems>
+                <operating_system>
+                    <best_os_cpe>cpe:/o:debian:debian_linux:12</best_os_cpe>
+                    <best_os_txt>Debian GNU/Linux 12 (bookworm)</best_os_txt>
+                    <hosts_count>2</hosts_count>
+                </operating_system>
+            </operating_systems>
+            <report_operating_system_count>1<filtered>1</filtered></report_operating_system_count>
+        </get_report_operating_systems_response>"#,
+    ))
+    .expect("operating-system projection parses");
+
+    let operating_system = report_operating_system_from_gmp(
+        parsed
+            .items
+            .into_iter()
+            .next()
+            .expect("operating-system row"),
+    );
+
+    assert_eq!(
+        operating_system.best_os_cpe.as_deref(),
+        Some("cpe:/o:debian:debian_linux:12")
+    );
+    assert_eq!(
+        operating_system.best_os_text.as_deref(),
+        Some("Debian GNU/Linux 12 (bookworm)")
+    );
+    assert_eq!(operating_system.hosts_count, Some(2));
+}
+
+#[test]
 fn closed_cve_preserves_closed_cve_identity_and_nested_nvt_identity() {
     // Closed-CVE drill-downs need their dedicated cve and threat fields
     // instead of being coerced into the generic result `name` shape.
@@ -898,6 +959,31 @@ fn user_from_gmp_preserves_typed_owner_and_hosts_allow_fields() {
         Some("admin")
     );
     assert_eq!(user.hosts_allow, Some(false));
+}
+
+#[test]
+fn user_setting_from_gmp_consumes_the_canonical_setting_model() {
+    // User-setting list and detail now share the canonical system Setting
+    // response. The domain mapping must preserve its public fields while
+    // keeping its value redacted from diagnostics.
+    let parsed = GetSettingsResponse::from_response(&GmpResponse::from(
+        r#"<get_settings_response status="200" status_text="OK">
+                <setting id="123e4567-e89b-12d3-a456-426614174006">
+                    <name>timezone</name>
+                    <value>Europe/Berlin</value>
+                    <comment>User timezone</comment>
+                </setting>
+                <setting_count>1<filtered>1</filtered><page>1</page></setting_count>
+            </get_settings_response>"#,
+    ))
+    .expect("settings parse");
+
+    let setting = user_setting_from_gmp(parsed.items.into_iter().next().unwrap());
+
+    assert_eq!(setting.name, "timezone");
+    assert_eq!(setting.value.as_deref(), Some("Europe/Berlin"));
+    assert_eq!(setting.comment.as_deref(), Some("User timezone"));
+    assert!(!format!("{setting:?}").contains("Europe/Berlin"));
 }
 
 #[test]

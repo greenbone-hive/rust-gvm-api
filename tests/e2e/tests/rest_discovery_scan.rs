@@ -335,16 +335,10 @@ async fn rest_discovery_lifecycle_completes_scan_and_links_report() -> Result<()
             .report_detail_subresources_supported(&session.token, &action.report_id)
             .await?
         {
-            // These five resources are purpose-shaped report summaries. A
+            // These four resources are purpose-shaped report summaries. A
             // completed scan may legitimately produce empty categories, but
             // every route must preserve its pagination and typed row shape.
-            for subresource in [
-                "hosts",
-                "ports",
-                "applications",
-                "operating-systems",
-                "cves",
-            ] {
+            for subresource in ["hosts", "ports", "applications", "cves"] {
                 let summaries = harness
                     .get_report_summary_page(
                         &session.token,
@@ -361,6 +355,23 @@ async fn rest_discovery_lifecycle_completes_scan_and_links_report() -> Result<()
                         "report {subresource} returned an empty summary row"
                     );
                 }
+            }
+
+            // gvmd operating-system rows are not generic id/name/severity
+            // summaries. Keep this live assertion purpose-shaped so an
+            // upstream parser mismatch cannot silently deserialize rows as
+            // empty JSON objects again.
+            let operating_systems = harness
+                .get_report_operating_systems_page(&session.token, &action.report_id, 1, 25)
+                .await?;
+            assert_pagination_shape("report operating systems", &operating_systems);
+            for operating_system in operating_systems.data {
+                assert!(
+                    operating_system.best_os_cpe.is_some()
+                        || operating_system.best_os_text.is_some()
+                        || operating_system.hosts_count.is_some(),
+                    "report operating systems returned an empty summary row"
+                );
             }
 
             let vulnerabilities = harness

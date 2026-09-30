@@ -14,6 +14,95 @@ const RUST_GVM_COMPONENTS: &[&str] = &[
     "gvm-mock-server",
     "gvm-protocol",
 ];
+// The published v0.7.0 release contains the complete reviewed canonical-request
+// baseline and must remain immutable across all five workspace dependencies.
+const RUST_GVM_RELEASE_TAG: &str = "v0.7.0";
+const RUST_GVM_RELEASE_REVISION: &str = "acdabf5a039d78df82e86b69ee8a374df8575c7a";
+
+const REMOVED_CANONICAL_TRANSITION_TYPES: &[&str] = &[
+    "CreateTargetOpts",
+    "GetTargetsOpts",
+    "ModifyTargetOpts",
+    "CreateOciImageTargetOpts",
+    "GetOciImageTargetsOpts",
+    "ModifyOciImageTargetOpts",
+    "CreateWebApplicationTargetOpts",
+    "GetWebApplicationTargetsOpts",
+    "ModifyWebApplicationTargetOpts",
+    "CreateAgentGroupOpts",
+    "GetAgentGroupsOpts",
+    "ModifyAgentGroupOpts",
+    "GetAgentsOpts",
+    "ModifyAgentOpts",
+    "ModifyAgentControlScanConfigOpts",
+    "GetIntegrationConfigsOpts",
+    "ModifyIntegrationConfigOpts",
+    "PortListOpts",
+    "ModifyPortListOpts",
+    "GetPortListsOpts",
+    "CredentialOpts",
+    "ModifyCredentialOpts",
+    "GetCredentialsOpts",
+    "GetCredentialStoresOpts",
+    "CredentialStoreCredentialOpts",
+    "ModifyCredentialStoreOpts",
+    "ModifyCredentialStoreCredentialOpts",
+    "FilterOpts",
+    "GetFiltersOpts",
+    "TagOpts",
+    "GetTagsOpts",
+    "AlertOpts",
+    "GetAlertsOpts",
+    "TriggerAlertOpts",
+    "ScheduleOpts",
+    "GetSchedulesOpts",
+    "CreateTypedScheduleRequest",
+    "ModifyTypedScheduleRequest",
+    "ScannerOpts",
+    "GetScannersOpts",
+    "NoteOpts",
+    "ModifyNoteOpts",
+    "GetNotesOpts",
+    "OverrideOpts",
+    "ModifyOverrideOpts",
+    "GetOverridesOpts",
+    "UserOpts",
+    "ModifyUserOpts",
+    "GetUsersOpts",
+    "GroupOpts",
+    "GetGroupsOpts",
+    "RoleOpts",
+    "GetRolesOpts",
+    "PermissionOpts",
+    "GetPermissionsOpts",
+    "CreateAssetOpts",
+    "DeleteAssetOpts",
+    "GetAssetsOpts",
+    "ModifyAssetOpts",
+    "HostOpts",
+    "GetHostsOpts",
+    "GetOperatingSystemsOpts",
+    "ModifyOperatingSystemAssetRequest",
+    "GetResultsOpts",
+    "CreateReportConfigOpts",
+    "CreateReportConfigWithOptsRequest",
+    "DeleteReportConfigOpts",
+    "GetReportConfigsOpts",
+    "ModifyReportConfigOpts",
+    "GetNvtsOpts",
+    "GetSecInfoOpts",
+    "GetReportsOpts",
+    "GetReportDetailsOpts",
+    "GetReportExportOpts",
+    "CreateAgentGroupTaskOpts",
+    "CreateOciImageTargetTaskOpts",
+    "CreateWebApplicationTaskOpts",
+    "CreateTaskOpts",
+    "GetTasksOpts",
+    "ModifyTaskOpts",
+    "GetUserSettingsOpts",
+    "ModifyUserSettingOpts",
+];
 
 #[derive(Debug, Eq, PartialEq)]
 struct Finding {
@@ -182,6 +271,292 @@ fn rust_gvm_components_resolve_to_one_revision() {
         revisions.values().all(|revision| revision == expected),
         "rust-gvm components resolved to different revisions: {revisions:?}"
     );
+    assert_eq!(
+        *expected, RUST_GVM_RELEASE_REVISION,
+        "rust-gvm components must remain on the exact published v0.7.0 revision"
+    );
+
+    let workspace_manifest =
+        fs::read_to_string(manifest_dir.join("../../Cargo.toml")).expect("read workspace manifest");
+    for component in RUST_GVM_COMPONENTS {
+        let dependency = workspace_manifest
+            .lines()
+            .find(|line| line.trim_start().starts_with(&format!("{component} =")))
+            .unwrap_or_else(|| panic!("{component} must be declared in workspace dependencies"));
+        assert!(
+            dependency.contains(&format!("tag = \"{RUST_GVM_RELEASE_TAG}\"")),
+            "{component} must pin the immutable v0.7.0 release tag in Cargo.toml: {dependency}"
+        );
+        assert!(
+            !dependency.contains("branch ="),
+            "{component} must not use a moving branch dependency: {dependency}"
+        );
+    }
+}
+
+#[test]
+fn removed_canonical_transition_types_stay_absent() {
+    // The ordered canonical migrations through issue #529 remove transitional
+    // request and option APIs. Scanning all workspace production prevents a
+    // future upstream compatibility shim from silently restoring them.
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut findings = Vec::new();
+    for file in rust_files(&manifest_dir.join("../../crates")) {
+        if file.ends_with("tests/architecture.rs") {
+            continue;
+        }
+        let contents = fs::read_to_string(&file).expect("read workspace Rust source");
+        for removed in REMOVED_CANONICAL_TRANSITION_TYPES {
+            if contents.contains(removed) {
+                findings.push(format!("{} uses {removed}", file.display()));
+            }
+        }
+    }
+    assert!(
+        findings.is_empty(),
+        "removed pre-result canonical transition APIs must stay absent:\n{}",
+        findings.join("\n")
+    );
+}
+
+#[test]
+fn canonical_user_setting_requests_stay_complete_and_source_faithful() {
+    // Issue #529 adopts the canonical #671 request and response surface. Keep
+    // all query controls explicit, consume the source-faithful items field,
+    // and prevent compatibility option bags from returning.
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let identity = fs::read_to_string(manifest_dir.join("src/gvmd_adapter/ports/identity.rs"))
+        .expect("read identity adapter");
+    let list = section_between(
+        &identity,
+        "async fn list_user_settings",
+        "async fn get_user_setting",
+    );
+    for assignment in [
+        "request.filter_string = filter;",
+        "request.first = Some(1);",
+        "request.max = Some(-1);",
+        "request.sort_field = Some(\"name\".to_string());",
+        "request.sort_order = Some(SortOrder::Ascending);",
+    ] {
+        assert!(
+            list.contains(assignment),
+            "user-setting list must populate canonical field: {assignment}"
+        );
+    }
+    assert!(list.contains(".items"));
+    assert!(!list.contains(".settings"));
+
+    let detail = section_between(
+        &identity,
+        "async fn get_user_setting",
+        "async fn modify_user_setting",
+    );
+    assert!(detail.contains("GetUserSettingRequest::new"));
+    assert!(detail.contains(".items"));
+    assert!(detail.contains("GatewayError::NotFound"));
+    assert!(!detail.contains(".settings"));
+
+    let modify = identity
+        .split("async fn modify_user_setting")
+        .nth(1)
+        .expect("modify user-setting section");
+    assert!(modify.contains("ModifyUserSettingRequest::new(parse_entity_id(id)?, input.value)"));
+    assert!(!identity.contains("GetUserSettingsOpts"));
+    assert!(!identity.contains("ModifyUserSettingOpts"));
+
+    let conversions =
+        fs::read_to_string(manifest_dir.join("src/conversions.rs")).expect("read conversions");
+    assert!(conversions.contains("user_setting_from_gmp(setting: gvm_gmp::responses::Setting)"));
+    assert!(!conversions.contains("gvm_gmp::responses::UserSetting"));
+}
+
+#[test]
+fn report_configuration_administration_stays_omitted() {
+    // Issue #514 distinguishes the supported report-export selector from the
+    // intentionally omitted report-configuration administration surface in
+    // issue #381. Canonical upstream availability must not add those methods.
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let production = fs::read_to_string(manifest_dir.join("src/gvmd_adapter/mod.rs"))
+        .expect("read gvmd adapter imports");
+    for request in [
+        "GetReportConfigsRequest",
+        "GetReportConfigRequest",
+        "CreateReportConfigRequest",
+        "CloneReportConfigRequest",
+        "ModifyReportConfigRequest",
+        "DeleteReportConfigRequest",
+    ] {
+        assert!(
+            !production.contains(request),
+            "report-configuration administration is omitted under issue #381: {request}"
+        );
+    }
+
+    let reports = fs::read_to_string(manifest_dir.join("src/gvmd_adapter/ports/reports.rs"))
+        .expect("read report adapter");
+    assert!(
+        reports.contains("export_request.report_config_id = request"),
+        "reportConfigId must remain an export selector"
+    );
+}
+
+#[test]
+fn nvt_secinfo_migration_dispositions_stay_bounded() {
+    // Issue #517 migrates existing reads only. Generic SecInfo/vulnerability
+    // endpoints remain omitted, while preference and selection mutations keep
+    // their existing implementation until the separately reviewed #523 work.
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let production = fs::read_to_string(manifest_dir.join("src/gvmd_adapter/mod.rs"))
+        .expect("read gvmd adapter imports");
+    for request in [
+        "GetInfoListRequest",
+        "GetInfoRequest",
+        "GetVulnerabilityRequest",
+        "GetNvtPreferencesRequest",
+        "GetNvtPreferenceRequest",
+    ] {
+        assert!(
+            !production.contains(request),
+            "issue #517 must not widen the public surface through {request}"
+        );
+    }
+
+    let scan_configs =
+        fs::read_to_string(manifest_dir.join("src/gvmd_adapter/ports/scan_configs.rs"))
+            .expect("read scan-config adapter");
+    for deferred_mutation in [
+        "ModifyScanConfigSetNvtSelectionRequest::new",
+        "ModifyScanConfigSetNvtPreferenceRequest::new",
+    ] {
+        assert!(
+            scan_configs.contains(deferred_mutation),
+            "preference/selection mutation must remain unchanged pending #523: {deferred_mutation}"
+        );
+    }
+
+    let dispositions =
+        fs::read_to_string(manifest_dir.join("../../docs/upstream-surface-dispositions.md"))
+            .expect("read upstream surface dispositions");
+    assert!(dispositions.contains("Deferred to #523"));
+    assert!(dispositions.contains("Generic SecInfo dispatch"));
+}
+
+#[test]
+fn system_discovery_migration_dispositions_stay_bounded() {
+    // Issue #528 adopts canonical typed discovery only for the pre-existing
+    // version, authentication, timezone, and feed operations. The other
+    // upstream system-discovery requests remain deliberately non-public under
+    // the #381/#401 surface inventory; their availability must not add routes.
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let production = fs::read_to_string(manifest_dir.join("src/gvmd_adapter/mod.rs"))
+        .expect("read gvmd adapter imports");
+    for request in [
+        "GetSettingsRequest",
+        "GetAggregatesRequest",
+        "GetFeaturesRequest",
+        "GetLicenseRequest",
+        "HelpRequest",
+        "GetResourceNamesRequest",
+        "GetResourceNameRequest",
+        "GetSystemReportsRequest",
+        "DescribeAuthRequest",
+    ] {
+        assert!(
+            !production.contains(request),
+            "system discovery is not a new public surface under #381/#401: {request}"
+        );
+    }
+
+    let feeds = fs::read_to_string(manifest_dir.join("src/gvmd_adapter/ports/feeds.rs"))
+        .expect("read feed adapter");
+    for mapping in [
+        "parsed.feed_owner_set.unwrap_or(false)",
+        "parsed.feed_roles_set.unwrap_or(false)",
+        "parsed.feed_resources_access.unwrap_or(false)",
+    ] {
+        assert!(
+            feeds.contains(mapping),
+            "optional canonical feed access metadata must preserve required REST booleans: {mapping}"
+        );
+    }
+
+    let dispositions =
+        fs::read_to_string(manifest_dir.join("../../docs/upstream-surface-dispositions.md"))
+            .expect("read upstream surface dispositions");
+    for disposition in [
+        "System discovery additions",
+        "#381/#401",
+        "feed-sync",
+        "auth-description",
+    ] {
+        assert!(
+            dispositions.contains(disposition),
+            "system-discovery disposition must remain documented: {disposition}"
+        );
+    }
+}
+
+#[test]
+fn administration_and_cleanup_dispositions_stay_explicit_and_non_public() {
+    // Reviewed upstream availability does not authorize new downstream
+    // administration routes. Every remaining #664 family must retain its
+    // #381/#401 disposition and stay absent from production adapter imports.
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let production = fs::read_to_string(manifest_dir.join("src/gvmd_adapter/mod.rs"))
+        .expect("read gvmd adapter imports");
+    for omitted_request in [
+        "DescribeAuthRequest",
+        "ModifyAuthRequest",
+        "GetLicenseRequest",
+        "ModifyLicenseRequest",
+        "GetSettingsRequest",
+        "ModifySettingRequest",
+        "RunWizardRequest",
+        "EmptyTrashcanRequest",
+        "RestoreRequest",
+        "CreateScannerRequest",
+        "CloneScannerRequest",
+        "ModifyScannerRequest",
+        "DeleteScannerRequest",
+        "VerifyScannerRequest",
+    ] {
+        assert!(
+            !production.contains(omitted_request),
+            "administration/cleanup request must stay non-public: {omitted_request}"
+        );
+    }
+
+    let dispositions =
+        fs::read_to_string(manifest_dir.join("../../docs/upstream-surface-dispositions.md"))
+            .expect("read upstream surface dispositions");
+    for documented in [
+        "Authentication configuration",
+        "License administration",
+        "Global settings administration",
+        "Wizard execution",
+        "Trash cleanup and recovery",
+        "Scanner administration",
+        "Removed #664 compatibility surfaces",
+        "#381/#401",
+    ] {
+        assert!(
+            dispositions.contains(documented),
+            "administration/cleanup disposition must remain documented: {documented}"
+        );
+    }
+
+    let router = fs::read_to_string(manifest_dir.join("../gvm-gateway-rest/src/router.rs"))
+        .expect("read REST router");
+    let scanner_routes = section_between(&router, "// Scanners", "\"/api/v1/operating-systems\"");
+    assert_eq!(scanner_routes.matches("/api/v1/scanners").count(), 2);
+    assert_eq!(scanner_routes.matches("get_with(").count(), 2);
+    for mutating_route in ["post_with(", "put_with(", "delete_with("] {
+        assert!(
+            !scanner_routes.contains(mutating_route),
+            "scanner administration route must stay absent: {mutating_route}"
+        );
+    }
 }
 
 #[test]
@@ -221,7 +596,7 @@ fn initial_adapter_slice_stays_on_typed_execution() {
         "async fn list_oci_image_targets",
     );
     for request in [
-        "GetTargetsRequest::new",
+        "GetTargetsRequest",
         "GetTargetRequest::new",
         "CreateTargetRequest::new",
         "ModifyTargetRequest::new",
@@ -245,8 +620,12 @@ fn initial_adapter_slice_stays_on_typed_execution() {
         section_between(&reports, "async fn export_report", "async fn delete_report");
     assert_typed_section(
         report_export,
-        "GmpGetReportExportRequest::new",
+        "GetReportExportRequest::new",
         "report export",
+    );
+    assert!(
+        !report_export.contains("GmpGetReportExportRequest"),
+        "report export must retain the canonical upstream request spelling"
     );
 }
 
@@ -256,11 +635,157 @@ fn migrated_task_and_report_families_stay_on_typed_execution() {
     let ports_dir = manifest_dir.join("src/gvmd_adapter/ports");
 
     let tasks = fs::read_to_string(ports_dir.join("tasks.rs")).expect("read task adapter module");
-    assert_typed_section(&tasks, "GetTasksRequest::new", "task and audit family");
+    for (request, description) in [
+        ("GetTasksRequest {", "standard task family"),
+        (
+            "CreateAgentGroupTaskRequest::new",
+            "agent-group task creation",
+        ),
+        (
+            "CreateOciImageTargetTaskRequest::new",
+            "OCI-image task creation",
+        ),
+        (
+            "CreateWebApplicationTaskRequest::new",
+            "web-application task creation",
+        ),
+        ("CreateImportTaskRequest::new", "import task creation"),
+        ("GetAuditsRequest {", "audit listing"),
+        ("GetAuditRequest::new", "audit detail"),
+        ("CreateAuditRequest::new", "audit creation"),
+        ("ModifyAuditRequest::new", "audit modification"),
+        ("DeleteAuditRequest::new", "audit deletion"),
+        ("StartAuditRequest::new", "audit start"),
+        ("StopAuditRequest::new", "audit stop"),
+        ("ResumeAuditRequest::new", "audit resume"),
+    ] {
+        assert_typed_section(&tasks, request, description);
+    }
 
     let reports =
         fs::read_to_string(ports_dir.join("reports.rs")).expect("read report adapter module");
-    assert_typed_section(&reports, "GetReportsRequest::new", "report family");
+    let list_reports = section_between(&reports, "async fn list_reports", "async fn get_report");
+    assert_typed_section(list_reports, "GetReportsRequest {", "report listing");
+    assert!(
+        !list_reports.contains("GetReportsRequest::new"),
+        "report listing must use the canonical complete request value"
+    );
+
+    let get_report = section_between(&reports, "async fn get_report", "async fn export_report");
+    assert_typed_section(get_report, "GetReportRequest::new", "report detail");
+    assert!(
+        get_report.contains("request.details = Some(false)"),
+        "report detail must suppress canonical default details because results use a separate window"
+    );
+
+    let delete_report = section_between(
+        &reports,
+        "async fn delete_report",
+        "async fn get_report_results",
+    );
+    assert_typed_section(
+        delete_report,
+        "DeleteReportRequest::new",
+        "permanent report deletion",
+    );
+
+    // Issue #527 adopts the canonical complete request values for all nine
+    // existing projection endpoints. Their constructors carry identity only;
+    // gateway-resolved filters and explicit detail semantics are assigned here.
+    for (function, next_function, request, description) in [
+        (
+            "async fn get_report_vulnerabilities",
+            "async fn get_report_hosts",
+            "GetReportVulnsRequest",
+            "report vulnerabilities",
+        ),
+        (
+            "async fn get_report_hosts",
+            "async fn get_report_ports",
+            "GetReportHostsRequest",
+            "report hosts",
+        ),
+        (
+            "async fn get_report_ports",
+            "async fn get_report_applications",
+            "GetReportPortsRequest",
+            "report ports",
+        ),
+        (
+            "async fn get_report_applications",
+            "async fn get_report_operating_systems",
+            "GetReportApplicationsRequest",
+            "report applications",
+        ),
+        (
+            "async fn get_report_operating_systems",
+            "async fn get_report_cves",
+            "GetReportOperatingSystemsRequest",
+            "report operating systems",
+        ),
+        (
+            "async fn get_report_cves",
+            "async fn get_report_tls_certificates",
+            "GetReportCvesRequest",
+            "report CVEs",
+        ),
+        (
+            "async fn get_report_tls_certificates",
+            "async fn get_report_errors",
+            "GetReportTlsCertificatesRequest",
+            "report TLS certificates",
+        ),
+        (
+            "async fn get_report_errors",
+            "async fn get_report_closed_cves",
+            "GetReportErrorsRequest",
+            "report errors",
+        ),
+        (
+            "async fn get_report_closed_cves",
+            "async fn report_projection_filter",
+            "GetReportClosedCvesRequest",
+            "report closed CVEs",
+        ),
+    ] {
+        let projection = section_between(&reports, function, next_function);
+        assert_typed_section(
+            projection,
+            &format!("{request}::new(report_id);"),
+            description,
+        );
+        assert!(
+            !projection.contains(&format!("{request}::new(report_id,")),
+            "{description} must not restore the removed two-argument constructor"
+        );
+        for assignment in [
+            "request.filter_string = filter_string;",
+            "request.filter_id = None;",
+            "request.ignore_pagination = None;",
+            "request.details = Some(true);",
+        ] {
+            assert!(
+                projection.contains(assignment),
+                "{description} must populate the canonical complete request field: {assignment}"
+            );
+        }
+    }
+
+    let hosts = section_between(
+        &reports,
+        "async fn get_report_hosts",
+        "async fn get_report_ports",
+    );
+    assert!(
+        hosts.contains("request.lean = None;"),
+        "report-host projection must preserve lean omission"
+    );
+
+    assert!(
+        reports.contains("async fn report_projection_filter(")
+            && reports.contains(") -> Result<Option<String>, GatewayError>"),
+        "gateway-owned report filter resolution must return only the resolved inline filter"
+    );
 }
 
 #[test]
@@ -271,20 +796,16 @@ fn migrated_security_and_config_families_stay_on_typed_execution() {
     for (file, request, description) in [
         (
             "credentials.rs",
-            "GetCredentialsRequest::new",
+            "GetCredentialsRequest",
             "credential family",
         ),
-        ("scanners.rs", "GetScannersRequest::new", "scanner family"),
+        ("scanners.rs", "GetScannersRequest", "scanner family"),
         (
             "scan_configs.rs",
-            "GetScanConfigsRequest::new",
+            "GetScanConfigsRequest {",
             "config and policy family",
         ),
-        (
-            "port_lists.rs",
-            "GetPortListsRequest::new",
-            "port-list family",
-        ),
+        ("port_lists.rs", "GetPortListsRequest", "port-list family"),
     ] {
         let contents = fs::read_to_string(ports_dir.join(file))
             .unwrap_or_else(|error| panic!("read {description} adapter module: {error}"));
@@ -298,12 +819,8 @@ fn migrated_automation_families_stay_on_typed_execution() {
     let ports_dir = manifest_dir.join("src/gvmd_adapter/ports");
 
     for (file, request, description) in [
-        ("alerts.rs", "GetAlertsRequest::new", "alert family"),
-        (
-            "schedules.rs",
-            "GetSchedulesRequest::new",
-            "schedule family",
-        ),
+        ("alerts.rs", "GetAlertsRequest", "alert family"),
+        ("schedules.rs", "GetSchedulesRequest", "schedule family"),
     ] {
         let contents = fs::read_to_string(ports_dir.join(file))
             .unwrap_or_else(|error| panic!("read {description} adapter module: {error}"));
@@ -318,10 +835,10 @@ fn migrated_identity_families_stay_on_typed_execution() {
         .expect("read identity adapter module");
 
     for request in [
-        "GetUsersRequest::new",
-        "GetGroupsRequest::new",
-        "GetRolesRequest::new",
-        "GetPermissionsRequest::new",
+        "GetUsersRequest",
+        "GetGroupsRequest",
+        "GetRolesRequest",
+        "GetPermissionsRequest",
         "GetUserSettingsRequest::new",
     ] {
         assert!(
@@ -341,7 +858,7 @@ fn remaining_adapter_families_and_raw_call_inventory_stay_typed() {
     for (file, request, description) in [
         ("feeds.rs", "GetFeedsRequest::new", "feed family"),
         ("system.rs", "GetTimezonesRequest::new", "system family"),
-        ("agents.rs", "GetAgentsRequest::new", "agent family"),
+        ("agents.rs", "GetAgentsRequest", "agent family"),
     ] {
         let contents = fs::read_to_string(ports_dir.join(file))
             .unwrap_or_else(|error| panic!("read {description} adapter module: {error}"));
@@ -351,8 +868,8 @@ fn remaining_adapter_families_and_raw_call_inventory_stay_typed() {
     let targets =
         fs::read_to_string(ports_dir.join("targets.rs")).expect("read target adapter module");
     assert!(
-        targets.contains("GetOciImageTargetsRequest::new")
-            && targets.contains("GetWebApplicationTargetsRequest::new"),
+        targets.contains("GetOciImageTargetsRequest")
+            && targets.contains("GetWebApplicationTargetsRequest"),
         "specialized target families must construct semantic requests"
     );
     assert_typed_section(&targets, "execute_with_session", "all target families");
@@ -384,19 +901,41 @@ fn migrated_supporting_resource_families_stay_on_typed_execution() {
     let supporting = fs::read_to_string(ports_dir.join("supporting_resources.rs"))
         .expect("read supporting-resource adapter module");
 
+    assert!(
+        !supporting.contains("GetReportFormatsOpts"),
+        "report-format adapters must not restore the removed option bag"
+    );
+    assert!(
+        !supporting.contains("GetTlsCertificatesOpts"),
+        "TLS-certificate adapters must not restore the removed option bag"
+    );
+    assert!(
+        !supporting.contains("GetNvtsOpts") && !supporting.contains("GetSecInfoOpts"),
+        "NVT and SecInfo adapters must not restore removed option bags"
+    );
+
     for request in [
         "GetAssetsRequest::new",
-        "GetHostsRequest::new",
-        "GetOperatingSystemAssetsRequest::new",
-        "GetTlsCertificatesRequest::new",
-        "GetReportFormatsRequest::new",
-        "GetFiltersRequest::new",
-        "GetTagsRequest::new",
-        "GetNotesRequest::new",
-        "GetOverridesRequest::new",
-        "GetNvtsRequest::new",
-        "GetVulnsRequest::new",
-        "GetCvesRequest::new",
+        "GetHostsRequest",
+        "GetOperatingSystemAssetsRequest",
+        "GetTlsCertificatesRequest {",
+        "GetReportFormatsRequest {",
+        "GetFiltersRequest",
+        "GetTagsRequest",
+        "GetNotesRequest",
+        "GetOverridesRequest",
+        "GetNvtsRequest {",
+        "GetNvtRequest::new",
+        "GetNvtFamiliesRequest::new",
+        "GetVulnsRequest {",
+        "GetCvesRequest {",
+        "GetCveRequest::new",
+        "GetCpesRequest {",
+        "GetCpeRequest::new",
+        "GetCertBundAdvisoriesRequest {",
+        "GetCertBundAdvisoryRequest::new",
+        "GetDfnCertAdvisoriesRequest {",
+        "GetDfnCertAdvisoryRequest::new",
     ] {
         assert!(
             supporting.contains(request),
@@ -420,7 +959,23 @@ fn migrated_supporting_resource_families_stay_on_typed_execution() {
 
     let results =
         fs::read_to_string(ports_dir.join("results.rs")).expect("read result adapter module");
-    assert_typed_section(&results, "GetResultsRequest::new", "result family");
+    assert_typed_section(&results, "GetResultsRequest {", "result family");
+
+    let scan_configs = fs::read_to_string(ports_dir.join("scan_configs.rs"))
+        .expect("read scan-config adapter module");
+    assert!(
+        !scan_configs.contains("GetNvtsOpts"),
+        "scan-config NVT reads must not restore the removed option bag"
+    );
+    for request in [
+        "GetScanConfigNvtsRequest::new",
+        "GetScanConfigNvtRequest::new",
+    ] {
+        assert!(
+            scan_configs.contains(request),
+            "scan-config NVT reads must use canonical request {request}"
+        );
+    }
 }
 
 fn section_between<'a>(contents: &'a str, start: &str, end: &str) -> &'a str {

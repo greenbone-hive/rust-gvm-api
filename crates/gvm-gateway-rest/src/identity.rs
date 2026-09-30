@@ -3,6 +3,8 @@
 
 //! Identity and access-control DTOs, request parsing, handlers, and OpenAPI transforms.
 
+use std::fmt;
+
 use aide::transform::TransformOperation;
 use axum::{
     body::Bytes,
@@ -258,7 +260,7 @@ impl From<PermissionPage> for PermissionListResponse {
     }
 }
 
-#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[derive(Clone, Serialize, JsonSchema)]
 #[schemars(rename = "UserSetting")]
 struct UserSettingResponse {
     id: Uuid,
@@ -267,6 +269,18 @@ struct UserSettingResponse {
     value: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     comment: Option<String>,
+}
+
+impl fmt::Debug for UserSettingResponse {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("UserSettingResponse")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("value", &self.value.as_ref().map(|_| "<redacted>"))
+            .field("comment", &self.comment)
+            .finish()
+    }
 }
 
 impl From<UserSetting> for UserSettingResponse {
@@ -597,11 +611,20 @@ struct ModifyPermissionDoc {
     resource_id: Option<Uuid>,
 }
 
-#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[derive(Clone, Deserialize, JsonSchema, Serialize)]
 #[schemars(rename = "ModifyUserSetting")]
 #[serde(deny_unknown_fields)]
 struct ModifyUserSettingDoc {
     value: String,
+}
+
+impl fmt::Debug for ModifyUserSettingDoc {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ModifyUserSettingDoc")
+            .field("value", &"<redacted>")
+            .finish()
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -848,10 +871,19 @@ impl ModifyPermissionRequest {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Deserialize, Eq, PartialEq)]
 #[serde(deny_unknown_fields)]
 struct ModifyUserSettingRequest {
     value: Option<String>,
+}
+
+impl fmt::Debug for ModifyUserSettingRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ModifyUserSettingRequest")
+            .field("value", &self.value.as_ref().map(|_| "<redacted>"))
+            .finish()
+    }
 }
 
 impl ModifyUserSettingRequest {

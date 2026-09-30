@@ -32,13 +32,16 @@ impl ReportPort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "reports.list",
-                GetReportsRequest::new(GetReportsOpts {
-                    report_id: None,
+                GetReportsRequest {
                     filter_string,
                     filter_id: None,
                     details: Some(false),
                     ignore_pagination: None,
-                }),
+                    notes_details: None,
+                    overrides_details: None,
+                    result_tags: None,
+                    lean: None,
+                },
             )
             .await?;
         let items = parsed
@@ -65,18 +68,10 @@ impl ReportPort for GvmdAdapter {
 
         // Fetch only report metadata; embedded results are loaded below through
         // the explicit result-window request.
+        let mut request = GetReportRequest::new(report_id);
+        request.details = Some(false);
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "reports.get",
-                GetReportsRequest::new(GetReportsOpts {
-                    report_id: Some(report_id),
-                    filter_string: None,
-                    filter_id: None,
-                    details: Some(false),
-                    ignore_pagination: None,
-                }),
-            )
+            .execute_with_session(session_token, "reports.get", request)
             .await?;
         let mut report = parsed
             .items
@@ -97,11 +92,16 @@ impl ReportPort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "reports.results",
-                GetResultsRequest::new(GetResultsOpts {
+                GetResultsRequest {
+                    result_id: None,
+                    task_id: None,
                     filter_string: filter,
                     filter_id: None,
                     details: Some(true),
-                }),
+                    notes_details: None,
+                    overrides_details: None,
+                    get_counts: None,
+                },
             )
             .await?;
         report.results = results_parsed
@@ -120,25 +120,24 @@ impl ReportPort for GvmdAdapter {
         request: &ReportExportRequest,
     ) -> Result<ReportExport, GatewayError> {
         let report_id = parse_entity_id(report_id)?;
-        let mut opts = GetReportExportOpts::new(parse_entity_id(&request.report_format_id)?);
-        opts.report_config_id = request
+        let report_format_id = parse_entity_id(&request.report_format_id)?;
+        let mut export_request = GetReportExportRequest::new(report_id, report_format_id);
+        export_request.report_config_id = request
             .report_config_id
             .as_deref()
             .map(parse_entity_id)
             .transpose()?;
-        opts.filter_string = request.filter.clone();
-        opts.filter_id = request
+        export_request.filter_string = request.filter.clone();
+        export_request.filter_id = request
             .filter_id
             .as_deref()
             .map(parse_entity_id)
             .transpose()?;
+        export_request.details = Some(true);
+        export_request.ignore_pagination = Some(true);
 
         let export = self
-            .execute_with_session(
-                session_token,
-                "reports.export",
-                GmpGetReportExportRequest::new(report_id, opts),
-            )
+            .execute_with_session(session_token, "reports.export", export_request)
             .await?;
 
         Ok(ReportExport {
@@ -148,16 +147,11 @@ impl ReportPort for GvmdAdapter {
         })
     }
 
-    async fn delete_report(
-        &self,
-        session_token: &str,
-        id: &str,
-        ultimate: bool,
-    ) -> Result<(), GatewayError> {
+    async fn delete_report(&self, session_token: &str, id: &str) -> Result<(), GatewayError> {
         self.execute_with_session(
             session_token,
             "reports.delete",
-            DeleteReportRequest::new(parse_entity_id(id)?, ultimate),
+            DeleteReportRequest::new(parse_entity_id(id)?),
         )
         .await?;
         Ok(())
@@ -193,11 +187,16 @@ impl ReportPort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "reports.results",
-                GetResultsRequest::new(GetResultsOpts {
+                GetResultsRequest {
+                    result_id: None,
+                    task_id: None,
                     filter_string: filter,
                     filter_id: None,
                     details: Some(true),
-                }),
+                    notes_details: None,
+                    overrides_details: None,
+                    get_counts: None,
+                },
             )
             .await?;
         let items = parsed
@@ -221,12 +220,17 @@ impl ReportPort for GvmdAdapter {
         query: &ResultQuery,
     ) -> Result<ReportVulnerabilityPage, GatewayError> {
         let report_id = parse_entity_id(report_id)?;
-        let opts = report_detail_query(self, session_token, query).await?;
+        let filter_string = report_projection_filter(self, session_token, query).await?;
+        let mut request = GetReportVulnsRequest::new(report_id);
+        request.filter_string = filter_string;
+        request.filter_id = None;
+        request.ignore_pagination = None;
+        request.details = Some(true);
         let parsed = self
             .execute_with_session_mapped(
                 session_token,
                 "reports.vulnerabilities",
-                GetReportVulnsRequest::new(report_id, opts),
+                request,
                 |error| {
                     map_report_detail_error(error, "get_report_vulns", "report vulnerabilities")
                 },
@@ -252,14 +256,17 @@ impl ReportPort for GvmdAdapter {
         query: &ResultQuery,
     ) -> Result<ReportHostPage, GatewayError> {
         let report_id = parse_entity_id(report_id)?;
-        let opts = report_detail_query(self, session_token, query).await?;
+        let filter_string = report_projection_filter(self, session_token, query).await?;
+        let mut request = GetReportHostsRequest::new(report_id);
+        request.filter_string = filter_string;
+        request.filter_id = None;
+        request.ignore_pagination = None;
+        request.details = Some(true);
+        request.lean = None;
         let parsed = self
-            .execute_with_session_mapped(
-                session_token,
-                "reports.hosts",
-                GetReportHostsRequest::new(report_id, opts),
-                |error| map_report_detail_error(error, "get_report_hosts", "report hosts"),
-            )
+            .execute_with_session_mapped(session_token, "reports.hosts", request, |error| {
+                map_report_detail_error(error, "get_report_hosts", "report hosts")
+            })
             .await?;
         let items = parsed
             .items
@@ -281,14 +288,16 @@ impl ReportPort for GvmdAdapter {
         query: &ResultQuery,
     ) -> Result<ReportPortPage, GatewayError> {
         let report_id = parse_entity_id(report_id)?;
-        let opts = report_detail_query(self, session_token, query).await?;
+        let filter_string = report_projection_filter(self, session_token, query).await?;
+        let mut request = GetReportPortsRequest::new(report_id);
+        request.filter_string = filter_string;
+        request.filter_id = None;
+        request.ignore_pagination = None;
+        request.details = Some(true);
         let parsed = self
-            .execute_with_session_mapped(
-                session_token,
-                "reports.ports",
-                GetReportPortsRequest::new(report_id, opts),
-                |error| map_report_detail_error(error, "get_report_ports", "report ports"),
-            )
+            .execute_with_session_mapped(session_token, "reports.ports", request, |error| {
+                map_report_detail_error(error, "get_report_ports", "report ports")
+            })
             .await?;
         let items = parsed
             .items
@@ -310,16 +319,16 @@ impl ReportPort for GvmdAdapter {
         query: &ResultQuery,
     ) -> Result<ReportApplicationPage, GatewayError> {
         let report_id = parse_entity_id(report_id)?;
-        let opts = report_detail_query(self, session_token, query).await?;
+        let filter_string = report_projection_filter(self, session_token, query).await?;
+        let mut request = GetReportApplicationsRequest::new(report_id);
+        request.filter_string = filter_string;
+        request.filter_id = None;
+        request.ignore_pagination = None;
+        request.details = Some(true);
         let parsed = self
-            .execute_with_session_mapped(
-                session_token,
-                "reports.applications",
-                GetReportApplicationsRequest::new(report_id, opts),
-                |error| {
-                    map_report_detail_error(error, "get_report_applications", "report applications")
-                },
-            )
+            .execute_with_session_mapped(session_token, "reports.applications", request, |error| {
+                map_report_detail_error(error, "get_report_applications", "report applications")
+            })
             .await?;
         let items = parsed
             .items
@@ -341,12 +350,17 @@ impl ReportPort for GvmdAdapter {
         query: &ResultQuery,
     ) -> Result<ReportOperatingSystemPage, GatewayError> {
         let report_id = parse_entity_id(report_id)?;
-        let opts = report_detail_query(self, session_token, query).await?;
+        let filter_string = report_projection_filter(self, session_token, query).await?;
+        let mut request = GetReportOperatingSystemsRequest::new(report_id);
+        request.filter_string = filter_string;
+        request.filter_id = None;
+        request.ignore_pagination = None;
+        request.details = Some(true);
         let parsed = self
             .execute_with_session_mapped(
                 session_token,
                 "reports.operating_systems",
-                GetReportOperatingSystemsRequest::new(report_id, opts),
+                request,
                 |error| {
                     map_report_detail_error(
                         error,
@@ -376,14 +390,16 @@ impl ReportPort for GvmdAdapter {
         query: &ResultQuery,
     ) -> Result<ReportCvePage, GatewayError> {
         let report_id = parse_entity_id(report_id)?;
-        let opts = report_detail_query(self, session_token, query).await?;
+        let filter_string = report_projection_filter(self, session_token, query).await?;
+        let mut request = GetReportCvesRequest::new(report_id);
+        request.filter_string = filter_string;
+        request.filter_id = None;
+        request.ignore_pagination = None;
+        request.details = Some(true);
         let parsed = self
-            .execute_with_session_mapped(
-                session_token,
-                "reports.cves",
-                GetReportCvesRequest::new(report_id, opts),
-                |error| map_report_detail_error(error, "get_report_cves", "report CVEs"),
-            )
+            .execute_with_session_mapped(session_token, "reports.cves", request, |error| {
+                map_report_detail_error(error, "get_report_cves", "report CVEs")
+            })
             .await?;
         let items = parsed
             .items
@@ -405,12 +421,17 @@ impl ReportPort for GvmdAdapter {
         query: &ResultQuery,
     ) -> Result<TlsCertificatePage, GatewayError> {
         let report_id = parse_entity_id(report_id)?;
-        let opts = report_detail_query(self, session_token, query).await?;
+        let filter_string = report_projection_filter(self, session_token, query).await?;
+        let mut request = GetReportTlsCertificatesRequest::new(report_id);
+        request.filter_string = filter_string;
+        request.filter_id = None;
+        request.ignore_pagination = None;
+        request.details = Some(true);
         let parsed = self
             .execute_with_session_mapped(
                 session_token,
                 "reports.tls_certificates",
-                GetReportTlsCertificatesRequest::new(report_id, opts),
+                request,
                 |error| {
                     map_report_detail_error(
                         error,
@@ -444,14 +465,16 @@ impl ReportPort for GvmdAdapter {
         query: &ResultQuery,
     ) -> Result<ReportErrorPage, GatewayError> {
         let report_id = parse_entity_id(report_id)?;
-        let opts = report_detail_query(self, session_token, query).await?;
+        let filter_string = report_projection_filter(self, session_token, query).await?;
+        let mut request = GetReportErrorsRequest::new(report_id);
+        request.filter_string = filter_string;
+        request.filter_id = None;
+        request.ignore_pagination = None;
+        request.details = Some(true);
         let parsed = self
-            .execute_with_session_mapped(
-                session_token,
-                "reports.errors",
-                GetReportErrorsRequest::new(report_id, opts),
-                |error| map_report_detail_error(error, "get_report_errors", "report errors"),
-            )
+            .execute_with_session_mapped(session_token, "reports.errors", request, |error| {
+                map_report_detail_error(error, "get_report_errors", "report errors")
+            })
             .await?;
         let items = parsed
             .items
@@ -473,16 +496,16 @@ impl ReportPort for GvmdAdapter {
         query: &ResultQuery,
     ) -> Result<ReportClosedCvePage, GatewayError> {
         let report_id = parse_entity_id(report_id)?;
-        let opts = report_detail_query(self, session_token, query).await?;
+        let filter_string = report_projection_filter(self, session_token, query).await?;
+        let mut request = GetReportClosedCvesRequest::new(report_id);
+        request.filter_string = filter_string;
+        request.filter_id = None;
+        request.ignore_pagination = None;
+        request.details = Some(true);
         let parsed = self
-            .execute_with_session_mapped(
-                session_token,
-                "reports.closed_cves",
-                GetReportClosedCvesRequest::new(report_id, opts),
-                |error| {
-                    map_report_detail_error(error, "get_report_closed_cves", "report closed CVEs")
-                },
-            )
+            .execute_with_session_mapped(session_token, "reports.closed_cves", request, |error| {
+                map_report_detail_error(error, "get_report_closed_cves", "report closed CVEs")
+            })
             .await?;
         let items = parsed
             .items
@@ -498,32 +521,27 @@ impl ReportPort for GvmdAdapter {
     }
 }
 
-async fn report_detail_query(
+async fn report_projection_filter(
     adapter: &GvmdAdapter,
     session_token: &str,
     query: &ResultQuery,
-) -> Result<GetReportDetailsOpts, GatewayError> {
+) -> Result<Option<String>, GatewayError> {
     let filter_id = query
         .filter_id
         .as_deref()
         .map(parse_entity_id)
         .transpose()?;
-    Ok(GetReportDetailsOpts {
-        filter_string: adapter
-            .paginated_filter_resolving_filter_id(
-                session_token,
-                None,
-                query.filter_string.as_deref(),
-                filter_id.as_ref(),
-                query.page,
-                query.per_page,
-                &["report_id"],
-            )
-            .await?,
-        filter_id: None,
-        ignore_pagination: None,
-        details: Some(true),
-    })
+    adapter
+        .paginated_filter_resolving_filter_id(
+            session_token,
+            None,
+            query.filter_string.as_deref(),
+            filter_id.as_ref(),
+            query.page,
+            query.per_page,
+            &["report_id"],
+        )
+        .await
 }
 
 fn typed_report_detail_unsupported(error: &gvm_client::GvmError, command: &str) -> bool {

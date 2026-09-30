@@ -3,7 +3,32 @@
 
 use serde_json::json;
 
-use super::{CredentialStore, IdentityOwner, IdentityResourceMeta, User};
+use super::{
+    CredentialStore, IdentityOwner, IdentityResourceMeta, ReportOperatingSystemSummary, User,
+};
+
+#[test]
+fn report_operating_system_summary_deserializes_the_live_gvmd_shape() {
+    // The compose E2E harness must model the purpose-shaped OS row directly;
+    // requiring generic summary fields would allow the #527 empty-object
+    // regression to escape live coverage.
+    let operating_system: ReportOperatingSystemSummary = serde_json::from_value(json!({
+        "bestOsCpe": "cpe:/o:debian:debian_linux:12",
+        "bestOsText": "Debian GNU/Linux 12 (bookworm)",
+        "hostsCount": 2
+    }))
+    .expect("live report operating-system row should deserialize");
+
+    assert_eq!(
+        operating_system.best_os_cpe.as_deref(),
+        Some("cpe:/o:debian:debian_linux:12")
+    );
+    assert_eq!(
+        operating_system.best_os_text.as_deref(),
+        Some("Debian GNU/Linux 12 (bookworm)")
+    );
+    assert_eq!(operating_system.hosts_count, Some(2));
+}
 
 #[test]
 fn identity_meta_deserializes_name_only_owner_shape() {

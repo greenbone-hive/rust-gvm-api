@@ -21,7 +21,7 @@ impl TaskPort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "tasks.list",
-                GetTasksRequest::new(GetTasksOpts {
+                GetTasksRequest {
                     filter_string: self
                         .paginated_filter_resolving_filter_id(
                             session_token,
@@ -38,7 +38,7 @@ impl TaskPort for GvmdAdapter {
                     details: Some(true),
                     schedules_only: None,
                     ignore_pagination: None,
-                }),
+                },
             )
             .await?;
         let items = parsed
@@ -66,7 +66,6 @@ impl TaskPort for GvmdAdapter {
             schedule_id,
             alert_ids,
             alterable,
-            hosts_ordering,
             observers,
             schedule_periods,
             preferences,
@@ -83,128 +82,93 @@ impl TaskPort for GvmdAdapter {
                 scan_config_id,
                 scanner_id,
             } => {
-                let hosts_ordering = hosts_ordering
-                    .as_deref()
-                    .map(parse_hosts_ordering)
-                    .transpose()?;
-                self.execute_with_session(
-                    session_token,
-                    "tasks.create",
-                    CreateTaskRequest::new(
-                        name,
-                        parse_entity_id(&scan_config_id)?,
-                        parse_entity_id(&target_id)?,
-                        parse_entity_id(&scanner_id)?,
-                        CreateTaskOpts {
-                            alterable,
-                            hosts_ordering,
-                            schedule_id,
-                            alert_ids,
-                            comment,
-                            schedule_periods,
-                            observers,
-                            observer_group_ids: Vec::new(),
-                            preferences,
-                        },
-                    ),
-                )
-                .await?
+                let mut request = CreateTaskRequest::new(
+                    name,
+                    parse_entity_id(&scan_config_id)?,
+                    parse_entity_id(&target_id)?,
+                    parse_entity_id(&scanner_id)?,
+                );
+                request.comment = comment;
+                request.alterable = alterable;
+                request.schedule_id = schedule_id;
+                request.alert_ids = alert_ids;
+                request.schedule_periods = schedule_periods;
+                request.observers = observers;
+                request.preferences = preferences
+                    .into_iter()
+                    .map(|(name, value)| TaskPreference::new(name, value))
+                    .collect();
+                self.execute_with_session(session_token, "tasks.create", request)
+                    .await?
             }
             CreateTaskTarget::AgentGroup {
                 agent_group_id,
                 scanner_id,
             } => {
-                if hosts_ordering.is_some() {
-                    return Err(GatewayError::InvalidInput(
-                        "hostsOrdering is only valid for classic tasks".to_string(),
-                    ));
-                }
-                self.execute_with_session(
-                    session_token,
-                    "tasks.create",
-                    CreateAgentGroupTaskRequest::new(
-                        name,
-                        parse_entity_id(&agent_group_id)?,
-                        parse_entity_id(&scanner_id)?,
-                        CreateAgentGroupTaskOpts {
-                            comment,
-                            alterable,
-                            schedule_id,
-                            alert_ids,
-                            schedule_periods,
-                            observers,
-                            observer_group_ids: Vec::new(),
-                            preferences,
-                        },
-                    ),
-                )
-                .await?
+                let mut request =
+                    CreateAgentGroupTaskRequest::new(name, parse_entity_id(&agent_group_id)?);
+                request.scanner_id = Some(parse_entity_id(&scanner_id)?);
+                request.comment = comment;
+                request.alterable = alterable;
+                request.schedule_id = schedule_id;
+                request.alert_ids = alert_ids;
+                request.schedule_periods = schedule_periods;
+                request.observers = observers;
+                request.preferences = preferences
+                    .into_iter()
+                    .map(|(name, value)| TaskPreference::new(name, value))
+                    .collect();
+                self.execute_with_session(session_token, "tasks.create", request)
+                    .await?
             }
             CreateTaskTarget::OciImage {
                 oci_image_target_id,
                 scanner_id,
             } => {
-                if hosts_ordering.is_some() {
-                    return Err(GatewayError::InvalidInput(
-                        "hostsOrdering is only valid for classic tasks".to_string(),
-                    ));
-                }
-                self.execute_with_session(
-                    session_token,
-                    "tasks.create",
-                    CreateOciImageTargetTaskRequest::new(
-                        name,
-                        parse_entity_id(&oci_image_target_id)?,
-                        parse_entity_id(&scanner_id)?,
-                        CreateOciImageTargetTaskOpts {
-                            comment,
-                            alterable,
-                            schedule_id,
-                            alert_ids,
-                            schedule_periods,
-                            observers,
-                            observer_group_ids: Vec::new(),
-                            preferences,
-                        },
-                    ),
-                )
-                .await?
+                let mut request = CreateOciImageTargetTaskRequest::new(
+                    name,
+                    parse_entity_id(&oci_image_target_id)?,
+                    parse_entity_id(&scanner_id)?,
+                );
+                request.comment = comment;
+                request.alterable = alterable;
+                request.schedule_id = schedule_id;
+                request.alert_ids = alert_ids;
+                request.schedule_periods = schedule_periods;
+                request.observers = observers;
+                request.preferences = preferences
+                    .into_iter()
+                    .map(|(name, value)| TaskPreference::new(name, value))
+                    .collect();
+                self.execute_with_session(session_token, "tasks.create", request)
+                    .await?
             }
             CreateTaskTarget::WebApplication {
                 web_application_target_id,
                 scanner_id,
             } => {
-                if hosts_ordering.is_some() {
-                    return Err(GatewayError::InvalidInput(
-                        "hostsOrdering is only valid for classic tasks".to_string(),
-                    ));
-                }
-                self.execute_with_session(
-                    session_token,
-                    "tasks.create",
-                    CreateWebApplicationTaskRequest::new(
-                        name,
-                        parse_entity_id(&web_application_target_id)?,
-                        parse_entity_id(&scanner_id)?,
-                        CreateWebApplicationTaskOpts {
-                            alterable,
-                            schedule_id,
-                            alert_ids,
-                            comment,
-                            schedule_periods,
-                            observers,
-                            observer_group_ids: Vec::new(),
-                            preferences,
-                        },
-                    ),
-                )
-                .await?
+                let mut request = CreateWebApplicationTaskRequest::new(
+                    name,
+                    parse_entity_id(&web_application_target_id)?,
+                    parse_entity_id(&scanner_id)?,
+                );
+                request.comment = comment;
+                request.alterable = alterable;
+                request.schedule_id = schedule_id;
+                request.alert_ids = alert_ids;
+                request.schedule_periods = schedule_periods;
+                request.observers = observers;
+                request.preferences = preferences
+                    .into_iter()
+                    .map(|(name, value)| TaskPreference::new(name, value))
+                    .collect();
+                self.execute_with_session(session_token, "tasks.create", request)
+                    .await?
             }
             CreateTaskTarget::Import => {
                 if schedule_id.is_some()
                     || !alert_ids.is_empty()
                     || alterable.is_some()
-                    || hosts_ordering.is_some()
                     || !observers.is_empty()
                     || schedule_periods.is_some()
                     || !preferences.is_empty()
@@ -213,12 +177,10 @@ impl TaskPort for GvmdAdapter {
                         "import tasks accept only type, name, and comment".to_string(),
                     ));
                 }
-                self.execute_with_session(
-                    session_token,
-                    "tasks.create",
-                    CreateImportTaskRequest::new(name, comment),
-                )
-                .await?
+                let mut request = CreateImportTaskRequest::new(name);
+                request.comment = comment;
+                self.execute_with_session(session_token, "tasks.create", request)
+                    .await?
             }
         };
         Ok(parsed.id.to_string())
@@ -288,31 +250,22 @@ impl TaskPort for GvmdAdapter {
                     .collect::<Result<Vec<_>, _>>()
             })
             .transpose()?;
-        let hosts_ordering = input
-            .hosts_ordering
-            .as_deref()
-            .map(parse_hosts_ordering)
-            .transpose()?;
-
-        let request = ModifyTaskRequest::new(
-            task_id,
-            ModifyTaskOpts {
-                name: input.name,
-                comment: input.comment,
-                alterable: input.alterable,
-                hosts_ordering,
-                schedule_id,
-                schedule_periods: input.schedule_periods,
-                target_id,
-                config_id,
-                scanner_id,
-                alert_ids,
-                observers: CollectionUpdate::Replace(input.observers),
-                observer_group_ids: CollectionUpdate::Omitted,
-                preferences: input.preferences,
-            },
-        )
-        .map_err(|error| GatewayError::InvalidInput(error.to_string()))?;
+        let mut request = ModifyTaskRequest::new(task_id);
+        request.name = input.name;
+        request.comment = input.comment;
+        request.alterable = input.alterable;
+        request.schedule_id = schedule_id;
+        request.schedule_periods = input.schedule_periods;
+        request.target_id = target_id;
+        request.config_id = config_id;
+        request.scanner_id = scanner_id;
+        request.alert_ids = alert_ids.map(CollectionUpdate::Replace).unwrap_or_default();
+        request.observers = CollectionUpdate::Replace(input.observers);
+        request.preferences = input
+            .preferences
+            .into_iter()
+            .map(|(name, value)| TaskPreference::new(name, value))
+            .collect();
         self.execute_with_session(session_token, "tasks.modify", request)
             .await?;
         self.get_task(session_token, id).await
@@ -388,7 +341,7 @@ impl TaskPort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "audits.list",
-                GetAuditsRequest::new(GetTasksOpts {
+                GetAuditsRequest {
                     filter_string: self
                         .paginated_filter_resolving_filter_id(
                             session_token,
@@ -405,7 +358,7 @@ impl TaskPort for GvmdAdapter {
                     details: Some(true),
                     schedules_only: None,
                     ignore_pagination: None,
-                }),
+                },
             )
             .await?;
         let items = parsed
@@ -449,34 +402,20 @@ impl TaskPort for GvmdAdapter {
             .iter()
             .map(|id| parse_entity_id(id))
             .collect::<Result<Vec<_>, _>>()?;
-        let hosts_ordering = input
-            .hosts_ordering
-            .as_deref()
-            .map(parse_hosts_ordering)
-            .transpose()?;
-
+        let mut request = CreateAuditRequest::new(input.name, config_id, target_id, scanner_id);
+        request.comment = input.comment;
+        request.alterable = input.alterable;
+        request.schedule_id = schedule_id;
+        request.schedule_periods = input.schedule_periods;
+        request.alert_ids = alert_ids;
+        request.observers = input.observers;
+        request.preferences = input
+            .preferences
+            .into_iter()
+            .map(|(name, value)| TaskPreference::new(name, value))
+            .collect();
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "audits.create",
-                CreateAuditRequest::new(
-                    input.name,
-                    config_id,
-                    target_id,
-                    scanner_id,
-                    CreateTaskOpts {
-                        alterable: input.alterable,
-                        hosts_ordering,
-                        schedule_id,
-                        alert_ids,
-                        comment: input.comment,
-                        schedule_periods: input.schedule_periods,
-                        observers: input.observers,
-                        observer_group_ids: Vec::new(),
-                        preferences: input.preferences,
-                    },
-                ),
-            )
+            .execute_with_session(session_token, "audits.create", request)
             .await?;
         Ok(parsed.id.to_string())
     }
@@ -487,6 +426,9 @@ impl TaskPort for GvmdAdapter {
         id: &str,
         input: ModifyTaskInput,
     ) -> Result<Task, GatewayError> {
+        // Audit mutation commands are selected by id and cannot carry a usage
+        // discriminator, so verify the REST resource family before mutating.
+        self.get_audit(session_token, id).await?;
         let task_id = parse_entity_id(id)?;
         let target_id = input
             .target_id
@@ -518,62 +460,45 @@ impl TaskPort for GvmdAdapter {
                     .collect::<Result<Vec<_>, _>>()
             })
             .transpose()?;
-        let hosts_ordering = input
-            .hosts_ordering
-            .as_deref()
-            .map(parse_hosts_ordering)
-            .transpose()?;
-
-        let request = ModifyAuditRequest::new(
-            task_id,
-            ModifyTaskOpts {
-                name: input.name,
-                comment: input.comment,
-                alterable: input.alterable,
-                hosts_ordering,
-                schedule_id,
-                schedule_periods: input.schedule_periods,
-                target_id,
-                config_id,
-                scanner_id,
-                alert_ids,
-                observers: CollectionUpdate::Replace(input.observers),
-                observer_group_ids: CollectionUpdate::Omitted,
-                preferences: input.preferences,
-            },
-        )
-        .map_err(|error| GatewayError::InvalidInput(error.to_string()))?;
+        let mut request = ModifyAuditRequest::new(task_id);
+        request.name = input.name;
+        request.comment = input.comment;
+        request.alterable = input.alterable;
+        request.schedule_id = schedule_id;
+        request.schedule_periods = input.schedule_periods;
+        request.target_id = target_id;
+        request.policy_id = config_id;
+        request.scanner_id = scanner_id;
+        request.alert_ids = alert_ids.map(CollectionUpdate::Replace).unwrap_or_default();
+        request.observers = CollectionUpdate::Replace(input.observers);
+        request.preferences = input
+            .preferences
+            .into_iter()
+            .map(|(name, value)| TaskPreference::new(name, value))
+            .collect();
         self.execute_with_session(session_token, "audits.modify", request)
             .await?;
         self.get_audit(session_token, id).await
     }
 
     async fn delete_audit(&self, session_token: &str, id: &str) -> Result<(), GatewayError> {
+        // Keep scan tasks inaccessible through the audit lifecycle surface.
+        self.get_audit(session_token, id).await?;
         self.execute_with_session(
             session_token,
             "audits.delete",
-            DeleteAuditRequest::new(parse_entity_id(id)?),
+            DeleteAuditRequest::new(parse_entity_id(id)?, false),
         )
         .await?;
         Ok(())
     }
 
     async fn get_audit(&self, session_token: &str, id: &str) -> Result<Task, GatewayError> {
-        // Fetch through the audit-scoped `get_tasks usage_type="audit"` command
-        // filtered to this id, so a scan-task id is not readable as an audit.
-        let _ = parse_entity_id(id)?;
         let parsed = self
             .execute_with_session(
                 session_token,
                 "audits.get",
-                GetAuditsRequest::new(GetTasksOpts {
-                    filter_string: Some(format!("uuid={id}")),
-                    filter_id: None,
-                    trash: None,
-                    details: Some(true),
-                    schedules_only: None,
-                    ignore_pagination: Some(true),
-                }),
+                GetAuditRequest::new(parse_entity_id(id)?),
             )
             .await?;
         parsed

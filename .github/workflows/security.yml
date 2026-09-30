@@ -56,15 +56,21 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Run Semgrep
-        uses: returntocorp/semgrep-action@713efdd345f3035192eaa63f56867b88e63e4e5d # v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          config: >-
-            p/rust
-            p/security-audit
-            p/secrets
-          generateSarif: "1"
+        run: |
+          docker run --rm \
+            --volume "${GITHUB_WORKSPACE}:/src:ro" \
+            --workdir /src \
+            semgrep/semgrep:1.176.1@sha256:34ab619bf1391a24bfda3f05debd0d8a6ce3093c2d5f9d39cfc00f83c1397823 \
+            semgrep scan \
+              --strict \
+              --error \
+              --config p/rust \
+              --config p/security-audit \
+              --config p/secrets \
+              --sarif > semgrep.sarif
+          jq '(.runs[].tool.driver.name) = "Semgrep"' \
+            semgrep.sarif > semgrep.normalized.sarif
+          mv semgrep.normalized.sarif semgrep.sarif
       - name: Upload SARIF
         # Code scanning must be enabled for the repo for SARIF upload to work.
         # For private repos, this requires GitHub Advanced Security (GHAS).

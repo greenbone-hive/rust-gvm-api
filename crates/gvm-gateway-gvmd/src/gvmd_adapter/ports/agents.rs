@@ -14,8 +14,7 @@ use gvm_gmp::{
     commands::{
         agent_groups::{
             CloneAgentGroupRequest, CreateAgentGroupRequest, DeleteAgentGroupRequest,
-            GetAgentGroupRequest, GetAgentGroupsOpts, GetAgentGroupsRequest, ModifyAgentGroupOpts,
-            ModifyAgentGroupRequest,
+            GetAgentGroupRequest, GetAgentGroupsRequest, ModifyAgentGroupRequest,
         },
         agents::{
             AgentConfigOpts, AgentControlConfig as GmpAgentControlConfig,
@@ -23,8 +22,7 @@ use gvm_gmp::{
             AgentRetryConfig as GmpAgentRetryConfig,
             AgentScriptExecutorConfig as GmpAgentScriptExecutorConfig, DeleteAgentRequest,
             GetAgentInstallerInstructionRequest, GetAgentRequest, GetAgentSupportBundleRequest,
-            GetAgentsOpts, GetAgentsRequest, ModifyAgentControlScanConfigOpts,
-            ModifyAgentControlScanConfigRequest, ModifyAgentOpts, ModifyAgentRequest,
+            GetAgentsRequest, ModifyAgentControlScanConfigRequest, ModifyAgentRequest,
             SyncAgentsRequest,
         },
     },
@@ -62,10 +60,10 @@ impl AgentPort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "agents.list",
-                GetAgentsRequest::new(GetAgentsOpts {
+                GetAgentsRequest {
                     filter_string,
                     filter_id: None,
-                }),
+                },
             )
             .await?;
         let items = parsed
@@ -80,7 +78,7 @@ impl AgentPort for GvmdAdapter {
                 .execute_with_session(
                     session_token,
                     "agents.list",
-                    GetAgentsRequest::new(GetAgentsOpts {
+                    GetAgentsRequest {
                         filter_string: self
                             .filter_resolving_filter_id(
                                 session_token,
@@ -91,7 +89,7 @@ impl AgentPort for GvmdAdapter {
                             )
                             .await?,
                         filter_id: None,
-                    }),
+                    },
                 )
                 .await?;
             let items = parsed
@@ -138,7 +136,7 @@ impl AgentPort for GvmdAdapter {
         self.execute_with_session(
             session_token,
             "agents.modify",
-            ModifyAgentRequest::new(vec![agent_id], modify_agent_opts_from_input(input)),
+            modify_agent_request_from_input(agent_id, input),
         )
         .await?;
         self.get_agent(session_token, id).await
@@ -190,18 +188,11 @@ impl AgentPort for GvmdAdapter {
         id: &str,
         input: ModifyAgentControlScanConfigInput,
     ) -> Result<(), GatewayError> {
-        self.execute_with_session(
-            session_token,
-            "agents.control_scan_config.modify",
-            ModifyAgentControlScanConfigRequest::new(
-                parse_entity_id(id)?,
-                ModifyAgentControlScanConfigOpts {
-                    agent_defaults: input.agent_defaults.map(agent_config_opts_from_domain),
-                    update_to_latest: input.update_to_latest,
-                },
-            ),
-        )
-        .await?;
+        let mut request = ModifyAgentControlScanConfigRequest::new(parse_entity_id(id)?);
+        request.agent_defaults = input.agent_defaults.map(agent_config_opts_from_domain);
+        request.update_to_latest = input.update_to_latest;
+        self.execute_with_session(session_token, "agents.control_scan_config.modify", request)
+            .await?;
         Ok(())
     }
 
@@ -248,11 +239,11 @@ impl AgentPort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "agent_groups.list",
-                GetAgentGroupsRequest::new(GetAgentGroupsOpts {
+                GetAgentGroupsRequest {
                     filter_string,
                     filter_id: None,
                     trash: Some(query.trash),
-                }),
+                },
             )
             .await?;
         let items = parsed
@@ -267,7 +258,7 @@ impl AgentPort for GvmdAdapter {
                 .execute_with_session(
                     session_token,
                     "agent_groups.list",
-                    GetAgentGroupsRequest::new(GetAgentGroupsOpts {
+                    GetAgentGroupsRequest {
                         filter_string: self
                             .filter_resolving_filter_id(
                                 session_token,
@@ -279,7 +270,7 @@ impl AgentPort for GvmdAdapter {
                             .await?,
                         filter_id: None,
                         trash: Some(query.trash),
-                    }),
+                    },
                 )
                 .await?;
             let items = parsed
@@ -306,19 +297,11 @@ impl AgentPort for GvmdAdapter {
         input: CreateAgentGroupInput,
     ) -> Result<String, GatewayError> {
         let agent_ids = parse_entity_ids(&input.agent_ids)?;
+        let mut request =
+            CreateAgentGroupRequest::new(input.name, agent_ids, input.scheduler_cron_time);
+        request.comment = input.comment;
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "agent_groups.create",
-                CreateAgentGroupRequest::new(
-                    input.name,
-                    agent_ids,
-                    input.scheduler_cron_time,
-                    gvm_client::CreateAgentGroupOpts {
-                        comment: input.comment,
-                    },
-                ),
-            )
+            .execute_with_session(session_token, "agent_groups.create", request)
             .await?;
         Ok(parsed.id.to_string())
     }
@@ -349,25 +332,18 @@ impl AgentPort for GvmdAdapter {
         id: &str,
         input: ModifyAgentGroupInput,
     ) -> Result<AgentGroup, GatewayError> {
-        self.execute_with_session(
-            session_token,
-            "agent_groups.modify",
-            ModifyAgentGroupRequest::new(
-                parse_entity_id(id)?,
-                input.scheduler_cron_time,
-                ModifyAgentGroupOpts {
-                    name: input.name,
-                    comment: input.comment,
-                    agent_ids: input
-                        .agent_ids
-                        .as_deref()
-                        .map(parse_entity_ids)
-                        .transpose()?
-                        .unwrap_or_default(),
-                },
-            ),
-        )
-        .await?;
+        let mut request =
+            ModifyAgentGroupRequest::new(parse_entity_id(id)?, input.scheduler_cron_time);
+        request.name = input.name;
+        request.comment = input.comment;
+        request.agent_ids = input
+            .agent_ids
+            .as_deref()
+            .map(parse_entity_ids)
+            .transpose()?
+            .unwrap_or_default();
+        self.execute_with_session(session_token, "agent_groups.modify", request)
+            .await?;
         self.get_agent_group(session_token, id).await
     }
 
@@ -425,13 +401,16 @@ fn parse_agent_installer_language(value: &str) -> Result<AgentInstallerLanguage,
     }
 }
 
-fn modify_agent_opts_from_input(input: ModifyAgentInput) -> ModifyAgentOpts {
-    ModifyAgentOpts {
-        authorized: input.authorized,
-        update_to_latest: input.update_to_latest,
-        comment: input.comment,
-        config: input.config.map(agent_config_opts_from_domain),
-    }
+fn modify_agent_request_from_input(
+    agent_id: EntityId,
+    input: ModifyAgentInput,
+) -> ModifyAgentRequest {
+    let mut request = ModifyAgentRequest::new(vec![agent_id]);
+    request.authorized = input.authorized;
+    request.update_to_latest = input.update_to_latest;
+    request.comment = input.comment;
+    request.config = input.config.map(agent_config_opts_from_domain);
+    request
 }
 
 fn agent_config_opts_from_domain(input: AgentConfig) -> AgentConfigOpts {

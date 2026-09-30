@@ -32,13 +32,13 @@ impl SchedulePort for GvmdAdapter {
             .execute_with_session(
                 session_token,
                 "schedules.list",
-                GetSchedulesRequest::new(GetSchedulesOpts {
+                GetSchedulesRequest {
                     filter_string,
                     filter_id: None,
                     trash: None,
                     details: Some(true),
                     tasks: None,
-                }),
+                },
             )
             .await?;
         let items = parsed
@@ -58,20 +58,11 @@ impl SchedulePort for GvmdAdapter {
         session_token: &str,
         input: CreateScheduleInput,
     ) -> Result<String, GatewayError> {
+        let mut request = CreateScheduleRequest::new(input.name, input.icalendar);
+        request.comment = input.comment;
+        request.timezone = Some(input.timezone);
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "schedules.create",
-                CreateScheduleRequest::new(
-                    input.name,
-                    ScheduleOpts {
-                        comment: input.comment,
-                        icalendar: Some(input.icalendar),
-                        timezone: Some(input.timezone),
-                        name: None,
-                    },
-                ),
-            )
+            .execute_with_session(session_token, "schedules.create", request)
             .await?;
         Ok(parsed.id.to_string())
     }
@@ -98,20 +89,24 @@ impl SchedulePort for GvmdAdapter {
         id: &str,
         input: ModifyScheduleInput,
     ) -> Result<Schedule, GatewayError> {
-        self.execute_with_session(
-            session_token,
-            "schedules.modify",
-            ModifyScheduleRequest::new(
-                parse_entity_id(id)?,
-                ScheduleOpts {
-                    comment: input.comment,
-                    icalendar: input.icalendar,
-                    timezone: input.timezone,
-                    name: input.name,
-                },
-            ),
-        )
-        .await?;
+        let icalendar = match input.icalendar {
+            Some(icalendar) => icalendar,
+            None => self
+                .get_schedule(session_token, id)
+                .await?
+                .icalendar
+                .ok_or_else(|| {
+                    GatewayError::InvalidInput(
+                        "schedule has no iCalendar value to preserve".to_string(),
+                    )
+                })?,
+        };
+        let mut request = ModifyScheduleRequest::new(parse_entity_id(id)?, icalendar);
+        request.name = input.name;
+        request.comment = input.comment;
+        request.timezone = input.timezone;
+        self.execute_with_session(session_token, "schedules.modify", request)
+            .await?;
         self.get_schedule(session_token, id).await
     }
 

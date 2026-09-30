@@ -82,7 +82,7 @@ async fn generated_openapi_endpoint_exposes_implemented_contract() {
 
 #[tokio::test]
 async fn report_drill_down_and_operating_system_routes_expose_typed_contracts() {
-    // End-to-end contract coverage for #344: all five report summary routes and
+    // End-to-end contract coverage for #344/#527: report summary routes and
     // all four OS operations must leave the reservation handler, preserve their
     // purpose-shaped JSON, and enforce backend-supported mutation semantics.
     let report_id =
@@ -112,7 +112,6 @@ async fn report_drill_down_and_operating_system_routes_expose_typed_contracts() 
         ("hosts", "192.0.2.10"),
         ("ports", "22/tcp"),
         ("applications", "OpenSSH"),
-        ("operating-systems", "Debian"),
         ("cves", "CVE-2026-0001"),
     ] {
         let response = harness
@@ -142,6 +141,39 @@ async fn report_drill_down_and_operating_system_routes_expose_typed_contracts() 
             "subresource={subresource} must remain purpose-shaped"
         );
     }
+
+    // #527: report operating-system summaries are a distinct projection, not
+    // generic id/name/severity rows. Assert their real gvmd fields at the HTTP
+    // boundary so an empty-object response cannot satisfy this contract test.
+    let response = harness
+        .client
+        .get(harness.url(&format!(
+            "/api/v1/reports/{report_id}/operating-systems?filter=severity%3E3&page=1&perPage=10"
+        )))
+        .bearer_auth(&harness.token)
+        .send()
+        .await
+        .expect("report operating-system response");
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response
+        .json::<Value>()
+        .await
+        .expect("report operating-system JSON");
+    let operating_system = &body["data"][0];
+    assert_eq!(
+        operating_system["bestOsCpe"],
+        Value::String("cpe:/o:debian:debian_linux".to_string())
+    );
+    assert_eq!(
+        operating_system["bestOsText"],
+        Value::String("Debian".to_string())
+    );
+    assert_eq!(operating_system["hostsCount"], Value::from(2));
+    assert!(operating_system.get("id").is_none());
+    assert!(operating_system.get("name").is_none());
+    assert!(operating_system.get("severity").is_none());
+    assert_eq!(body["pagination"]["page"], Value::from(1));
+    assert_eq!(body["pagination"]["perPage"], Value::from(10));
 
     let response = harness
         .client
@@ -313,7 +345,8 @@ async fn update_task_preserves_preferences_through_handler() {
 
 #[tokio::test]
 async fn report_export_job_api_downloads_json_result() {
-    let (addr, token, handle) = spawn_report_server(Arc::new(JsonExportReportPort)).await;
+    let (addr, token, handle) =
+        spawn_report_server(Arc::new(JsonExportReportPort::default())).await;
     let report_id = "550e8400-e29b-41d4-a716-446655440000";
     let client = Client::new();
 
@@ -388,9 +421,74 @@ async fn report_export_job_api_downloads_json_result() {
 }
 
 #[tokio::test]
+async fn report_delete_rejects_obsolete_permanence_choice_before_permanent_delete() {
+    let deleted_ids = Arc::new(Mutex::new(Vec::new()));
+    let report_port = Arc::new(JsonExportReportPort {
+        deleted_ids: Arc::clone(&deleted_ids),
+    });
+    let (addr, token, handle) = spawn_report_server(report_port).await;
+    let report_id = "550e8400-e29b-41d4-a716-446655440000";
+    let client = Client::new();
+
+    // A legacy caller asking for non-ultimate deletion must receive a
+    // deterministic RFC 9457 error before the permanent domain operation can
+    // run. This prevents a successful response from implying trash semantics.
+    let rejected = client
+        .delete(format!(
+            "http://{addr}/api/v1/reports/{report_id}?ultimate=false"
+        ))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .expect("obsolete report delete response");
+    assert_eq!(rejected.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        rejected
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok()),
+        Some("application/problem+json")
+    );
+    let problem = rejected.json::<Value>().await.expect("RFC 9457 response");
+    assert_eq!(problem["code"], "bad_request");
+    assert_eq!(problem["status"], 400);
+    assert_eq!(problem["instance"], format!("/api/v1/reports/{report_id}"));
+    assert!(problem["detail"]
+        .as_str()
+        .is_some_and(|detail| detail.contains("always permanent")));
+    assert!(
+        deleted_ids
+            .lock()
+            .expect("deleted report mutex should not be poisoned")
+            .is_empty(),
+        "rejected legacy input must not reach permanent deletion"
+    );
+
+    // Unrelated queries retain the repository's ignore-unknown convention,
+    // and the no-choice delete contract reaches the port exactly once.
+    let deleted = client
+        .delete(format!(
+            "http://{addr}/api/v1/reports/{report_id}?reason=cleanup"
+        ))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .expect("permanent report delete response");
+    assert_eq!(deleted.status(), StatusCode::NO_CONTENT);
+    assert_eq!(
+        *deleted_ids
+            .lock()
+            .expect("deleted report mutex should not be poisoned"),
+        vec![report_id.to_string()]
+    );
+
+    handle.abort();
+}
+
+#[tokio::test]
 async fn report_export_jobs_are_hidden_from_other_users() {
     let (addr, owner_token, other_token, handle) =
-        spawn_report_server_with_users(Arc::new(JsonExportReportPort)).await;
+        spawn_report_server_with_users(Arc::new(JsonExportReportPort::default())).await;
     let report_id = "550e8400-e29b-41d4-a716-446655440000";
     let client = Client::new();
 
@@ -531,7 +629,7 @@ async fn representative_request_bodies_reject_unknown_fields_with_rfc9457_400() 
         Arc::new(CapturingTaskPort {
             captured: Arc::new(Mutex::new(None)),
         }),
-        Arc::new(JsonExportReportPort),
+        Arc::new(JsonExportReportPort::default()),
     )
     .await;
     let client = Client::new();
@@ -664,7 +762,7 @@ async fn representative_request_bodies_accept_valid_payloads() {
         Arc::new(CapturingTaskPort {
             captured: Arc::clone(&captured),
         }),
-        Arc::new(JsonExportReportPort),
+        Arc::new(JsonExportReportPort::default()),
     )
     .await;
     let client = Client::new();
@@ -971,7 +1069,10 @@ async fn spawn_report_server_with_users(
     (addr, token, other_token, handle)
 }
 
-struct JsonExportReportPort;
+#[derive(Default)]
+struct JsonExportReportPort {
+    deleted_ids: Arc<Mutex<Vec<String>>>,
+}
 
 struct AcceptingAlertPort;
 
@@ -1089,7 +1190,11 @@ impl ReportPort for JsonExportReportPort {
         ))
     }
 
-    async fn delete_report(&self, _: &str, _: &str, _: bool) -> Result<(), GatewayError> {
+    async fn delete_report(&self, _: &str, id: &str) -> Result<(), GatewayError> {
+        self.deleted_ids
+            .lock()
+            .expect("deleted report mutex should not be poisoned")
+            .push(id.to_string());
         Ok(())
     }
 
@@ -1352,7 +1457,7 @@ impl ReportPort for MissingReportPort {
         Err(GatewayError::NotFound(format!("report {id} not found")))
     }
 
-    async fn delete_report(&self, _: &str, id: &str, _: bool) -> Result<(), GatewayError> {
+    async fn delete_report(&self, _: &str, id: &str) -> Result<(), GatewayError> {
         Err(GatewayError::NotFound(format!("report {id} not found")))
     }
 

@@ -385,9 +385,6 @@ pub struct CreateTaskRequest {
     pub alert_ids: Vec<String>,
     /// Optional alterable flag.
     pub alterable: Option<bool>,
-    /// Optional hosts ordering.
-    #[serde(rename = "hostsOrdering")]
-    pub hosts_ordering: Option<String>,
     /// Optional observers.
     #[serde(default)]
     pub observers: Vec<String>,
@@ -415,7 +412,6 @@ impl CreateTaskRequest {
             schedule_id,
             alert_ids,
             alterable,
-            hosts_ordering,
             observers,
             schedule_periods,
             preferences,
@@ -500,7 +496,6 @@ impl CreateTaskRequest {
                     || schedule_id.is_some()
                     || !alert_ids.is_empty()
                     || alterable.is_some()
-                    || hosts_ordering.is_some()
                     || !observers.is_empty()
                     || schedule_periods.is_some()
                     || !preferences.is_empty()
@@ -527,16 +522,6 @@ impl CreateTaskRequest {
                 "scanConfigId is only valid for classic tasks".to_string(),
             ));
         }
-        if !matches!(
-            &target,
-            gvm_gateway_domain::CreateTaskTarget::Classic { .. }
-                | gvm_gateway_domain::CreateTaskTarget::Import
-        ) && hosts_ordering.is_some()
-        {
-            return Err(GatewayError::InvalidInput(
-                "hostsOrdering is only valid for classic tasks".to_string(),
-            ));
-        }
         validate_optional_uuid("scheduleId", schedule_id.as_deref())?;
         for (index, alert_id) in alert_ids.iter().enumerate() {
             validate_uuid(&format!("alertIds[{index}]"), alert_id)?;
@@ -549,7 +534,6 @@ impl CreateTaskRequest {
             schedule_id,
             alert_ids,
             alterable,
-            hosts_ordering,
             observers,
             schedule_periods,
             preferences: preferences.into_iter().collect(),
@@ -588,9 +572,6 @@ pub struct ModifyTaskRequest {
     pub alert_ids: Option<Vec<String>>,
     /// Optional alterable flag.
     pub alterable: Option<bool>,
-    /// Optional hosts ordering.
-    #[serde(rename = "hostsOrdering")]
-    pub hosts_ordering: Option<String>,
     /// Optional observers.
     #[serde(default)]
     pub observers: Vec<String>,
@@ -624,7 +605,6 @@ impl ModifyTaskRequest {
             schedule_id: self.schedule_id,
             alert_ids: self.alert_ids,
             alterable: self.alterable,
-            hosts_ordering: self.hosts_ordering,
             observers: self.observers,
             schedule_periods: self.schedule_periods,
             preferences: self.preferences.into_iter().collect(),
