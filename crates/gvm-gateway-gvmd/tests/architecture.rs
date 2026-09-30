@@ -14,9 +14,10 @@ const RUST_GVM_COMPONENTS: &[&str] = &[
     "gvm-mock-server",
     "gvm-protocol",
 ];
-// #529 uses the signed compatibility commit that applies the authoritative
-// operating-system parser correction to the exact reviewed #671 baseline.
-const RUST_GVM_BASELINE: &str = "f14a4590a74135b222589cb6347ae7655c9b8506";
+// The published v0.7.0 release contains the complete reviewed canonical-request
+// baseline and must remain immutable across all five workspace dependencies.
+const RUST_GVM_RELEASE_TAG: &str = "v0.7.0";
+const RUST_GVM_RELEASE_REVISION: &str = "acdabf5a039d78df82e86b69ee8a374df8575c7a";
 
 const REMOVED_CANONICAL_TRANSITION_TYPES: &[&str] = &[
     "CreateTargetOpts",
@@ -271,8 +272,8 @@ fn rust_gvm_components_resolve_to_one_revision() {
         "rust-gvm components resolved to different revisions: {revisions:?}"
     );
     assert_eq!(
-        *expected, RUST_GVM_BASELINE,
-        "rust-gvm components must remain on the reviewed issue #529 canonical administration/cleanup baseline"
+        *expected, RUST_GVM_RELEASE_REVISION,
+        "rust-gvm components must remain on the exact published v0.7.0 revision"
     );
 
     let workspace_manifest =
@@ -283,8 +284,8 @@ fn rust_gvm_components_resolve_to_one_revision() {
             .find(|line| line.trim_start().starts_with(&format!("{component} =")))
             .unwrap_or_else(|| panic!("{component} must be declared in workspace dependencies"));
         assert!(
-            dependency.contains(&format!("rev = \"{RUST_GVM_BASELINE}\"")),
-            "{component} must pin the reviewed issue #529 baseline in Cargo.toml: {dependency}"
+            dependency.contains(&format!("tag = \"{RUST_GVM_RELEASE_TAG}\"")),
+            "{component} must pin the immutable v0.7.0 release tag in Cargo.toml: {dependency}"
         );
         assert!(
             !dependency.contains("branch ="),
