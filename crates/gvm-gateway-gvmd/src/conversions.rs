@@ -236,6 +236,25 @@ pub(crate) fn credential_from_gmp(credential: gvm_gmp::responses::Credential) ->
 }
 
 pub(crate) fn port_list_from_gmp(port_list: gvm_gmp::responses::PortList) -> PortList {
+    let port_range = (!port_list.port_ranges.is_empty()).then(|| {
+        port_list
+            .port_ranges
+            .iter()
+            .map(|range| {
+                let range_type = match range.range_type {
+                    gvm_gmp::PortRangeType::Tcp => "T",
+                    gvm_gmp::PortRangeType::Udp => "U",
+                };
+                if range.start == range.end {
+                    format!("{range_type}:{}", range.start)
+                } else {
+                    format!("{range_type}:{}-{}", range.start, range.end)
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    });
+
     PortList {
         id: port_list.meta.id.to_string(),
         name: port_list.meta.name,
@@ -243,7 +262,7 @@ pub(crate) fn port_list_from_gmp(port_list: gvm_gmp::responses::PortList) -> Por
         port_count: port_list.port_count,
         tcp_count: port_list.tcp_count,
         udp_count: port_list.udp_count,
-        port_range: port_list.port_range,
+        port_range,
         in_use: port_list.meta.in_use,
         writable: port_list.meta.writable,
     }
