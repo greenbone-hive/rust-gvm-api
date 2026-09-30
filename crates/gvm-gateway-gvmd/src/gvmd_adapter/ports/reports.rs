@@ -4,6 +4,20 @@ use super::super::*;
 
 #[async_trait]
 impl ReportPort for GvmdAdapter {
+    async fn import_report(
+        &self,
+        session_token: &str,
+        input: ImportReportInput,
+    ) -> Result<String, GatewayError> {
+        let mut request =
+            ImportReportRequest::new(parse_entity_id(&input.task_id)?, input.report_xml);
+        request.in_assets = input.in_assets;
+        let created = self
+            .execute_with_session(session_token, "reports.create", request)
+            .await?;
+        Ok(created.id.to_string())
+    }
+
     async fn list_reports(
         &self,
         session_token: &str,

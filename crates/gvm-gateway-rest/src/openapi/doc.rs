@@ -56,6 +56,14 @@ pub(crate) struct ResourceIdPathDoc {
     id: Uuid,
 }
 
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+pub(crate) struct ImportReportQueryDoc {
+    #[serde(rename = "taskId")]
+    task_id: Uuid,
+    #[serde(rename = "inAssets")]
+    in_assets: Option<bool>,
+}
+
 #[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]
 pub(crate) struct TargetListQueryDoc {
     filter: Option<String>,

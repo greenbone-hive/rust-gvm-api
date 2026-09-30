@@ -24,7 +24,7 @@ use gvm_gateway_domain::{
     DfnCertAdvisory, DfnCertAdvisoryPage, FeedList, FeedPort, FeedQuery, Filter, FilterPage,
     GatewayError, GenericAsset, GenericAssetPage, GenericConfig, GenericConfigPage,
     GenericConfigQuery, GetReportOpts, Group, GroupPage, Host, HostPage, IdentityPort,
-    IdentityQuery, ModifyAlertInput, ModifyAssetInput, ModifyCredentialInput,
+    IdentityQuery, ImportReportInput, ModifyAlertInput, ModifyAssetInput, ModifyCredentialInput,
     ModifyCredentialStoreInput, ModifyFilterInput, ModifyGroupInput, ModifyHostInput,
     ModifyNoteInput, ModifyOciImageTargetInput, ModifyOperatingSystemInput, ModifyOverrideInput,
     ModifyPermissionInput, ModifyPortListInput, ModifyRoleInput, ModifyScanConfigInput,
@@ -96,7 +96,7 @@ use gvm_gmp::{
             GetReportCvesRequest, GetReportErrorsRequest, GetReportExportRequest,
             GetReportHostsRequest, GetReportOperatingSystemsRequest, GetReportPortsRequest,
             GetReportRequest, GetReportTlsCertificatesRequest, GetReportVulnsRequest,
-            GetReportsRequest,
+            GetReportsRequest, ImportReportRequest,
         },
         results::{GetResultRequest, GetResultsRequest},
         roles::{

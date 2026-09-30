@@ -3,9 +3,34 @@
 
 //! Report domain types and query options.
 
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{Pagination, ResourceRef, ScanResult};
+
+/// Request to import one opaque report envelope into an existing import task.
+#[derive(Clone, Eq, PartialEq)]
+pub struct ImportReportInput {
+    /// Existing import-task identifier.
+    pub task_id: String,
+    /// Original report envelope bytes, interpreted only by the typed GMP layer.
+    pub report_xml: Vec<u8>,
+    /// Whether report hosts should be added to assets; omission preserves the
+    /// backend default and is distinct from explicit `false`.
+    pub in_assets: Option<bool>,
+}
+
+impl fmt::Debug for ImportReportInput {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ImportReportInput")
+            .field("task_id", &self.task_id)
+            .field("report_xml", &"<redacted>")
+            .field("in_assets", &self.in_assets)
+            .finish()
+    }
+}
 
 /// Aggregate vulnerability finding returned by a report drill-down.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -371,3 +396,7 @@ impl Default for GetReportOpts {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "reports_test.rs"]
+mod reports_test;

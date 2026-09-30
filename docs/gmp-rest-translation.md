@@ -362,6 +362,7 @@ and
 | `PUT /api/v1/targets/{id}` | `modify_target`, then a read-back when needed | `200` JSON representation |
 | `DELETE /api/v1/targets/{id}` | `delete_target` with trash/permanent semantics | `204` on success |
 | `POST /api/v1/tasks/{id}/start` | `start_task` | `200` JSON action result containing `reportId` |
+| `POST /api/v1/reports?taskId={taskId}&inAssets={bool}` | typed `ImportReportRequest` / `import_report` | `201` JSON containing the new report ID plus canonical `Location` |
 | `POST /api/v1/reports/{id}/exports` | report retrieval/export operations | `202` plus a pollable job URI |
 
 The table describes translation intent; the OpenAPI files remain authoritative
@@ -660,8 +661,15 @@ Factor their guarantees into a common artifact policy:
 - streaming or disk-backed spooling when the maximum artifact is too large for
   predictable in-memory handling.
 
-Future report and report-format imports should be modeled as bounded resources
-or jobs with these rules. Credential private-material export should remain
+Report import is modeled as bounded report collection creation:
+`POST /api/v1/reports` accepts an `application/xml` body up to 10 MiB, relates
+it to an existing import task through `taskId`, and preserves optional
+`inAssets` omission. The gateway rejects invalid media type, UUID, empty body,
+and excessive size while treating the XML bytes as opaque. Exact one-report
+envelope validation and GMP construction remain in rust-gvm's typed
+`ImportReportRequest`; success returns the created report ID and canonical
+readback location. Report-format import remains future work and should use the
+same bounded-resource rules. Credential private-material export should remain
 omitted unless a concrete product requirement and a stricter secret-delivery
 contract justify it.
 

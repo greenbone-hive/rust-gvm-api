@@ -18,20 +18,20 @@ use gvm_gateway_domain::{
     CredentialStore, Cve, CvePage, DfnCertAdvisory, DfnCertAdvisoryPage, FeedList, FeedPort,
     FeedQuery, Filter, FilterPage, GatewayError, GenericAsset, GenericAssetPage, GenericConfig,
     GenericConfigPage, GenericConfigQuery, GetReportOpts, Group, GroupPage, Host, HostPage,
-    IdentityPort, IdentityQuery, ModifyAgentControlScanConfigInput, ModifyAgentGroupInput,
-    ModifyAgentInput, ModifyAlertInput, ModifyAssetInput, ModifyCredentialInput,
-    ModifyCredentialStoreInput, ModifyFilterInput, ModifyGroupInput, ModifyHostInput,
-    ModifyNoteInput, ModifyOciImageTargetInput, ModifyOperatingSystemInput, ModifyOverrideInput,
-    ModifyPermissionInput, ModifyPortListInput, ModifyRoleInput, ModifyScanConfigInput,
-    ModifyScheduleInput, ModifyTagInput, ModifyTargetInput, ModifyTaskInput, ModifyUserInput,
-    ModifyUserSettingInput, ModifyWebApplicationTargetInput, Note, NotePage, Nvt, NvtFamilyPage,
-    NvtPage, NvtQuery, OciImageTarget, OciImageTargetPage, OperatingSystem, OperatingSystemPage,
-    Override, OverridePage, Permission, PermissionPage, PortList, PortListPage, PortListPort,
-    PortListQuery, ReadinessStatus, Report, ReportApplicationPage, ReportClosedCvePage,
-    ReportCvePage, ReportErrorPage, ReportExport, ReportExportRequest, ReportFormat,
-    ReportFormatPage, ReportHostPage, ReportOperatingSystemPage, ReportPage, ReportPort,
-    ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResultPage, ResultPort, ResultQuery,
-    Role, RolePage, ScanConfig, ScanConfigNvtPage, ScanConfigNvtQuery, ScanConfigPage,
+    IdentityPort, IdentityQuery, ImportReportInput, ModifyAgentControlScanConfigInput,
+    ModifyAgentGroupInput, ModifyAgentInput, ModifyAlertInput, ModifyAssetInput,
+    ModifyCredentialInput, ModifyCredentialStoreInput, ModifyFilterInput, ModifyGroupInput,
+    ModifyHostInput, ModifyNoteInput, ModifyOciImageTargetInput, ModifyOperatingSystemInput,
+    ModifyOverrideInput, ModifyPermissionInput, ModifyPortListInput, ModifyRoleInput,
+    ModifyScanConfigInput, ModifyScheduleInput, ModifyTagInput, ModifyTargetInput, ModifyTaskInput,
+    ModifyUserInput, ModifyUserSettingInput, ModifyWebApplicationTargetInput, Note, NotePage, Nvt,
+    NvtFamilyPage, NvtPage, NvtQuery, OciImageTarget, OciImageTargetPage, OperatingSystem,
+    OperatingSystemPage, Override, OverridePage, Permission, PermissionPage, PortList,
+    PortListPage, PortListPort, PortListQuery, ReadinessStatus, Report, ReportApplicationPage,
+    ReportClosedCvePage, ReportCvePage, ReportErrorPage, ReportExport, ReportExportRequest,
+    ReportFormat, ReportFormatPage, ReportHostPage, ReportOperatingSystemPage, ReportPage,
+    ReportPort, ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResultPage, ResultPort,
+    ResultQuery, Role, RolePage, ScanConfig, ScanConfigNvtPage, ScanConfigNvtQuery, ScanConfigPage,
     ScanConfigPort, ScanConfigPreference, ScanConfigPreferenceQuery, ScanConfigQuery, ScanResult,
     Scanner, ScannerPage, ScannerPort, ScannerQuery, Schedule, SchedulePage, SchedulePort,
     ScheduleQuery, SetScanConfigFamilySelectionInput, SpecializedTargetQuery,
@@ -635,6 +635,12 @@ impl TaskPort for StaticGvmdAdapter {
 
 #[async_trait]
 impl ReportPort for StaticGvmdAdapter {
+    async fn import_report(&self, _: &str, _: ImportReportInput) -> Result<String, GatewayError> {
+        Err(GatewayError::BackendUnavailable(
+            "static adapter does not support reports".to_string(),
+        ))
+    }
+
     async fn list_reports(&self, _: &str, _: &ReportQuery) -> Result<ReportPage, GatewayError> {
         Err(GatewayError::BackendUnavailable(
             "static adapter does not support reports".to_string(),

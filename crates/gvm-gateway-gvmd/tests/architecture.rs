@@ -664,6 +664,17 @@ fn migrated_task_and_report_families_stay_on_typed_execution() {
 
     let reports =
         fs::read_to_string(ports_dir.join("reports.rs")).expect("read report adapter module");
+    let import_report =
+        section_between(&reports, "async fn import_report", "async fn list_reports");
+    assert_typed_section(
+        import_report,
+        "ImportReportRequest::new",
+        "bounded report import",
+    );
+    assert!(
+        import_report.contains("request.in_assets = input.in_assets"),
+        "report import must preserve omitted versus explicit false inAssets"
+    );
     let list_reports = section_between(&reports, "async fn list_reports", "async fn get_report");
     assert_typed_section(list_reports, "GetReportsRequest {", "report listing");
     assert!(

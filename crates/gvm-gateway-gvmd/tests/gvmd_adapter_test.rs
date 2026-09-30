@@ -187,6 +187,26 @@ async fn create_task_target(adapter: &GvmdAdapter, token: &str, name: &str) -> S
         .expect("task target should be created")
 }
 
+async fn create_import_task(adapter: &GvmdAdapter, token: &str, name: &str) -> String {
+    adapter
+        .create_task(
+            token,
+            CreateTaskInput {
+                name: name.to_string(),
+                comment: Some("report import owner".to_string()),
+                target: CreateTaskTarget::Import,
+                schedule_id: None,
+                alert_ids: vec![],
+                alterable: None,
+                observers: vec![],
+                schedule_periods: None,
+                preferences: vec![],
+            },
+        )
+        .await
+        .expect("import task should be created")
+}
+
 async fn create_mock_adapter_v22_8_with_credential_store_error(
     message: &str,
 ) -> (GvmdAdapter, MockGmpServer, String) {
@@ -1950,6 +1970,159 @@ async fn gvmd_adapter_list_reports_requests_summary_metadata_only() {
     assert!(xml.contains("details=\"0\""), "xml={xml}");
     assert!(!xml.contains("details=\"1\""), "xml={xml}");
     assert!(!xml.contains("no_report"), "xml={xml}");
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_import_report_maps_typed_request_options_and_created_id() {
+    // This exercises the typed rust-gvm import path end to end: opaque bytes
+    // reach the stateful backend, omission stays omitted, explicit false stays
+    // explicit, and the created ID can be read back through the report port.
+    let (adapter, server, token) = create_mock_adapter_v22_8().await;
+    let task_id = create_import_task(&adapter, &token, "Typed report imports").await;
+    server.clear_history();
+
+    let first_id = adapter
+        .import_report(
+            &token,
+            ImportReportInput {
+                task_id: task_id.clone(),
+                report_xml: b"<report><name>Omitted assets</name></report>".to_vec(),
+                in_assets: None,
+            },
+        )
+        .await
+        .expect("omitted inAssets import should succeed");
+    let second_id = adapter
+        .import_report(
+            &token,
+            ImportReportInput {
+                task_id: task_id.clone(),
+                report_xml: b"<report><name>False assets</name></report>".to_vec(),
+                in_assets: Some(false),
+            },
+        )
+        .await
+        .expect("explicit false inAssets import should succeed");
+
+    assert_ne!(first_id, second_id);
+    let commands = server
+        .command_history()
+        .into_iter()
+        .filter(|record| record.command_name() == "create_report")
+        .map(|record| String::from_utf8(record.raw_xml().to_vec()).expect("report command XML"))
+        .collect::<Vec<_>>();
+    assert_eq!(commands.len(), 2);
+    assert!(commands[0].contains(&format!("<task id=\"{task_id}\"/>")));
+    assert!(!commands[0].contains("in_assets"));
+    assert!(commands[1].contains("<in_assets>0</in_assets>"));
+
+    let readback = adapter
+        .get_report(&token, &second_id, &GetReportOpts::default())
+        .await
+        .expect("created report should be readable");
+    assert_eq!(readback.id, second_id);
+    assert_eq!(
+        readback.task.as_ref().map(|task| task.id.as_str()),
+        Some(task_id.as_str())
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_import_report_uses_upstream_envelope_validation_without_payload_leaks() {
+    // Exactly-one-envelope validation belongs to rust-gvm. A rejected payload
+    // must fail before transport and neither the error nor trace output may
+    // contain report contents.
+    let _guard = lock_tracing().await;
+    let logs = capture_tracing();
+    let (adapter, server, token) = create_mock_adapter_v22_8().await;
+    let task_id = create_import_task(&adapter, &token, "Rejected report imports").await;
+    server.clear_history();
+    let private_marker = "private-import-payload-marker-570";
+
+    let error = adapter
+        .import_report(
+            &token,
+            ImportReportInput {
+                task_id,
+                report_xml: format!("<report><name>{private_marker}</name></report><report/>")
+                    .into_bytes(),
+                in_assets: None,
+            },
+        )
+        .await
+        .expect_err("multiple report envelopes must be rejected by rust-gvm");
+
+    assert!(matches!(error, GatewayError::InvalidInput(_)));
+    assert!(!format!("{error:?}").contains(private_marker));
+    let output = String::from_utf8(logs.lock().unwrap().clone()).unwrap();
+    assert!(!output.contains(private_marker), "output={output}");
+    assert!(server
+        .command_history()
+        .iter()
+        .all(|record| record.command_name() != "create_report"));
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_import_report_maps_backend_failure_without_payload_leaks() {
+    // A valid typed request can still be rejected by gvmd. Preserve the
+    // standard backend error mapping while ensuring the opaque report never
+    // enters adapter diagnostics.
+    let _guard = lock_tracing().await;
+    let logs = capture_tracing();
+    let server = MockGmpServer::builder()
+        .mode(ServerMode::Stateful)
+        .version(MockVersion::V22_8)
+        .inject_fault(Fault::on_command(
+            "create_report",
+            FaultKind::ErrorStatus {
+                code: 503,
+                message: "report import unavailable".to_string(),
+            },
+        ))
+        .unix_socket_auto()
+        .build()
+        .await
+        .unwrap();
+    let adapter = GvmdAdapter::unix_socket(server.socket_path().unwrap());
+    let token = "report-import-backend-failure";
+    adapter
+        .connect_session(token, "admin", "admin")
+        .await
+        .unwrap();
+    let task_id = create_import_task(&adapter, token, "Faulted report imports").await;
+    server.clear_history();
+    let private_marker = "private-backend-payload-marker-570";
+
+    let error = adapter
+        .import_report(
+            token,
+            ImportReportInput {
+                task_id,
+                report_xml: format!("<report><name>{private_marker}</name></report>").into_bytes(),
+                in_assets: Some(true),
+            },
+        )
+        .await
+        .expect_err("faulted backend import must fail");
+
+    assert!(matches!(error, GatewayError::BackendUnavailable(_)));
+    assert!(!format!("{error:?}").contains(private_marker));
+    let output = String::from_utf8(logs.lock().unwrap().clone()).unwrap();
+    assert!(!output.contains(private_marker), "output={output}");
+    assert_eq!(
+        server
+            .command_history()
+            .iter()
+            .filter(|record| record.command_name() == "create_report")
+            .count(),
+        1
+    );
 
     server.shutdown().await;
 }

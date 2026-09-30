@@ -11,13 +11,13 @@ use std::{
 use async_trait::async_trait;
 use gvm_gateway_domain::{
     AssetQuery, CreateReportExportRequest, CreateTargetInput, GatewayError, GenericConfigQuery,
-    GetReportOpts, GvmdReportFormatExportRequest, JobStatus, JsonReportExportRequest,
-    ModifyAssetInput, ModifyTargetInput, Pagination, ReadinessStatus, Report,
-    ReportApplicationPage, ReportClosedCvePage, ReportCvePage, ReportErrorPage, ReportExport,
-    ReportExportJob, ReportExportRequest, ReportHostPage, ReportOperatingSystemPage, ReportPage,
-    ReportPort, ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResourceRef, ResultPage,
-    ResultQuery, ScanResult, SessionLimits, SessionManager, SessionTokenDigest, SystemPort,
-    TargetQuery, Timezone, TlsCertificatePage,
+    GetReportOpts, GvmdReportFormatExportRequest, ImportReportInput, JobStatus,
+    JsonReportExportRequest, ModifyAssetInput, ModifyTargetInput, Pagination, ReadinessStatus,
+    Report, ReportApplicationPage, ReportClosedCvePage, ReportCvePage, ReportErrorPage,
+    ReportExport, ReportExportJob, ReportExportRequest, ReportHostPage, ReportOperatingSystemPage,
+    ReportPage, ReportPort, ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResourceRef,
+    ResultPage, ResultQuery, ScanResult, SessionLimits, SessionManager, SessionTokenDigest,
+    SystemPort, TargetQuery, Timezone, TlsCertificatePage,
 };
 use tokio::sync::Notify;
 
@@ -746,6 +746,12 @@ struct BlockingReportPort {
 
 #[async_trait]
 impl ReportPort for BlockingReportPort {
+    async fn import_report(&self, _: &str, _: ImportReportInput) -> Result<String, GatewayError> {
+        Err(GatewayError::NotImplemented(
+            "report import is outside this test port".to_string(),
+        ))
+    }
+
     async fn list_reports(&self, _: &str, query: &ReportQuery) -> Result<ReportPage, GatewayError> {
         Ok(ReportPage {
             data: vec![test_report("123e4567-e89b-12d3-a456-426614174000")],
@@ -889,6 +895,12 @@ struct ExistingReportPort;
 
 #[async_trait]
 impl ReportPort for ExistingReportPort {
+    async fn import_report(&self, _: &str, _: ImportReportInput) -> Result<String, GatewayError> {
+        Err(GatewayError::NotImplemented(
+            "report import is outside this test port".to_string(),
+        ))
+    }
+
     async fn list_reports(&self, _: &str, query: &ReportQuery) -> Result<ReportPage, GatewayError> {
         Ok(ReportPage {
             data: vec![test_report("123e4567-e89b-12d3-a456-426614174000")],
@@ -1032,6 +1044,12 @@ struct CapturingReportPort {
 
 #[async_trait]
 impl ReportPort for CapturingReportPort {
+    async fn import_report(&self, _: &str, _: ImportReportInput) -> Result<String, GatewayError> {
+        Err(GatewayError::NotImplemented(
+            "report import is outside this test port".to_string(),
+        ))
+    }
+
     async fn list_reports(&self, _: &str, query: &ReportQuery) -> Result<ReportPage, GatewayError> {
         Ok(ReportPage {
             data: vec![test_report("123e4567-e89b-12d3-a456-426614174000")],
@@ -1177,6 +1195,10 @@ struct MissingReportPort;
 
 #[async_trait]
 impl ReportPort for MissingReportPort {
+    async fn import_report(&self, _: &str, _: ImportReportInput) -> Result<String, GatewayError> {
+        Err(GatewayError::NotFound("import task not found".to_string()))
+    }
+
     async fn list_reports(&self, _: &str, query: &ReportQuery) -> Result<ReportPage, GatewayError> {
         Ok(ReportPage {
             data: vec![],
@@ -1598,6 +1620,32 @@ async fn audit_logs_report_export_with_export_action() {
     assert!(output.contains("action=\"export\""));
     assert!(!output.contains("action=\"read\""));
     assert!(!output.contains(&session_token));
+}
+
+/// Report import preserves opaque bytes and omission-sensitive options across
+/// the authenticated application boundary without adding payload observability.
+#[tokio::test]
+async fn service_import_report_propagates_the_opaque_domain_request() {
+    let sessions = Arc::new(SessionManager::default());
+    let report_port = Arc::new(MockReportPort::default());
+    let imported = Arc::clone(&report_port.imported);
+    let mut ports = test_ports();
+    ports.reports = report_port;
+    let service = GatewayService::new(ports, Arc::clone(&sessions));
+    let session = sessions.create("admin").unwrap();
+    let input = ImportReportInput {
+        task_id: "123e4567-e89b-12d3-a456-426614174000".to_string(),
+        report_xml: b"<report><name>opaque-marker</name></report>".to_vec(),
+        in_assets: Some(false),
+    };
+
+    let id = service
+        .import_report(&session.token, input.clone())
+        .await
+        .expect("report import should reach its port");
+
+    assert_eq!(id, "550e8400-e29b-41d4-a716-446655440000");
+    assert_eq!(*imported.lock().unwrap(), Some(input));
 }
 
 /// Spans are emitted for both session lifecycle and resource command execution.

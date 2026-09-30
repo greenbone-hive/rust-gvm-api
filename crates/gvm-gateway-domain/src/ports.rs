@@ -18,19 +18,20 @@ use crate::{
     Cve, CvePage, DfnCertAdvisory, DfnCertAdvisoryPage, FeedList, FeedQuery, Filter, FilterPage,
     GatewayError, GenericAsset, GenericAssetPage, GenericConfig, GenericConfigPage,
     GenericConfigQuery, GetReportOpts, Group, GroupPage, Host, HostPage, IdentityQuery,
-    ModifyAgentControlScanConfigInput, ModifyAgentGroupInput, ModifyAgentInput, ModifyAlertInput,
-    ModifyAssetInput, ModifyCredentialInput, ModifyCredentialStoreInput, ModifyFilterInput,
-    ModifyGroupInput, ModifyHostInput, ModifyNoteInput, ModifyOciImageTargetInput,
-    ModifyOperatingSystemInput, ModifyOverrideInput, ModifyPermissionInput, ModifyPortListInput,
-    ModifyRoleInput, ModifyScanConfigInput, ModifyScheduleInput, ModifyTagInput, ModifyTargetInput,
-    ModifyTaskInput, ModifyUserInput, ModifyUserSettingInput, ModifyWebApplicationTargetInput,
-    Note, NotePage, Nvt, NvtFamilyPage, NvtPage, NvtQuery, OciImageTarget, OciImageTargetPage,
-    OperatingSystem, OperatingSystemPage, Override, OverridePage, Permission, PermissionPage,
-    PortList, PortListPage, PortListQuery, ReadinessStatus, Report, ReportApplicationPage,
-    ReportClosedCvePage, ReportCvePage, ReportErrorPage, ReportExport, ReportExportRequest,
-    ReportFormat, ReportFormatPage, ReportHostPage, ReportOperatingSystemPage, ReportPage,
-    ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResultPage, ResultQuery, Role, RolePage,
-    ScanConfig, ScanConfigNvtPage, ScanConfigNvtQuery, ScanConfigPage, ScanConfigPreference,
+    ImportReportInput, ModifyAgentControlScanConfigInput, ModifyAgentGroupInput, ModifyAgentInput,
+    ModifyAlertInput, ModifyAssetInput, ModifyCredentialInput, ModifyCredentialStoreInput,
+    ModifyFilterInput, ModifyGroupInput, ModifyHostInput, ModifyNoteInput,
+    ModifyOciImageTargetInput, ModifyOperatingSystemInput, ModifyOverrideInput,
+    ModifyPermissionInput, ModifyPortListInput, ModifyRoleInput, ModifyScanConfigInput,
+    ModifyScheduleInput, ModifyTagInput, ModifyTargetInput, ModifyTaskInput, ModifyUserInput,
+    ModifyUserSettingInput, ModifyWebApplicationTargetInput, Note, NotePage, Nvt, NvtFamilyPage,
+    NvtPage, NvtQuery, OciImageTarget, OciImageTargetPage, OperatingSystem, OperatingSystemPage,
+    Override, OverridePage, Permission, PermissionPage, PortList, PortListPage, PortListQuery,
+    ReadinessStatus, Report, ReportApplicationPage, ReportClosedCvePage, ReportCvePage,
+    ReportErrorPage, ReportExport, ReportExportRequest, ReportFormat, ReportFormatPage,
+    ReportHostPage, ReportOperatingSystemPage, ReportPage, ReportPortPage, ReportQuery,
+    ReportVulnerabilityPage, ResultPage, ResultQuery, Role, RolePage, ScanConfig,
+    ScanConfigNvtPage, ScanConfigNvtQuery, ScanConfigPage, ScanConfigPreference,
     ScanConfigPreferenceQuery, ScanConfigQuery, ScanResult, Scanner, ScannerPage, ScannerQuery,
     Schedule, SchedulePage, ScheduleQuery, SetScanConfigFamilySelectionInput,
     SpecializedTargetQuery, SupportingResourceQuery, Tag, TagPage, Target, TargetPage, TargetQuery,
@@ -429,6 +430,13 @@ pub trait IdentityPort: Send + Sync + 'static {
 /// Port for report operations.
 #[async_trait]
 pub trait ReportPort: Send + Sync + 'static {
+    /// Import one report into an existing import task and return its identifier.
+    async fn import_report(
+        &self,
+        session_token: &str,
+        input: ImportReportInput,
+    ) -> Result<String, GatewayError>;
+
     /// List reports for the session.
     async fn list_reports(
         &self,

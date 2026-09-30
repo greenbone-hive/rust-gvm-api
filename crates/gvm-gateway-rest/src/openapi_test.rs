@@ -206,6 +206,23 @@ fn generated_openapi_preserves_key_schema_fields() {
     assert!(report_vulnerability_props.get("hostsCount").is_some());
     assert!(report_vulnerability_props.get("occurrences").is_some());
 
+    let report_import = &generated["paths"]["/reports"]["post"];
+    assert_eq!(report_import["operationId"], "importReport");
+    assert_eq!(
+        report_import["requestBody"]["content"]["application/xml"]["schema"]["maxLength"],
+        10 * 1024 * 1024
+    );
+    assert_eq!(
+        report_import["responses"]["201"]["headers"]["Location"]["schema"]["format"],
+        "uri-reference"
+    );
+    for status in ["400", "401", "404", "413", "415", "501", "502", "504"] {
+        assert!(
+            report_import["responses"].get(status).is_some(),
+            "report import is missing documented {status} response"
+        );
+    }
+
     let report_operating_system_props = &schemas["ReportOperatingSystem"]["properties"];
     for property in ["bestOsCpe", "bestOsText", "hostsCount"] {
         assert!(

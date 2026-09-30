@@ -168,6 +168,7 @@ Rules for these exceptions:
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/v1/reports` | List reports |
+| `POST` | `/api/v1/reports?taskId={taskId}&inAssets={bool}` | Import one bounded XML report into an existing import task (`201 Created` + `Location`) |
 | `GET` | `/api/v1/reports/{id}` | Get report with an embedded result page |
 | `POST` | `/api/v1/reports/{id}/exports` | Start an asynchronous report export job (`202 Accepted` + `Location`) |
 | `GET` | `/api/v1/reports/{id}/results` | Get report results (paginated) |
@@ -189,6 +190,14 @@ Report reads and result subresources use `page` and `perPage`.
 Report deletion is always permanent in gvmd. The REST endpoint exposes no
 caller-level permanence choice and rejects the obsolete `ultimate` query
 parameter with the standard RFC 9457 `400 bad_request` response.
+
+Report import is synchronous collection creation. `POST /api/v1/reports`
+requires an existing import-task UUID in `taskId`, accepts optional `inAssets`
+with omission distinct from explicit `false`, and accepts only one
+`application/xml` report envelope. The gateway treats the XML as opaque bytes;
+the typed rust-gvm import request owns exact single-envelope validation. The
+gateway enforces a 10485760-byte (10 MiB) limit while reading the body and never
+places report contents in logs, traces, metrics labels, or problem details.
 
 #### Jobs
 
@@ -400,6 +409,7 @@ Current required coverage:
 - `POST /api/v1/session` → `Location: /api/v1/session`
 - `POST /api/v1/targets` → `Location: /api/v1/targets/{id}`
 - `POST /api/v1/tasks` → `Location: /api/v1/tasks/{id}`
+- `POST /api/v1/reports` → `Location: /api/v1/reports/{id}`
 - `POST /api/v1/scan-configs` → `Location: /api/v1/scan-configs/{id}`
 
 ### Authentication & Authorization

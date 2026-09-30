@@ -8,6 +8,7 @@ surface.
 
 | Upstream family | Downstream disposition | Existing supported distinction |
 | --- | --- | --- |
+| Report import: `ImportReportRequest` / `import_report` | Adopted by #570 as bounded `POST /reports` collection creation. The body is opaque outside rust-gvm, limited to 10 MiB while reading, and allowlisted to `application/xml`. | Existing import-task creation supplies the required task relationship; optional `inAssets` preserves omission versus explicit `false`, and success returns the canonical report readback location. |
 | Report-configuration list, detail, create, clone, modify, and delete | Omitted under #381; no administration REST surface is planned in this migration. | `reportConfigId` remains an optional, validated selector on synchronous and job-backed report export. |
 | Report-format create/import, clone, modify, delete, and verify | Omitted or deferred under #381; canonical upstream mutation requests do not authorize new administration routes. | Existing report-format list/detail and report export selection remain supported. |
 | TLS-certificate create/import, clone, modify, and delete | Omitted under #381; this migration does not add certificate administration or transport TLS/mTLS controls. | Existing global TLS-certificate list/detail and report-scoped projections remain supported. |

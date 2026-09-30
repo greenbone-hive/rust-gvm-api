@@ -13,13 +13,13 @@ use gvm_gateway_app::{GatewayPorts, GatewayService};
 use gvm_gateway_domain::{
     Alert, AlertPage, AlertPort, AlertQuery, CreateAlertInput, CreateCredentialInput,
     CreateTargetInput, CreateTaskInput, Credential, CredentialPage, CredentialPort,
-    CredentialQuery, CredentialStore, GatewayError, GetReportOpts, ModifyAlertInput,
-    ModifyCredentialInput, ModifyCredentialStoreInput, ModifyTargetInput, ModifyTaskInput,
-    Pagination, Report, ReportApplicationPage, ReportClosedCvePage, ReportCvePage, ReportErrorPage,
-    ReportExport, ReportExportRequest, ReportHostPage, ReportOperatingSystemPage, ReportPage,
-    ReportPort, ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResourceRef, ResultPage,
-    ResultQuery, ScanResult, SessionLimits, SessionManager, Target, TargetPage, TargetPort,
-    TargetQuery, Task, TaskAction, TaskObservers, TaskPage, TaskPort, TaskQuery,
+    CredentialQuery, CredentialStore, GatewayError, GetReportOpts, ImportReportInput,
+    ModifyAlertInput, ModifyCredentialInput, ModifyCredentialStoreInput, ModifyTargetInput,
+    ModifyTaskInput, Pagination, Report, ReportApplicationPage, ReportClosedCvePage, ReportCvePage,
+    ReportErrorPage, ReportExport, ReportExportRequest, ReportHostPage, ReportOperatingSystemPage,
+    ReportPage, ReportPort, ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResourceRef,
+    ResultPage, ResultQuery, ScanResult, SessionLimits, SessionManager, Target, TargetPage,
+    TargetPort, TargetQuery, Task, TaskAction, TaskObservers, TaskPage, TaskPort, TaskQuery,
     TlsCertificatePage,
 };
 use gvm_gateway_gvmd::StaticGvmdAdapter;
@@ -254,6 +254,178 @@ async fn report_drill_down_and_operating_system_routes_expose_typed_contracts() 
         .await
         .expect("unused OS delete response");
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+    harness.shutdown().await;
+}
+
+#[tokio::test]
+async fn bounded_report_import_contract_creates_readable_resource_and_redacts_failures() {
+    // This is the HTTP-to-typed-GMP contract for #570. It covers authentication,
+    // metadata/media validation, upstream single-envelope validation, the hard
+    // body bound, created identity/Location, readback, and cleanup.
+    const MAX_REPORT_IMPORT_BYTES: usize = 10 * 1024 * 1024;
+
+    let harness = specialized_target_harness(|_| {}).await;
+    let task_response = harness
+        .client
+        .post(harness.url("/api/v1/tasks"))
+        .bearer_auth(&harness.token)
+        .json(&serde_json::json!({
+            "type": "import",
+            "name": "contract report import owner"
+        }))
+        .send()
+        .await
+        .expect("create import task response");
+    assert_eq!(task_response.status(), StatusCode::CREATED);
+    let task_id = task_response
+        .json::<Value>()
+        .await
+        .expect("create import task JSON")["id"]
+        .as_str()
+        .expect("created task ID")
+        .to_string();
+    let endpoint = format!("/api/v1/reports?taskId={task_id}&inAssets=false");
+
+    let unauthorized = harness
+        .client
+        .post(harness.url(&endpoint))
+        .header("Content-Type", "application/xml")
+        .body("<report/>")
+        .send()
+        .await
+        .expect("unauthenticated report import response");
+    common::assert_problem_status(unauthorized, StatusCode::UNAUTHORIZED).await;
+
+    let wrong_media_type = harness
+        .client
+        .post(harness.url(&endpoint))
+        .bearer_auth(&harness.token)
+        .header("Content-Type", "text/xml")
+        .body("<report/>")
+        .send()
+        .await
+        .expect("wrong-media-type report import response");
+    common::assert_problem_status(wrong_media_type, StatusCode::UNSUPPORTED_MEDIA_TYPE).await;
+
+    let invalid_task = harness
+        .client
+        .post(harness.url("/api/v1/reports?taskId=not-a-uuid"))
+        .bearer_auth(&harness.token)
+        .header("Content-Type", "application/xml")
+        .body("<report/>")
+        .send()
+        .await
+        .expect("invalid-task report import response");
+    common::assert_problem_status(invalid_task, StatusCode::BAD_REQUEST).await;
+
+    let missing_task = harness
+        .client
+        .post(harness.url("/api/v1/reports?taskId=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"))
+        .bearer_auth(&harness.token)
+        .header("Content-Type", "application/xml")
+        .body("<report/>")
+        .send()
+        .await
+        .expect("missing-task report import response");
+    common::assert_problem_status(missing_task, StatusCode::NOT_FOUND).await;
+
+    let empty = harness
+        .client
+        .post(harness.url(&endpoint))
+        .bearer_auth(&harness.token)
+        .header("Content-Type", "application/xml")
+        .body(Vec::new())
+        .send()
+        .await
+        .expect("empty report import response");
+    common::assert_problem_status(empty, StatusCode::BAD_REQUEST).await;
+
+    let private_marker = "private-report-contract-marker-570";
+    let multiple = harness
+        .client
+        .post(harness.url(&endpoint))
+        .bearer_auth(&harness.token)
+        .header("Content-Type", "application/xml")
+        .body(format!(
+            "<report><name>{private_marker}</name></report><report/>"
+        ))
+        .send()
+        .await
+        .expect("multiple-envelope report import response");
+    assert_eq!(multiple.status(), StatusCode::BAD_REQUEST);
+    let multiple_problem = multiple
+        .text()
+        .await
+        .expect("multiple-envelope problem body");
+    assert!(!multiple_problem.contains(private_marker));
+
+    let oversized = harness
+        .client
+        .post(harness.url(&endpoint))
+        .bearer_auth(&harness.token)
+        .header("Content-Type", "application/xml")
+        .body(vec![b'x'; MAX_REPORT_IMPORT_BYTES + 1])
+        .send()
+        .await
+        .expect("oversized report import response");
+    common::assert_problem_status(oversized, StatusCode::PAYLOAD_TOO_LARGE).await;
+
+    let report_xml = "<report><name>Contract imported report</name></report>";
+    let created = harness
+        .client
+        .post(harness.url(&endpoint))
+        .bearer_auth(&harness.token)
+        .header("Content-Type", "application/xml; charset=utf-8")
+        .body(report_xml)
+        .send()
+        .await
+        .expect("valid report import response");
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let location = created
+        .headers()
+        .get(reqwest::header::LOCATION)
+        .expect("created report Location")
+        .to_str()
+        .expect("Location header text")
+        .to_string();
+    let report_id = created.json::<Value>().await.expect("created report JSON")["id"]
+        .as_str()
+        .expect("created report ID")
+        .to_string();
+    assert_eq!(location, format!("/api/v1/reports/{report_id}"));
+
+    let readback = harness
+        .client
+        .get(harness.url(&location))
+        .bearer_auth(&harness.token)
+        .send()
+        .await
+        .expect("imported report readback response");
+    assert_eq!(readback.status(), StatusCode::OK);
+    let report = readback
+        .json::<Value>()
+        .await
+        .expect("report readback JSON");
+    assert_eq!(report["id"], report_id);
+    assert_eq!(report["task"]["id"], task_id);
+
+    let deleted_report = harness
+        .client
+        .delete(harness.url(&location))
+        .bearer_auth(&harness.token)
+        .send()
+        .await
+        .expect("delete imported report response");
+    assert_eq!(deleted_report.status(), StatusCode::NO_CONTENT);
+    let deleted_task = harness
+        .client
+        .delete(harness.url(&format!("/api/v1/tasks/{task_id}")))
+        .bearer_auth(&harness.token)
+        .send()
+        .await
+        .expect("delete import task response");
+    assert_eq!(deleted_task.status(), StatusCode::NO_CONTENT);
 
     harness.shutdown().await;
 }
@@ -1158,6 +1330,12 @@ impl TargetPort for AcceptingTargetPort {
 
 #[async_trait]
 impl ReportPort for JsonExportReportPort {
+    async fn import_report(&self, _: &str, _: ImportReportInput) -> Result<String, GatewayError> {
+        Err(GatewayError::NotImplemented(
+            "report import is outside this test port".to_string(),
+        ))
+    }
+
     async fn list_reports(&self, _: &str, query: &ReportQuery) -> Result<ReportPage, GatewayError> {
         Ok(ReportPage {
             data: vec![report_response("550e8400-e29b-41d4-a716-446655440000")],
@@ -1427,6 +1605,10 @@ struct MissingReportPort;
 
 #[async_trait]
 impl ReportPort for MissingReportPort {
+    async fn import_report(&self, _: &str, _: ImportReportInput) -> Result<String, GatewayError> {
+        Err(GatewayError::NotFound("import task not found".to_string()))
+    }
+
     async fn list_reports(&self, _: &str, query: &ReportQuery) -> Result<ReportPage, GatewayError> {
         Ok(ReportPage {
             data: vec![],

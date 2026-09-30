@@ -4,15 +4,32 @@
 //! Report use cases.
 
 use gvm_gateway_domain::{
-    GatewayError, GetReportOpts, Report, ReportApplicationPage, ReportClosedCvePage, ReportCvePage,
-    ReportErrorPage, ReportExport, ReportExportRequest, ReportHostPage, ReportOperatingSystemPage,
-    ReportPage, ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResultPage, ResultQuery,
-    TlsCertificatePage,
+    GatewayError, GetReportOpts, ImportReportInput, Report, ReportApplicationPage,
+    ReportClosedCvePage, ReportCvePage, ReportErrorPage, ReportExport, ReportExportRequest,
+    ReportHostPage, ReportOperatingSystemPage, ReportPage, ReportPortPage, ReportQuery,
+    ReportVulnerabilityPage, ResultPage, ResultQuery, TlsCertificatePage,
 };
 
 use crate::GatewayService;
 
 impl GatewayService {
+    /// Imports one opaque report envelope into an existing import task.
+    pub async fn import_report(
+        &self,
+        session_token: &str,
+        input: ImportReportInput,
+    ) -> Result<String, GatewayError> {
+        self.execute_with_resource(
+            "reports.create",
+            session_token,
+            "create",
+            "report",
+            None,
+            |session| async move { self.reports.import_report(&session.token, input).await },
+        )
+        .await
+    }
+
     /// Lists reports for an authenticated session.
     pub async fn list_reports(
         &self,

@@ -4,6 +4,20 @@
 use super::super::*;
 
 impl E2eHarness {
+    pub async fn create_import_task(&self, token: &str, name: &str) -> Result<CreatedResource> {
+        let body = json!({
+            "type": "import",
+            "name": name,
+            "comment": "created by compose-backed report import E2E coverage",
+        });
+        self.send_created_json(
+            self.authed(Method::POST, "/api/v1/tasks", token)
+                .json(&body),
+            "create report import task",
+        )
+        .await
+    }
+
     pub async fn list_scan_configs(&self, token: &str) -> Result<Vec<ScanConfig>> {
         let response: ListResponse<ScanConfig> = self
             .send_json(
