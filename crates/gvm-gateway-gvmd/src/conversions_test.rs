@@ -567,9 +567,9 @@ fn result_from_gmp_omits_missing_reference_names() {
 }
 
 #[test]
-fn port_list_from_gmp_uses_structured_protocol_counts() {
-    // Mixed-protocol port lists need the typed TCP/UDP counts; inferring
-    // counts from the first port_range character loses UDP data.
+fn port_list_from_gmp_projects_structured_ranges_and_protocol_counts() {
+    // The REST contract retains its compact expression while rust-gvm exposes
+    // the current gvmd response as typed ranges with authoritative counts.
     let response = GmpResponse::from(
         r#"<get_port_lists_response status="200" status_text="OK">
             <port_list id="550e8400-e29b-41d4-a716-446655440000">
@@ -579,7 +579,14 @@ fn port_list_from_gmp_uses_structured_protocol_counts() {
                     <tcp>2</tcp>
                     <udp>1</udp>
                 </port_count>
-                <port_range>T:22,80,U:53</port_range>
+                <port_ranges>
+                    <port_range id="11111111-1111-1111-1111-111111111111">
+                        <start>22</start><end>80</end><type>TCP</type><comment></comment>
+                    </port_range>
+                    <port_range id="22222222-2222-2222-2222-222222222222">
+                        <start>53</start><end>53</end><type>UDP</type><comment>DNS</comment>
+                    </port_range>
+                </port_ranges>
             </port_list>
             <port_list_count>1<filtered>1</filtered></port_list_count>
         </get_port_lists_response>"#,
@@ -591,6 +598,7 @@ fn port_list_from_gmp_uses_structured_protocol_counts() {
     assert_eq!(port_list.port_count, Some(3));
     assert_eq!(port_list.tcp_count, Some(2));
     assert_eq!(port_list.udp_count, Some(1));
+    assert_eq!(port_list.port_range.as_deref(), Some("T:22-80,U:53"));
 }
 
 #[test]
