@@ -124,7 +124,7 @@ That newer transport contract supersedes the older blanket "no plain HTTP" assum
   New local GMP command construction, response parsing, or wire/display-name normalization in `gvm-gateway-gvmd` is a stop-and-report event, not a reason to add another gateway workaround.
 - Shared session/connection behavior changes should stay aligned with issue `#27` or its successor issues.
 - Coverage audits and adapter-parity plans should treat all GMP ticket operations
-  as a deliberate exclusion, not missing endpoints.
+  as a deliberate exclusion, not as missing endpoints.
 - Specs under `spec/rest-api/` and `spec/grpc-api/` should treat this document as the architectural source of truth.
 - Repo docs must distinguish clearly between:
   - implemented gateway surfaces on `main`
