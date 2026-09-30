@@ -581,7 +581,9 @@ impl ScanConfigPort for GvmdAdapter {
     }
 }
 
-fn preference_from_gmp(preference: gvm_gmp::responses::Preference) -> ScanConfigPreference {
+fn preference_from_gmp(
+    preference: gvm_gmp::responses::ScanConfigPreference,
+) -> ScanConfigPreference {
     ScanConfigPreference {
         nvt: preference.nvt.map(|nvt| ScanConfigPreferenceNvt {
             oid: nvt.oid,
