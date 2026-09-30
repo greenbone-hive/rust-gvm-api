@@ -4,7 +4,7 @@ on:
   merge_group:
     types: [checks_requested]
   push:
-    branches: [main, devel]
+    branches: [main, next]
     paths-ignore:
       - 'docs/**'
       - 'spec/**'
@@ -12,40 +12,192 @@ on:
       - 'LICENSE'
       - '.github/ISSUE_TEMPLATE/**'
   pull_request:
-    branches: [main, devel]
+    # Keep this required workflow active for both protected delivery lanes.
+    branches: [main, next]
   schedule:
-    # Run weekly on Monday at 06:00 UTC
     - cron: "0 6 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+env:
+  CARGO_AUDIT_VERSION: "0.22.2"
+  CARGO_CYCLONEDX_VERSION: "0.5.9"
+  CARGO_GEIGER_VERSION: "0.13.0"
+  CARGO_MACHETE_VERSION: "0.9.2"
+  CARGO_VET_VERSION: "0.10.2"
+  SBOMQS_VERSION: "v2.0.5"
+  SBOM_QUALITY_THRESHOLD: "8.3"
+
 jobs:
-  # Rust advisory database check
   cargo-audit:
     name: Cargo Audit
     runs-on: ubuntu-latest
     steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
-      - name: Install cargo-audit
-        run: cargo install cargo-audit
+      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2
+        with:
+          tool: cargo-audit@${{ env.CARGO_AUDIT_VERSION }}
       - name: Run cargo-audit
         run: cargo audit
 
-  # Check for unused dependencies
   cargo-machete:
     name: Unused Dependencies
     runs-on: ubuntu-latest
     steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
-      - name: Install cargo-machete
-        run: cargo install cargo-machete
+      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2
+        with:
+          tool: cargo-machete@${{ env.CARGO_MACHETE_VERSION }}
       - name: Run cargo-machete
         run: cargo machete
 
-  # Semgrep SAST (static application security testing)
+  cargo-vet:
+    name: Cargo Vet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
+      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2
+        with:
+          tool: cargo-vet@${{ env.CARGO_VET_VERSION }}
+      - name: Require committed dependency review evidence
+        run: cargo vet --locked
+
+  security-policy:
+    name: Security Policy Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
+      - name: Test fail-closed security helpers and workflow policy
+        run: >-
+          python3 -B -m unittest
+          tests.test_sbom_postprocess
+          tests.test_sbom_quality
+          tests.test_workspace_security
+          tests.test_security_workflow
+          -q
+
+  sbom-quality:
+    name: SBOM Quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
+      - uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16 # v2
+      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2
+        with:
+          tool: cargo-cyclonedx@${{ env.CARGO_CYCLONEDX_VERSION }}
+      - name: Verify the locked all-feature workspace
+        run: cargo metadata --locked --all-features --format-version 1 > /dev/null
+      - name: Generate complete workspace CycloneDX JSON
+        run: >-
+          cargo cyclonedx --format json --all --all-features --target all
+          --spec-version 1.5
+      - name: Collect and post-process every workspace SBOM
+        run: |
+          python3 scripts/collect_workspace_sboms.py sbom-artifacts
+          python3 scripts/sbom_postprocess.py \
+            --cargo-toml Cargo.toml \
+            --declare-dependency-complete \
+            sbom-artifacts/*.cdx.json
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+      - name: Install pinned sbomqs
+        run: |
+          go install github.com/interlynk-io/sbomqs/v2@${SBOMQS_VERSION}
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Enforce SBOM quality floor
+        run: |
+          sbomqs score --json sbom-artifacts/*.cdx.json > sbomqs-results.json
+          python3 scripts/check_sbom_quality.py \
+            --threshold "$SBOM_QUALITY_THRESHOLD" \
+            sbomqs-results.json
+      - name: Upload machine-readable SBOM evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        with:
+          name: sbom-quality-evidence
+          path: |
+            sbom-artifacts/*.cdx.json
+            sbomqs-results.json
+          if-no-files-found: error
+          retention-days: 14
+
+  cargo-geiger-report:
+    name: Cargo Geiger Report
+    runs-on: ubuntu-latest
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
+      - uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16 # v2
+      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2
+        with:
+          tool: cargo-geiger@${{ env.CARGO_GEIGER_VERSION }}
+      - name: Generate every first-party package report
+        run: python3 scripts/check_workspace_unsafe.py --report-only
+      - name: Upload Cargo Geiger evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        with:
+          name: cargo-geiger-report
+          path: target/geiger/*.json
+          if-no-files-found: error
+          retention-days: 14
+
+  cargo-geiger-workspace-gate:
+    name: Cargo Geiger Workspace Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
+      - uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16 # v2
+      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2
+        with:
+          tool: cargo-geiger@${{ env.CARGO_GEIGER_VERSION }}
+      - name: Reject unsafe Rust in first-party workspace packages
+        run: python3 scripts/check_workspace_unsafe.py
+
   semgrep:
     name: Semgrep SAST
     runs-on: ubuntu-latest
@@ -54,8 +206,13 @@ jobs:
       contents: read
       security-events: write
     steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Run Semgrep
+        with:
+          persist-credentials: false
+      - name: Run immutable direct Semgrep scan
         run: |
           docker run --rm \
             --volume "${GITHUB_WORKSPACE}:/src:ro" \
@@ -72,26 +229,42 @@ jobs:
             semgrep.sarif > semgrep.normalized.sarif
           mv semgrep.normalized.sarif semgrep.sarif
       - name: Upload SARIF
-        # Code scanning must be enabled for the repo for SARIF upload to work.
-        # For private repos, this requires GitHub Advanced Security (GHAS).
-        # Making this non-blocking until code scanning is enabled.
         if: always()
         continue-on-error: true
         uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v3
         with:
           sarif_file: semgrep.sarif
 
-  # Aggregator job for branch protection — require this single check
   security:
     name: Security
-    if: always()
-    needs: [cargo-audit, cargo-machete, semgrep]
+    if: ${{ always() }}
+    needs:
+      - cargo-audit
+      - cargo-machete
+      - cargo-vet
+      - security-policy
+      - sbom-quality
+      - cargo-geiger-report
+      - cargo-geiger-workspace-gate
+      - semgrep
     runs-on: ubuntu-latest
     steps:
-      - name: Check upstream job results
+      - name: Require every security job to succeed
+        env:
+          CARGO_AUDIT_RESULT: ${{ needs.cargo-audit.result }}
+          CARGO_MACHETE_RESULT: ${{ needs.cargo-machete.result }}
+          CARGO_VET_RESULT: ${{ needs.cargo-vet.result }}
+          SECURITY_POLICY_RESULT: ${{ needs.security-policy.result }}
+          SBOM_QUALITY_RESULT: ${{ needs.sbom-quality.result }}
+          CARGO_GEIGER_REPORT_RESULT: ${{ needs.cargo-geiger-report.result }}
+          CARGO_GEIGER_WORKSPACE_GATE_RESULT: ${{ needs.cargo-geiger-workspace-gate.result }}
+          SEMGREP_RESULT: ${{ needs.semgrep.result }}
         run: |
-          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ||
-                "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
-            echo "One or more upstream jobs failed or were cancelled"
-            exit 1
-          fi
+          test "$CARGO_AUDIT_RESULT" = success
+          test "$CARGO_MACHETE_RESULT" = success
+          test "$CARGO_VET_RESULT" = success
+          test "$SECURITY_POLICY_RESULT" = success
+          test "$SBOM_QUALITY_RESULT" = success
+          test "$CARGO_GEIGER_REPORT_RESULT" = success
+          test "$CARGO_GEIGER_WORKSPACE_GATE_RESULT" = success
+          test "$SEMGREP_RESULT" = success

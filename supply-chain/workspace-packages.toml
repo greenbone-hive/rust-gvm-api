@@ -1,0 +1,29 @@
+schema = 1
+
+[[packages]]
+name = "gvm-gateway-domain"
+manifest = "crates/gvm-gateway-domain/Cargo.toml"
+
+[[packages]]
+name = "gvm-gateway-app"
+manifest = "crates/gvm-gateway-app/Cargo.toml"
+
+[[packages]]
+name = "gvm-gateway-rest"
+manifest = "crates/gvm-gateway-rest/Cargo.toml"
+
+[[packages]]
+name = "gvm-gateway-gvmd"
+manifest = "crates/gvm-gateway-gvmd/Cargo.toml"
+
+[[packages]]
+name = "gvm-gateway"
+manifest = "crates/gvm-gateway/Cargo.toml"
+
+[[packages]]
+name = "gvm-gateway-e2e"
+manifest = "tests/e2e/Cargo.toml"
+
+[[packages]]
+name = "gvm-gateway-performance"
+manifest = "tests/performance/Cargo.toml"

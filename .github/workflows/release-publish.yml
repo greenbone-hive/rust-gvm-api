@@ -12,6 +12,7 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+  CARGO_CYCLONEDX_VERSION: "0.5.9"
 
 jobs:
   validate:
@@ -237,15 +238,17 @@ jobs:
         run: git config --global url."https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/".insteadOf "https://github.com/"
       - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-      - name: Install cargo-cyclonedx
-        run: cargo install cargo-cyclonedx
+      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2
+        with:
+          tool: cargo-cyclonedx@${{ env.CARGO_CYCLONEDX_VERSION }}
       - name: Generate and upload SBOMs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ needs.validate.outputs.tag }}
         run: |
-          cargo cyclonedx --format json --all --spec-version 1.5
-          cargo cyclonedx --format xml --all --spec-version 1.5
+          cargo metadata --locked --all-features --format-version 1 > /dev/null
+          cargo cyclonedx --format json --all --all-features --target all --spec-version 1.5
+          cargo cyclonedx --format xml --all --all-features --target all --spec-version 1.5
           mkdir -p sbom-artifacts
           find . -name '*.cdx.json' -not -path '*/target/*' -not -path '*/sbom-artifacts/*' -exec cp {} sbom-artifacts/ \;
           find . -name '*.cdx.xml' -not -path '*/target/*' -not -path '*/sbom-artifacts/*' -exec cp {} sbom-artifacts/ \;
