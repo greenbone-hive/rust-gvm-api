@@ -1,0 +1,39 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.3",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "library",
+      "bom-ref": "path+file:///tmp/rust-gvm-api/crates/gvm-gateway-app#0.5.0",
+      "name": "gvm-gateway-app",
+      "version": "0.5.0",
+      "purl": "pkg:cargo/gvm-gateway-app@0.5.0?download_url=file://.",
+      "components": [
+        {
+          "type": "library",
+          "bom-ref": "path+file:///tmp/rust-gvm-api/crates/gvm-gateway-app#target",
+          "name": "gvm_gateway_app",
+          "version": "0.5.0"
+        }
+      ]
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#async-trait@0.1.92",
+      "name": "async-trait",
+      "version": "0.1.92",
+      "purl": "pkg:cargo/async-trait@0.1.92"
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "path+file:///tmp/rust-gvm-api/crates/gvm-gateway-app#0.5.0",
+      "dependsOn": [
+        "registry+https://github.com/rust-lang/crates.io-index#async-trait@0.1.92"
+      ]
+    }
+  ]
+}

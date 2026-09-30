@@ -4,7 +4,7 @@
 
 | Version | Supported |
 |---------|-----------|
-| 0.1.x   | ✅ Current |
+| 0.5.x   | ✅ Current |
 
 We support the latest minor release with security patches. Once a new minor or major version is published, prior versions receive patches only for critical vulnerabilities at maintainer discretion.
 
@@ -46,20 +46,29 @@ Instead, use **GitHub Private Vulnerability Reporting**:
 
 ### Dependency Auditing
 
-- **[cargo-audit](https://github.com/rustsec/rustsec)** runs in CI on every push and weekly via the Security workflow
+- **[cargo-audit](https://github.com/rustsec/rustsec)** runs on relevant protected-branch pushes and pull requests, merge queues, manual dispatch, and the weekly Security schedule
 - **[cargo-deny](https://github.com/EmbarkStudios/cargo-deny)** enforces license compliance, bans, and source restrictions (see [`deny.toml`](deny.toml))
 - **[Dependabot](https://docs.github.com/en/code-security/dependabot)** monitors Cargo and GitHub Actions dependencies with weekly update PRs
 - **[cargo-machete](https://github.com/bnjbvr/cargo-machete)** checks for unused dependencies in CI
+- **[cargo-vet](https://mozilla.github.io/cargo-vet/)** requires committed review evidence for the complete locked, all-feature dependency graph
+- **Cargo Geiger** produces per-package machine-readable reports; a separate gate rejects unsafe Rust in every explicitly inventoried first-party workspace member
+- **CycloneDX SBOM quality** is checked for every workspace member and blocks if any `sbomqs` score is below 8.3
+- **Semgrep** runs directly from an immutable container digest and uploads normalized SARIF
+
+Contributor procedures for Vet evidence, pinned SBOM tooling, the workspace
+inventory, and reviewed unsafe-policy exceptions are documented in
+[`docs/WORKFLOW_SECURITY.md`](docs/WORKFLOW_SECURITY.md).
 
 ### Code Quality
 
 - `cargo clippy` with `-D warnings` in CI
-- `#[deny(unsafe_code)]` — no unsafe blocks in any crate
+- `#[deny(unsafe_code)]` — no unsafe blocks in any crate, reinforced by the independent workspace-inventory/Geiger gate
 - MSRV tested (currently Rust 1.88.0)
-- SBOM (CycloneDX) generated on every release and nightly build
+- SBOM (CycloneDX) generated for releases and continuously quality-gated by Security
 
 ## Changelog
 
 | Date | Change |
 |------|--------|
 | 2026-03-20 | Initial security policy |
+| 2026-09-30 | Added blocking Vet, SBOM quality, Geiger evidence, explicit workspace unsafe-code policy, deterministic tool pins, and protected `main`/`next` coverage |
