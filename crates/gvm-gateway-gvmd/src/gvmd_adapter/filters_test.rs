@@ -3,7 +3,26 @@
 
 use gvm_gateway_domain::GatewayError;
 
-use super::filters::{paged_slice, paginated_filter, paginated_filter_with_reserved_terms};
+use super::filters::{
+    gvmd_total, paged_pagination, paged_slice, paginated_filter,
+    paginated_filter_with_reserved_terms,
+};
+
+#[test]
+fn canonical_list_counts_drive_rest_pagination() {
+    // Task and audit canonical responses expose filtered/full counts. The
+    // adapter must prefer the filtered total and retain the existing REST page
+    // arithmetic, falling back to decoded item count only when both are absent.
+    assert_eq!(gvmd_total(Some(51), Some(80), 25), 51);
+    assert_eq!(gvmd_total(None, Some(80), 25), 80);
+    assert_eq!(gvmd_total(None, None, 25), 25);
+
+    let pagination = paged_pagination(51, 3, 25);
+    assert_eq!(pagination.page, 3);
+    assert_eq!(pagination.per_page, 25);
+    assert_eq!(pagination.total, 51);
+    assert_eq!(pagination.total_pages, 3);
+}
 
 #[test]
 fn paged_slice_treats_maximum_page_as_out_of_range() {

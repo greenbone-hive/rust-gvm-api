@@ -21,9 +21,13 @@ impl FeedPort for GvmdAdapter {
         };
         Ok(FeedList {
             data: parsed.items.into_iter().map(feed_from_gmp).collect(),
-            feed_owner_configured: parsed.feed_owner_set,
-            feed_roles_configured: parsed.feed_roles_set,
-            feed_resources_access: parsed.feed_resources_access,
+            // The canonical response preserves absent legacy metadata as None.
+            // The established domain/REST contract requires booleans, so absent
+            // access flags conservatively mean false rather than changing the
+            // public schema to nullable fields.
+            feed_owner_configured: parsed.feed_owner_set.unwrap_or(false),
+            feed_roles_configured: parsed.feed_roles_set.unwrap_or(false),
+            feed_resources_access: parsed.feed_resources_access.unwrap_or(false),
         })
     }
 }

@@ -75,6 +75,51 @@ fn inner_crates_must_not_depend_on_gmp_protocol_crates() {
     );
 }
 
+/// Inner production source must exchange domain models only; fully qualified
+/// GMP, client, connection, protocol, or XML parser types cannot cross the
+/// outgoing-adapter boundary even through an undeclared or transitive path.
+#[test]
+fn inner_crates_must_not_reference_raw_gmp_or_xml_types() {
+    let root = workspace_root();
+    let mut violations = Vec::new();
+    let forbidden = [
+        "gvm_gmp::",
+        "gvm_client::",
+        "gvm_connection::",
+        "gvm_protocol::",
+        "quick_xml::",
+        "roxmltree::",
+        "xmltree::",
+        "serde_xml_rs::",
+    ];
+
+    for (crate_name, manifest_path) in INNER_CRATES {
+        let crate_dir = root
+            .join(manifest_path)
+            .parent()
+            .expect("inner crate manifest has a parent")
+            .join("src");
+        for file in production_rust_files(&crate_dir) {
+            let contents = std::fs::read_to_string(&file)
+                .unwrap_or_else(|error| panic!("read {}: {error}", file.display()));
+            for marker in forbidden {
+                if contents.contains(marker) {
+                    violations.push(format!(
+                        "{crate_name}: {} references {marker}",
+                        file.strip_prefix(&root).unwrap_or(&file).display()
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "raw GMP/XML types crossed the domain/application/REST boundary:\n  - {}",
+        violations.join("\n  - ")
+    );
+}
+
 /// Extracts the `[dependencies]` section from a Cargo.toml string.
 /// Returns the text between `[dependencies]` and the next section header.
 fn extract_dependencies_section(content: &str) -> Option<String> {

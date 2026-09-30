@@ -53,12 +53,12 @@ paths:
       operationId: deleteReport
       tags: [Reports]
       summary: Delete a report
-      description: Deletes a report. Pass `ultimate=true` to request permanent backend deletion instead of the default non-ultimate delete.
-      parameters:
-        - $ref: "./common.yaml#/components/parameters/UltimateDelete"
+      description: Permanently deletes a report. Report deletion cannot be undone and has no trash or caller-selectable permanence mode. The obsolete `ultimate` query parameter is rejected with `400 bad_request`.
       responses:
         "204":
           description: Report deleted
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
         "502":
@@ -655,15 +655,15 @@ components:
     ReportOperatingSystem:
       type: object
       properties:
-        id:
+        bestOsCpe:
           type: string
-          description: Backend row identifier when available.
-        name:
+          description: Best matching operating-system CPE reported by gvmd.
+        bestOsText:
           type: string
-          description: Operating-system label from the report summary row.
-        severity:
-          type: string
-          description: Backend severity summary for the operating-system row.
+          description: Human-readable best matching operating-system text reported by gvmd.
+        hostsCount:
+          type: integer
+          description: Number of report hosts with this best operating-system match.
 
     ReportOperatingSystemList:
       type: object

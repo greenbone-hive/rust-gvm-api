@@ -10,6 +10,7 @@ schedules, and tasks, as well as access to scan results and reports.
 
 - [Installation and configuration](./usage.md)
 - [Workflow examples](./examples.md)
+- [Technology Preview API migration notes](./migration.md)
 - Example config files:
   - [package-config.example.toml](./package-config.example.toml)
   - [container-config.example.toml](./container-config.example.toml)

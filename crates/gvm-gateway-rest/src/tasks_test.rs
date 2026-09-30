@@ -50,6 +50,23 @@ fn task_response_preserves_unknown_hosts_ordering() {
 }
 
 #[test]
+fn task_requests_reject_obsolete_hosts_ordering_input() {
+    let create = serde_json::from_value::<CreateTaskRequest>(json!({
+        "name": "Classic",
+        "targetId": "11111111-1111-1111-1111-111111111111",
+        "scanConfigId": "22222222-2222-2222-2222-222222222222",
+        "scannerId": "33333333-3333-3333-3333-333333333333",
+        "hostsOrdering": "sequential"
+    }));
+    assert!(create.is_err());
+
+    let modify = serde_json::from_value::<ModifyTaskRequest>(json!({
+        "hostsOrdering": "random"
+    }));
+    assert!(modify.is_err());
+}
+
+#[test]
 fn task_response_preserves_live_gvmd_status_values() {
     // Live task lifecycle values must remain visible to clients rather
     // than being coerced to an older enum variant.

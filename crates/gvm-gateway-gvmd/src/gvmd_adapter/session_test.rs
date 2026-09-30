@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Greenbone AG
 
-use gvm_gmp::commands::credentials::GetCredentialsOpts;
+use gvm_gmp::commands::credentials::GetCredentialsRequest;
 use gvm_mock_server::{Fault, FaultKind, GmpVersion as MockVersion, MockGmpServer, ServerMode};
 
 use super::{connect_authenticated_client, CredentialStoreCapability, SessionClient};
@@ -40,11 +40,11 @@ async fn connect_authenticated_client_restores_authenticated_socket_after_discon
     let mut guard = session_client.lock().await.expect("session lock");
 
     guard
-        .get_credentials(GetCredentialsOpts::default())
+        .get_credentials(GetCredentialsRequest::default())
         .await
         .expect("first credential read should succeed before the injected disconnect");
     guard
-        .get_credentials(GetCredentialsOpts::default())
+        .get_credentials(GetCredentialsRequest::default())
         .await
         .expect_err("second credential read should observe the injected disconnect");
 
@@ -55,7 +55,7 @@ async fn connect_authenticated_client_restores_authenticated_socket_after_discon
         .await
         .expect("reconnect should replace the stale GMP client");
     guard
-        .get_credentials(GetCredentialsOpts::default())
+        .get_credentials(GetCredentialsRequest::default())
         .await
         .expect("credential reads should succeed after reconnect");
 

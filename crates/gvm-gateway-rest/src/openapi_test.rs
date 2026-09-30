@@ -206,6 +206,44 @@ fn generated_openapi_preserves_key_schema_fields() {
     assert!(report_vulnerability_props.get("hostsCount").is_some());
     assert!(report_vulnerability_props.get("occurrences").is_some());
 
+    let report_operating_system_props = &schemas["ReportOperatingSystem"]["properties"];
+    for property in ["bestOsCpe", "bestOsText", "hostsCount"] {
+        assert!(
+            report_operating_system_props.get(property).is_some(),
+            "generated report operating-system schema is missing {property}"
+        );
+    }
+    for removed_property in ["id", "name", "severity"] {
+        assert!(
+            report_operating_system_props
+                .get(removed_property)
+                .is_none(),
+            "generated report operating-system schema retains false {removed_property} field"
+        );
+    }
+
+    // The curated OpenAPI source must publish the identical real gvmd row
+    // shape, rather than only verifying the generated endpoint contract.
+    let curated_reports = read_yaml(&root_spec_path().parent().unwrap().join("reports.yaml"));
+    let curated_report_operating_system_props =
+        &curated_reports["components"]["schemas"]["ReportOperatingSystem"]["properties"];
+    for property in ["bestOsCpe", "bestOsText", "hostsCount"] {
+        assert!(
+            curated_report_operating_system_props
+                .get(property)
+                .is_some(),
+            "curated report operating-system schema is missing {property}"
+        );
+    }
+    for removed_property in ["id", "name", "severity"] {
+        assert!(
+            curated_report_operating_system_props
+                .get(removed_property)
+                .is_none(),
+            "curated report operating-system schema retains false {removed_property} field"
+        );
+    }
+
     let report_error_props = &schemas["ReportError"]["properties"];
     assert!(report_error_props.get("nvtName").is_some());
     assert!(report_error_props.get("threat").is_none());
@@ -243,6 +281,117 @@ fn generated_openapi_preserves_key_schema_fields() {
     assert!(schemas["ScanConfig"]["properties"]
         .get("familyCount")
         .is_some());
+}
+
+#[test]
+fn user_setting_modify_requires_value_allows_empty_and_exposes_no_create_or_delete() {
+    // A missing value is invalid, while an explicit empty string is the
+    // supported clear operation. The existing surface remains GET/GET/PUT.
+    let generated = build_openapi();
+    let generated_modify = &generated["components"]["schemas"]["ModifyUserSetting"];
+    assert_eq!(generated_modify["required"], json!(["value"]));
+    assert_eq!(generated_modify["properties"]["value"]["type"], "string");
+    assert!(generated_modify["properties"]["value"]
+        .get("minLength")
+        .is_none());
+    assert!(generated["paths"]["/user-settings"].get("post").is_none());
+    assert!(generated["paths"]["/user-settings"].get("delete").is_none());
+    assert!(generated["paths"]["/user-settings/{id}"]
+        .get("post")
+        .is_none());
+    assert!(generated["paths"]["/user-settings/{id}"]
+        .get("delete")
+        .is_none());
+
+    let identity = read_yaml(
+        root_spec_path()
+            .parent()
+            .expect("spec directory")
+            .join("identity.yaml")
+            .as_path(),
+    );
+    let curated_modify = &identity["components"]["schemas"]["ModifyUserSetting"];
+    assert_eq!(curated_modify["required"], json!(["value"]));
+    assert_eq!(curated_modify["properties"]["value"]["type"], "string");
+    assert!(curated_modify["properties"]["value"]
+        .get("minLength")
+        .is_none());
+    assert!(identity["paths"]["/user-settings"].get("post").is_none());
+    assert!(identity["paths"]["/user-settings"].get("delete").is_none());
+    assert!(identity["paths"]["/user-settings/{id}"]
+        .get("post")
+        .is_none());
+    assert!(identity["paths"]["/user-settings/{id}"]
+        .get("delete")
+        .is_none());
+}
+
+#[test]
+fn generated_openapi_keeps_administration_and_cleanup_operations_non_public() {
+    // Canonical upstream requests for system administration and cleanup do
+    // not create a REST product decision. Scanner administration also remains
+    // read-only while its typed requests are available upstream.
+    let generated = build_openapi();
+    for absent_path in [
+        "/auth-config",
+        "/license",
+        "/settings",
+        "/wizards",
+        "/trashcan",
+        "/restore",
+    ] {
+        assert!(
+            generated["paths"].get(absent_path).is_none(),
+            "administration/cleanup path must stay absent: {absent_path}"
+        );
+    }
+    for (path, forbidden_methods) in [
+        ("/scanners", ["post", "put", "delete"]),
+        ("/scanners/{id}", ["post", "put", "delete"]),
+    ] {
+        assert!(generated["paths"][path].get("get").is_some());
+        for method in forbidden_methods {
+            assert!(
+                generated["paths"][path].get(method).is_none(),
+                "scanner administration must stay absent: {method} {path}"
+            );
+        }
+    }
+
+    let operation_ids = generated["paths"]
+        .as_object()
+        .expect("paths object")
+        .values()
+        .flat_map(|path_item| {
+            path_item
+                .as_object()
+                .into_iter()
+                .flatten()
+                .map(|(_, value)| value)
+        })
+        .filter_map(|operation| operation["operationId"].as_str())
+        .collect::<BTreeSet<_>>();
+    for omitted in [
+        "describeAuth",
+        "modifyAuth",
+        "getLicense",
+        "modifyLicense",
+        "getSettings",
+        "modifySetting",
+        "runWizard",
+        "emptyTrashcan",
+        "restore",
+        "createScanner",
+        "cloneScanner",
+        "modifyScanner",
+        "deleteScanner",
+        "verifyScanner",
+    ] {
+        assert!(
+            !operation_ids.contains(omitted),
+            "administration/cleanup operation must stay absent: {omitted}"
+        );
+    }
 }
 
 #[test]
@@ -338,18 +487,38 @@ fn generated_openapi_closes_every_request_object_without_closing_extension_maps(
 }
 
 #[test]
-fn generated_openapi_feed_version_matches_required_runtime_contract() {
+fn generated_openapi_feed_contract_matches_required_runtime_booleans() {
+    // Canonical GMP feed metadata may be absent, but the gateway compatibility
+    // mapping keeps all three downstream access flags required booleans.
     let generated = build_openapi();
-    let required = generated["components"]["schemas"]["Feed"]["required"]
+    let feed_required = generated["components"]["schemas"]["Feed"]["required"]
         .as_array()
         .unwrap()
         .iter()
         .filter_map(Value::as_str)
         .collect::<BTreeSet<_>>();
 
-    assert!(required.contains("type"));
-    assert!(required.contains("name"));
-    assert!(required.contains("version"));
+    assert!(feed_required.contains("type"));
+    assert!(feed_required.contains("name"));
+    assert!(feed_required.contains("version"));
+
+    let feed_list_required = generated["components"]["schemas"]["FeedList"]["required"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(Value::as_str)
+        .collect::<BTreeSet<_>>();
+    for field in [
+        "data",
+        "feedOwnerConfigured",
+        "feedRolesConfigured",
+        "feedResourcesAccess",
+    ] {
+        assert!(
+            feed_list_required.contains(field),
+            "FeedList must keep {field} required"
+        );
+    }
 }
 
 #[test]
@@ -599,6 +768,74 @@ fn generated_and_curated_generic_resource_contracts_match_semantics() {
     assert!(generated["paths"]["/assets"].get("post").is_none());
     assert!(generated["paths"]["/configs"].get("post").is_none());
     assert!(generated["paths"]["/configs/{id}"].get("put").is_none());
+}
+
+#[test]
+fn generated_and_curated_report_delete_contract_is_permanent_without_selector() {
+    // Report deletion cannot be downgraded to trash semantics. Keep both
+    // published contracts free of `ultimate`, explicit about permanence, and
+    // honest about the 400 returned for obsolete legacy input.
+    let generated = build_openapi();
+    let generated_delete = op(&generated, "/reports/{id}", "delete");
+    assert!(generated_delete["parameters"]
+        .as_array()
+        .expect("generated report delete parameters")
+        .iter()
+        .all(|parameter| parameter["name"] != "ultimate"));
+    assert!(generated_delete["description"]
+        .as_str()
+        .is_some_and(|description| description.contains("Permanently deletes")
+            && description.contains("400 bad_request")));
+    assert!(generated_delete["responses"].get("400").is_some());
+
+    let reports_path = root_spec_path()
+        .parent()
+        .expect("root spec should have a directory")
+        .join("reports.yaml");
+    let curated = read_yaml(&reports_path);
+    let curated_delete = &curated["paths"]["/reports/{id}"]["delete"];
+    assert!(curated_delete.get("parameters").is_none());
+    assert!(curated_delete["description"]
+        .as_str()
+        .is_some_and(|description| description.contains("Permanently deletes")
+            && description.contains("400 bad_request")));
+    assert!(curated_delete["responses"].get("400").is_some());
+}
+
+#[test]
+fn generated_and_curated_config_create_contracts_require_family_specific_bases() {
+    // Issue #518 intentionally corrects the Technology Preview create schema;
+    // keep generated docs and both curated component documents exact here.
+    let generated = build_openapi();
+    let generated_schemas = &generated["components"]["schemas"];
+    assert_eq!(
+        generated_schemas["CreateScanConfig"]["required"],
+        json!(["name", "baseScanConfigId"])
+    );
+    assert_eq!(
+        generated_schemas["CreatePolicy"]["required"],
+        json!(["name", "basePolicyId"])
+    );
+
+    let root_spec = root_spec_path();
+    let spec_dir = root_spec
+        .parent()
+        .expect("root spec should have a directory");
+    let scan_configs = read_yaml(&spec_dir.join("scan-configs.yaml"));
+    let policies = read_yaml(&spec_dir.join("policies.yaml"));
+    assert_eq!(
+        scan_configs["components"]["schemas"]["CreateScanConfig"]["required"],
+        json!(["name", "baseScanConfigId"])
+    );
+    assert_eq!(
+        policies["components"]["schemas"]["CreatePolicy"]["required"],
+        json!(["name", "basePolicyId"])
+    );
+    assert_eq!(
+        policies["paths"]["/policies"]["post"]["requestBody"]["content"]["application/json"]
+            ["schema"]["$ref"],
+        json!("#/components/schemas/CreatePolicy")
+    );
 }
 
 #[test]

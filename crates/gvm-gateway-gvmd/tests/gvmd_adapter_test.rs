@@ -9,7 +9,10 @@ use std::{
 use gvm_gateway_domain::*;
 use gvm_gateway_gvmd::GvmdAdapter;
 use gvm_mock_server::{
-    response_gen::{REPORT_EXPORT_BINARY_FORMAT_ID, REPORT_EXPORT_XML_FORMAT_ID},
+    response_gen::{
+        generate_binary_report_export, generate_xml_report_export, REPORT_EXPORT_BINARY_FORMAT_ID,
+        REPORT_EXPORT_XML_FORMAT_ID,
+    },
     Fault, FaultKind, GmpVersion as MockVersion, MockGmpServer, Resource, ServerMode,
 };
 use tokio::sync::{Mutex as AsyncMutex, MutexGuard as AsyncMutexGuard};
@@ -139,7 +142,9 @@ async fn create_mock_adapter_v22_8() -> (GvmdAdapter, MockGmpServer, String) {
         .mode(ServerMode::Stateful)
         .version(MockVersion::V22_8)
         .seed(move |store| {
-            store.create(Resource::with_id("report", "Typed report", report_id));
+            let mut report = Resource::with_id("report", "Typed report", report_id);
+            report.set_attr("usage_type", "scan");
+            store.create(report);
             let mut filter = Resource::with_id("filter", "Saved alarm filter", filter_id);
             filter.set_attr("term", "threat=Alarm");
             store.create(filter);
@@ -157,6 +162,29 @@ async fn create_mock_adapter_v22_8() -> (GvmdAdapter, MockGmpServer, String) {
         .unwrap();
 
     (adapter, server, token.to_string())
+}
+
+async fn create_task_target(adapter: &GvmdAdapter, token: &str, name: &str) -> String {
+    adapter
+        .create_target(
+            token,
+            CreateTargetInput {
+                name: name.to_string(),
+                comment: None,
+                hosts: vec!["192.0.2.10".to_string()],
+                exclude_hosts: vec![],
+                alive_test: None,
+                port_list_id: None,
+                reverse_lookup_only: None,
+                reverse_lookup_unify: None,
+                ssh_credential_id: None,
+                smb_credential_id: None,
+                esxi_credential_id: None,
+                snmp_credential_id: None,
+            },
+        )
+        .await
+        .expect("task target should be created")
 }
 
 async fn create_mock_adapter_v22_8_with_credential_store_error(
@@ -348,9 +376,16 @@ async fn gvmd_adapter_connect_session_auth_failure_returns_unauthorized() {
         .unwrap();
 
     let adapter = GvmdAdapter::unix_socket(server.socket_path().unwrap());
-    let result = adapter.connect_session("token", "admin", "wrong").await;
+    let result = adapter
+        .connect_session("token", "admin", "wrong-password-must-stay-redacted")
+        .await;
 
-    assert!(matches!(result, Err(GatewayError::Unauthorized(_))));
+    let error = result.expect_err("invalid credentials must fail");
+    assert!(matches!(error, GatewayError::Unauthorized(_)));
+    assert!(
+        !format!("{error:?}").contains("wrong-password-must-stay-redacted"),
+        "authentication errors must not reveal rejected credentials"
+    );
     let session_digest = SessionTokenDigest::from_token("token");
     let disconnect_result = adapter.disconnect_session(&session_digest).await;
     assert!(disconnect_result.is_ok());
@@ -732,8 +767,8 @@ async fn gvmd_adapter_create_credential_forwards_certificate_and_community_field
     let (adapter, server, token) = create_mock_adapter().await;
     server.clear_history();
 
-    // Regression coverage for #403: typed credential create requests must keep
-    // supported secret-bearing fields instead of 400-rejecting them locally.
+    // Regression coverage for #403: a complete client-certificate request must
+    // keep both required key material and unrelated supported secret fields.
     let result = adapter
         .create_credential(
             &token,
@@ -743,7 +778,7 @@ async fn gvmd_adapter_create_credential_forwards_certificate_and_community_field
                 credential_type: "cc".to_string(),
                 login: None,
                 password: None,
-                private_key: None,
+                private_key: Some("PRIVATE KEY".to_string()),
                 certificate: Some("CERTIFICATE".to_string()),
                 community: Some("public".to_string()),
                 auth_algorithm: None,
@@ -765,6 +800,7 @@ async fn gvmd_adapter_create_credential_forwards_certificate_and_community_field
         .expect("create_credential command should be recorded");
     let xml = String::from_utf8(command.raw_xml().to_vec()).expect("xml command");
     assert!(xml.contains("<type>cc</type>"));
+    assert!(xml.contains("<key><private>PRIVATE KEY</private>"));
     assert!(xml.contains("<certificate>CERTIFICATE</certificate>"));
     assert!(xml.contains("<community>public</community>"));
 
@@ -870,26 +906,48 @@ async fn gvmd_adapter_modify_task_forwards_alterable() {
 
 #[tokio::test]
 async fn gvmd_adapter_modify_audit_forwards_alterable() {
-    let (adapter, server, token) = create_mock_adapter().await;
+    let (adapter, server, token) = create_mock_adapter_v22_8().await;
+    let target_id = create_task_target(&adapter, &token, "Audit modify target").await;
+    let audit_id = adapter
+        .create_audit(
+            &token,
+            CreateTaskInput {
+                name: "Audit before modify".to_string(),
+                comment: None,
+                target: CreateTaskTarget::Classic {
+                    target_id,
+                    scan_config_id: "00000000-0000-0000-0000-000000000301".to_string(),
+                    scanner_id: "08b69003-5fc2-4037-a479-93b440211c73".to_string(),
+                },
+                schedule_id: None,
+                alert_ids: vec![],
+                alterable: None,
+                observers: vec![],
+                schedule_periods: None,
+                preferences: vec![],
+            },
+        )
+        .await
+        .expect("audit should be created");
     server.clear_history();
 
-    // Shared audit updates reuse ModifyTaskInput, so the adapter must not drop
-    // alterable there either.
+    // Canonical audit updates reuse ModifyTaskInput, retain explicit false,
+    // verify audit identity before mutation, and read the updated audit back.
     let result = adapter
         .modify_audit(
             &token,
-            "550e8400-e29b-41d4-a716-446655440011",
+            &audit_id,
             ModifyTaskInput {
+                name: Some("Audit after modify".to_string()),
                 alterable: Some(false),
                 ..Default::default()
             },
         )
         .await;
 
-    assert!(
-        result.is_err(),
-        "mock backend may reject the unknown audit, but the command should still be emitted"
-    );
+    let audit = result.expect("canonical audit modification should succeed");
+    assert_eq!(audit.name, "Audit after modify");
+    assert_eq!(audit.usage_type.as_deref(), Some("audit"));
     let history = server.command_history();
     let command = history
         .iter()
@@ -897,7 +955,19 @@ async fn gvmd_adapter_modify_audit_forwards_alterable() {
         .expect("modify_task command should be recorded");
     let xml = String::from_utf8(command.raw_xml().to_vec()).expect("xml command");
     assert!(xml.contains("<alterable>0</alterable>"));
-    assert!(xml.contains("<usage_type>audit</usage_type>"));
+    assert!(xml.contains(&format!("task_id=\"{audit_id}\"")));
+    assert!(
+        !xml.contains("usage_type"),
+        "gvmd does not accept a usage_type child on modify_task: {xml}"
+    );
+    assert!(
+        history
+            .iter()
+            .filter(|record| record.command_name() == "get_tasks")
+            .count()
+            >= 2,
+        "audit modification must verify scope and read the updated value back"
+    );
 
     server.shutdown().await;
 }
@@ -984,7 +1054,43 @@ async fn gvmd_adapter_modify_scan_config_forwards_rename() {
         .expect("modify_config command should be recorded");
     let xml = String::from_utf8(command.raw_xml().to_vec()).expect("xml command");
     assert!(xml.contains("<name>Renamed Config</name>"));
-    assert!(xml.contains("<usage_type>scan</usage_type>"));
+    assert!(!xml.contains("usage_type"), "xml={xml}");
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_scan_config_preference_reads_use_complete_requests() {
+    let (adapter, server, token) = create_mock_adapter().await;
+    let config_id = "550e8400-e29b-41d4-a716-446655440123";
+    let nvt_oid = "1.3.6.1.4.1.25623.1.0.100000";
+    server.clear_history();
+
+    let query = ScanConfigPreferenceQuery {
+        nvt_oid: Some(nvt_oid.to_string()),
+    };
+    let _ = adapter
+        .list_scan_config_preferences(&token, config_id, &query)
+        .await;
+    let _ = adapter
+        .get_scan_config_preference(&token, config_id, "Timeout", &query)
+        .await;
+
+    let history = server.command_history();
+    assert!(history.iter().any(|record| {
+        let xml = String::from_utf8_lossy(record.raw_xml());
+        record.command_name() == "get_preferences"
+            && xml.contains(&format!("config_id=\"{config_id}\""))
+            && xml.contains(&format!("nvt_oid=\"{nvt_oid}\""))
+            && !xml.contains("preference=")
+    }));
+    assert!(history.iter().any(|record| {
+        let xml = String::from_utf8_lossy(record.raw_xml());
+        record.command_name() == "get_preferences"
+            && xml.contains(&format!("config_id=\"{config_id}\""))
+            && xml.contains(&format!("nvt_oid=\"{nvt_oid}\""))
+            && xml.contains("preference=\"Timeout\"")
+    }));
 
     server.shutdown().await;
 }
@@ -1450,14 +1556,14 @@ async fn gvmd_adapter_direct_lists_emit_backend_pagination_filter() {
         adapter.list_results(
             &token,
             &ResultQuery {
-                filter_string: Some("name~Target".to_string()),
+                filter_string: Some("name=Target".to_string()),
                 filter_id: None,
                 page: 2,
                 per_page: 10,
             }
         ),
         "get_results",
-        "filter=\"name~Target first=11 rows=10\""
+        "filter=\"name=Target first=11 rows=10\""
     );
     assert_backend_pagination!(
         adapter,
@@ -1466,14 +1572,14 @@ async fn gvmd_adapter_direct_lists_emit_backend_pagination_filter() {
             &token,
             "550e8400-e29b-41d4-a716-446655440000",
             &ResultQuery {
-                filter_string: Some("name~Target".to_string()),
+                filter_string: Some("name=Target".to_string()),
                 filter_id: None,
                 page: 2,
                 per_page: 10,
             }
         ),
         "get_results",
-        "filter=\"report_id=550e8400-e29b-41d4-a716-446655440000 name~Target first=11 rows=10\""
+        "filter=\"report_id=550e8400-e29b-41d4-a716-446655440000 name=Target first=11 rows=10\""
     );
     assert_backend_pagination!(
         adapter,
@@ -1849,6 +1955,49 @@ async fn gvmd_adapter_list_reports_requests_summary_metadata_only() {
 }
 
 #[tokio::test]
+async fn gvmd_adapter_delete_report_permanently_removes_state_without_ultimate_attribute() {
+    let (adapter, server, token) = create_mock_adapter_v22_8().await;
+    let report_id = "550e8400-e29b-41d4-a716-446655440000";
+    server.clear_history();
+
+    // Reports have no gvmd trash lifecycle. The canonical one-argument
+    // request must remove the stateful resource and must never invent an
+    // `ultimate` wire attribute that gvmd does not parse for reports.
+    adapter
+        .delete_report(&token, report_id)
+        .await
+        .expect("canonical permanent report deletion should succeed");
+
+    let page = adapter
+        .list_reports(
+            &token,
+            &ReportQuery {
+                filter_string: None,
+                filter_id: None,
+                page: 1,
+                per_page: 25,
+            },
+        )
+        .await
+        .expect("reports should remain listable after deletion");
+    assert!(
+        page.data.iter().all(|report| report.id != report_id),
+        "deleted report must not remain in stateful backend state"
+    );
+
+    let history = server.command_history();
+    let delete = history
+        .iter()
+        .find(|record| record.command_name() == "delete_report")
+        .expect("delete_report command should be recorded");
+    let xml = String::from_utf8(delete.raw_xml().to_vec()).expect("XML command");
+    assert!(xml.contains(&format!("report_id=\"{report_id}\"")));
+    assert!(!xml.contains("ultimate"), "xml={xml}");
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn gvmd_adapter_list_hosts_emits_backend_pagination_filter() {
     let (adapter, server, token) = create_mock_adapter().await;
     server.clear_history();
@@ -1946,6 +2095,15 @@ async fn gvmd_adapter_asset_mutations_emit_comment_only_and_no_ultimate() {
         .await
         .expect("generic asset comment should update");
     assert_eq!(updated.meta.comment.as_deref(), Some("updated"));
+    server.clear_history();
+
+    // Complete canonical requests must not turn an omitted patch field into
+    // an accidental comment clear; the adapter supplies the stored value.
+    let preserved = adapter
+        .modify_asset(&token, &id, "host", ModifyAssetInput { comment: None })
+        .await
+        .expect("omitted generic asset comment should be preserved");
+    assert_eq!(preserved.meta.comment.as_deref(), Some("updated"));
     adapter
         .delete_asset(&token, &id)
         .await
@@ -2017,7 +2175,8 @@ async fn gvmd_adapter_generic_configs_forward_open_usage_clone_and_ultimate_dele
     let history = server.command_history();
     assert!(history.iter().any(|record| {
         record.command_name() == "get_configs"
-            && String::from_utf8_lossy(record.raw_xml()).contains("usage_type=\"future_usage\"")
+            && String::from_utf8_lossy(record.raw_xml())
+                .contains("filter=\"usage_type=future_usage")
     }));
     assert!(history.iter().any(|record| {
         record.command_name() == "create_config"
@@ -2027,6 +2186,228 @@ async fn gvmd_adapter_generic_configs_forward_open_usage_clone_and_ultimate_dele
         record.command_name() == "delete_config"
             && String::from_utf8_lossy(record.raw_xml()).contains("ultimate=\"1\"")
     }));
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_config_create_requires_active_same_usage_bases() {
+    // Issue #518 requires deterministic validation before create_config: a
+    // scan config can copy only an active scan config, and a policy can copy
+    // only an active policy. Exercise valid, wrong-usage, missing, and trashed
+    // sources against the canonical stateful lifecycle implementation.
+    let (adapter, server, token) = create_mock_adapter().await;
+    let scan_base = "daba56c8-73ec-11df-a475-002264764cea";
+    let policy_base = "00000000-0000-0000-0000-000000000301";
+    let missing_base = "00000000-0000-0000-0000-000000009999";
+    server.clear_history();
+
+    let scan_id = adapter
+        .create_scan_config(
+            &token,
+            CreateScanConfigInput {
+                name: "Issue 518 scan copy".to_string(),
+                comment: Some("scan metadata".to_string()),
+                base_scan_config_id: scan_base.to_string(),
+            },
+        )
+        .await
+        .expect("active scan base should be copied");
+    let policy_id = adapter
+        .create_policy(
+            &token,
+            CreatePolicyInput {
+                name: "Issue 518 policy copy".to_string(),
+                comment: Some("policy metadata".to_string()),
+                base_policy_id: policy_base.to_string(),
+            },
+        )
+        .await
+        .expect("active policy base should be copied");
+
+    for error in [
+        adapter
+            .create_scan_config(
+                &token,
+                CreateScanConfigInput {
+                    name: "Wrong usage scan".to_string(),
+                    comment: None,
+                    base_scan_config_id: policy_base.to_string(),
+                },
+            )
+            .await
+            .expect_err("policy base must be rejected for scan creation"),
+        adapter
+            .create_scan_config(
+                &token,
+                CreateScanConfigInput {
+                    name: "Missing scan".to_string(),
+                    comment: None,
+                    base_scan_config_id: missing_base.to_string(),
+                },
+            )
+            .await
+            .expect_err("missing scan base must be rejected"),
+    ] {
+        assert_eq!(
+            error,
+            GatewayError::InvalidInput(
+                "baseScanConfigId must identify an active scan config".to_string()
+            )
+        );
+    }
+
+    for error in [
+        adapter
+            .create_policy(
+                &token,
+                CreatePolicyInput {
+                    name: "Wrong usage policy".to_string(),
+                    comment: None,
+                    base_policy_id: scan_base.to_string(),
+                },
+            )
+            .await
+            .expect_err("scan base must be rejected for policy creation"),
+        adapter
+            .create_policy(
+                &token,
+                CreatePolicyInput {
+                    name: "Missing policy".to_string(),
+                    comment: None,
+                    base_policy_id: missing_base.to_string(),
+                },
+            )
+            .await
+            .expect_err("missing policy base must be rejected"),
+    ] {
+        assert_eq!(
+            error,
+            GatewayError::InvalidInput("basePolicyId must identify an active policy".to_string())
+        );
+    }
+
+    adapter
+        .delete_scan_config(&token, &scan_id, false)
+        .await
+        .expect("created scan should move to trash");
+    let trashed_scan = adapter
+        .create_scan_config(
+            &token,
+            CreateScanConfigInput {
+                name: "Trashed scan source".to_string(),
+                comment: None,
+                base_scan_config_id: scan_id,
+            },
+        )
+        .await
+        .expect_err("trashed scan base must be rejected");
+    assert!(matches!(trashed_scan, GatewayError::InvalidInput(_)));
+
+    adapter
+        .delete_policy(&token, &policy_id)
+        .await
+        .expect("created policy should move to trash");
+    let trashed_policy = adapter
+        .create_policy(
+            &token,
+            CreatePolicyInput {
+                name: "Trashed policy source".to_string(),
+                comment: None,
+                base_policy_id: policy_id,
+            },
+        )
+        .await
+        .expect_err("trashed policy base must be rejected");
+    assert!(matches!(trashed_policy, GatewayError::InvalidInput(_)));
+
+    let create_commands = server
+        .command_history()
+        .into_iter()
+        .filter(|record| record.command_name() == "create_config")
+        .collect::<Vec<_>>();
+    assert_eq!(
+        create_commands.len(),
+        2,
+        "invalid bases must be rejected before create_config"
+    );
+    let scan_xml = String::from_utf8_lossy(create_commands[0].raw_xml());
+    assert!(scan_xml.contains(&format!("<copy>{scan_base}</copy>")));
+    assert!(scan_xml.contains("<name>Issue 518 scan copy</name>"));
+    assert!(!scan_xml.contains("<usage_type>"));
+    let policy_xml = String::from_utf8_lossy(create_commands[1].raw_xml());
+    assert!(policy_xml.contains(&format!("<copy>{policy_base}</copy>")));
+    assert!(policy_xml.contains("<usage_type>policy</usage_type>"));
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_config_modify_is_metadata_only_and_reads_back() {
+    // Canonical scan/policy modifies must emit metadata only and then perform
+    // the existing typed read-back without touching selectors/preferences.
+    let (adapter, server, token) = create_mock_adapter().await;
+    let scan_id = "00000000-0000-0000-0000-000000000300";
+    let policy_id = "00000000-0000-0000-0000-000000000302";
+    server.clear_history();
+
+    let scan = adapter
+        .modify_scan_config(
+            &token,
+            scan_id,
+            ModifyScanConfigInput {
+                name: Some("Renamed discovery scan".to_string()),
+                comment: Some("updated scan".to_string()),
+            },
+        )
+        .await
+        .expect("scan metadata update should read back");
+    assert_eq!(scan.name, "Renamed discovery scan");
+
+    let policy = adapter
+        .modify_policy(
+            &token,
+            policy_id,
+            ModifyScanConfigInput {
+                name: Some("Renamed empty policy".to_string()),
+                comment: Some("updated policy".to_string()),
+            },
+        )
+        .await
+        .expect("policy metadata update should read back");
+    assert_eq!(policy.name, "Renamed empty policy");
+
+    let history = server.command_history();
+    let modifies = history
+        .iter()
+        .filter(|record| record.command_name() == "modify_config")
+        .collect::<Vec<_>>();
+    assert_eq!(modifies.len(), 2);
+    for modify in modifies {
+        let xml = String::from_utf8_lossy(modify.raw_xml());
+        assert!(xml.contains("<name>"));
+        assert!(xml.contains("<comment>"));
+        assert!(
+            !xml.contains("usage_type"),
+            "metadata modify changed usage: {xml}"
+        );
+        assert!(
+            !xml.contains("preference"),
+            "metadata modify touched preferences: {xml}"
+        );
+        assert!(
+            !xml.contains("selection"),
+            "metadata modify touched selections: {xml}"
+        );
+    }
+    assert_eq!(
+        history
+            .iter()
+            .filter(|record| record.command_name() == "get_configs")
+            .count(),
+        2,
+        "each metadata update must retain read-back behavior"
+    );
 
     server.shutdown().await;
 }
@@ -2069,7 +2450,7 @@ async fn gvmd_adapter_list_tls_certificates_emits_backend_pagination_filter() {
         .list_tls_certificates(
             &token,
             &SupportingResourceQuery {
-                filter_string: Some("subject~example".to_string()),
+                filter_string: Some("subject_dn~example".to_string()),
                 filter_id: None,
                 page: 2,
                 per_page: 10,
@@ -2085,7 +2466,7 @@ async fn gvmd_adapter_list_tls_certificates_emits_backend_pagination_filter() {
         .expect("get_tls_certificates command should be recorded");
     let xml = String::from_utf8(command.raw_xml().to_vec()).expect("xml command");
     assert!(xml.contains("<get_tls_certificates"));
-    assert!(xml.contains("filter=\"subject~example first=11 rows=10\""));
+    assert!(xml.contains("filter=\"subject_dn~example first=11 rows=10\""));
 
     server.shutdown().await;
 }
@@ -2162,9 +2543,11 @@ async fn gvmd_adapter_get_audit_scopes_usage_type_audit() {
     let xml = String::from_utf8(command.raw_xml().to_vec()).expect("xml command");
     assert!(xml.contains("usage_type=\"audit\""), "xml={xml}");
     assert!(
-        xml.contains(&format!("uuid={audit_id}")),
-        "get_audit must filter to the requested id; xml={xml}"
+        xml.contains(&format!("task_id=\"{audit_id}\"")),
+        "get_audit must use the canonical id selector; xml={xml}"
     );
+    assert!(xml.contains("details=\"1\""), "xml={xml}");
+    assert!(!xml.contains("filter="), "xml={xml}");
 
     server.shutdown().await;
 }
@@ -2185,8 +2568,8 @@ async fn gvmd_adapter_get_policy_scopes_usage_type_policy() {
     let xml = String::from_utf8(command.raw_xml().to_vec()).expect("xml command");
     assert!(xml.contains("usage_type=\"policy\""), "xml={xml}");
     assert!(
-        xml.contains(&format!("uuid={policy_id}")),
-        "get_policy must filter to the requested id; xml={xml}"
+        xml.contains(&format!("config_id=\"{policy_id}\"")),
+        "get_policy must select the requested id; xml={xml}"
     );
 
     server.shutdown().await;
@@ -2211,7 +2594,7 @@ async fn gvmd_adapter_start_audit_verifies_audit_scope_before_acting() {
     let xml = String::from_utf8(verify.raw_xml().to_vec()).expect("xml command");
     assert!(xml.contains("usage_type=\"audit\""), "xml={xml}");
     assert!(
-        xml.contains(&format!("uuid={audit_id}")),
+        xml.contains(&format!("task_id=\"{audit_id}\"")),
         "start_audit must verify the requested audit id; xml={xml}"
     );
 
@@ -2219,7 +2602,7 @@ async fn gvmd_adapter_start_audit_verifies_audit_scope_before_acting() {
 }
 
 #[tokio::test]
-async fn gvmd_adapter_list_nvts_emits_backend_pagination_filter() {
+async fn gvmd_adapter_list_nvts_emits_complete_canonical_context() {
     let (adapter, server, token) = create_mock_adapter().await;
     server.clear_history();
 
@@ -2227,13 +2610,13 @@ async fn gvmd_adapter_list_nvts_emits_backend_pagination_filter() {
         .list_nvts(
             &token,
             &NvtQuery {
-                filter_string: Some("family=Databases".to_string()),
+                filter_string: None,
                 filter_id: None,
-                page: 3,
+                page: 1,
                 per_page: 25,
-                config_id: Some("550e8400-e29b-41d4-a716-446655440001".to_string()),
-                preferences_config_id: Some("550e8400-e29b-41d4-a716-446655440002".to_string()),
-                family: Some("Databases".to_string()),
+                config_id: Some("daba56c8-73ec-11df-a475-002264764cea".to_string()),
+                preferences_config_id: None,
+                family: Some("General".to_string()),
                 include_preferences: Some(true),
                 include_preference_count: Some(false),
                 include_timeout: Some(true),
@@ -2251,15 +2634,110 @@ async fn gvmd_adapter_list_nvts_emits_backend_pagination_filter() {
         .expect("get_nvts command should be recorded");
     let xml = String::from_utf8(command.raw_xml().to_vec()).expect("xml command");
     assert!(xml.contains("<get_nvts"));
-    assert!(xml.contains("filter=\"family=Databases first=51 rows=25\""));
-    assert!(xml.contains("config_id=\"550e8400-e29b-41d4-a716-446655440001\""));
-    assert!(xml.contains("preferences_config_id=\"550e8400-e29b-41d4-a716-446655440002\""));
-    assert!(xml.contains("family=\"Databases\""));
+    assert!(xml.contains("config_id=\"daba56c8-73ec-11df-a475-002264764cea\""));
+    assert!(xml.contains("family=\"General\""));
+    assert!(!xml.contains("preferences_config_id="));
+    assert!(xml.contains("details=\"1\""));
     assert!(xml.contains("preferences=\"1\""));
     assert!(xml.contains("preference_count=\"0\""));
     assert!(xml.contains("timeout=\"1\""));
     assert!(xml.contains("sort_order=\"ascending\""));
     assert!(xml.contains("sort_field=\"name\""));
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_list_nvts_rejects_unsupported_filters() {
+    let (adapter, server, token) = create_mock_adapter().await;
+
+    for (filter_string, filter_id, expected) in [
+        (Some("name~apache".to_string()), None, "filter"),
+        (
+            None,
+            Some("550e8400-e29b-41d4-a716-446655440000".to_string()),
+            "filterId",
+        ),
+    ] {
+        server.clear_history();
+        let error = adapter
+            .list_nvts(
+                &token,
+                &NvtQuery {
+                    filter_string,
+                    filter_id,
+                    page: 1,
+                    per_page: 25,
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect_err("unsupported NVT filters must fail closed");
+
+        assert_eq!(
+            error,
+            GatewayError::InvalidInput(format!("{expected} is not supported for NVT queries"))
+        );
+        assert!(
+            server.command_history().is_empty(),
+            "unsupported filters must be rejected before contacting gvmd"
+        );
+    }
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_scan_config_nvt_reads_keep_family_and_detail_context() {
+    // Config-scoped lists require a family in reviewed gvmd. This regression
+    // test protects the adapter's family decomposition and the distinct
+    // preference-expanded detail request without changing the REST query.
+    let (adapter, server, token) = create_mock_adapter().await;
+    let config_id = "daba56c8-73ec-11df-a475-002264764cea";
+    let nvt_oid = "1.3.6.1.4.1.25623.1";
+    server.clear_history();
+
+    let page = adapter
+        .list_scan_config_nvts(
+            &token,
+            config_id,
+            &ScanConfigNvtQuery {
+                family: None,
+                page: 1,
+                per_page: 25,
+            },
+        )
+        .await
+        .expect("config-only NVT list should decompose through canonical families");
+    assert_eq!(page.data.len(), 1);
+    assert_eq!(page.pagination.total, 1);
+    assert!(server
+        .command_history()
+        .iter()
+        .any(|record| record.command_name() == "get_nvt_families"));
+    let list_xml = recorded_xml(&server, "get_nvts");
+    assert!(list_xml.contains(&format!("config_id=\"{config_id}\"")));
+    assert!(list_xml.contains("family=\"General\""));
+    assert!(list_xml.contains("details=\"1\""));
+    assert!(list_xml.contains("preferences=\"1\""));
+    assert!(list_xml.contains("preference_count=\"1\""));
+    assert!(list_xml.contains("timeout=\"1\""));
+    assert!(list_xml.contains("sort_field=\"name\""));
+
+    server.clear_history();
+    let nvt = adapter
+        .get_scan_config_nvt(&token, config_id, nvt_oid)
+        .await
+        .expect("scan-config NVT detail should preserve preference context");
+    assert_eq!(nvt.oid, nvt_oid);
+    let detail_xml = recorded_xml(&server, "get_nvts");
+    assert!(detail_xml.contains(&format!("nvt_oid=\"{nvt_oid}\"")));
+    assert!(detail_xml.contains(&format!("config_id=\"{config_id}\"")));
+    assert!(!detail_xml.contains("family="));
+    assert!(detail_xml.contains("details=\"1\""));
+    assert!(detail_xml.contains("preferences=\"1\""));
+    assert!(detail_xml.contains("preference_count=\"1\""));
+    assert!(detail_xml.contains("timeout=\"1\""));
 
     server.shutdown().await;
 }
@@ -2313,16 +2791,12 @@ async fn gvmd_adapter_get_report_vulnerabilities_uses_typed_command() {
         vec!["CVE-2011-1473".to_string(), "CVE-2011-5094".to_string()]
     );
 
-    let history = server.command_history();
-    let command = history
-        .iter()
-        .find(|record| record.command_name() == "get_report_vulns")
-        .expect("get_report_vulns command should be recorded");
-    let xml = String::from_utf8(command.raw_xml().to_vec()).expect("xml command");
-    assert!(xml.contains("report_id=\"550e8400-e29b-41d4-a716-446655440000\""));
-    assert!(xml.contains("filter=\"threat=Alarm severity&gt;5 first=11 rows=10\""));
-    assert!(!xml.contains("filter_id"));
-    assert!(xml.contains("details=\"1\""));
+    let xml = recorded_xml(&server, "get_report_vulns");
+    assert_complete_report_projection_xml(
+        &xml,
+        "550e8400-e29b-41d4-a716-446655440000",
+        "threat=Alarm severity&gt;5 first=11 rows=10",
+    );
 
     server.shutdown().await;
 }
@@ -2737,14 +3211,12 @@ async fn gvmd_adapter_get_report_tls_certificates_uses_typed_command() {
         Some("2027-01-01T00:00:00Z")
     );
 
-    let history = server.command_history();
-    let command = history
-        .iter()
-        .find(|record| record.command_name() == "get_report_tls_certificates")
-        .expect("get_report_tls_certificates command should be recorded");
-    let xml = String::from_utf8(command.raw_xml().to_vec()).expect("xml command");
-    assert!(xml.contains("report_id=\"550e8400-e29b-41d4-a716-446655440000\""));
-    assert!(xml.contains("filter=\"subject~example first=1 rows=25\""));
+    let xml = recorded_xml(&server, "get_report_tls_certificates");
+    assert_complete_report_projection_xml(
+        &xml,
+        "550e8400-e29b-41d4-a716-446655440000",
+        "subject~example first=1 rows=25",
+    );
 
     server.shutdown().await;
 }
@@ -2793,11 +3265,9 @@ async fn gvmd_adapter_get_report_embeds_requested_result_window_larger_than_25()
         .mode(ServerMode::Stateful)
         .version(MockVersion::V22_8)
         .seed(move |store| {
-            store.create(Resource::with_id(
-                "report",
-                "Large embedded report",
-                report_id,
-            ));
+            let mut report = Resource::with_id("report", "Large embedded report", report_id);
+            report.set_attr("usage_type", "scan");
+            store.create(report);
 
             // Regression coverage for issue #230: the single-report
             // path must honor the requested embedded-result window
@@ -2896,13 +3366,12 @@ async fn gvmd_adapter_get_report_errors_uses_typed_command() {
     assert_eq!(page.data[0].nvt_name.as_deref(), Some("Ping Host"));
     assert_eq!(page.data[0].host.as_deref(), Some("192.0.2.20"));
 
-    let history = server.command_history();
-    let command = history
-        .iter()
-        .find(|record| record.command_name() == "get_report_errors")
-        .expect("get_report_errors command should be recorded");
-    let xml = String::from_utf8(command.raw_xml().to_vec()).expect("xml command");
-    assert!(xml.contains("filter=\"threat=Alarm first=1 rows=25\""));
+    let xml = recorded_xml(&server, "get_report_errors");
+    assert_complete_report_projection_xml(
+        &xml,
+        "550e8400-e29b-41d4-a716-446655440000",
+        "threat=Alarm first=1 rows=25",
+    );
 
     server.shutdown().await;
 }
@@ -2940,13 +3409,12 @@ async fn gvmd_adapter_get_report_closed_cves_uses_typed_command() {
         vec!["CVE-2025-9999".to_string()]
     );
 
-    let history = server.command_history();
-    let command = history
-        .iter()
-        .find(|record| record.command_name() == "get_report_closed_cves")
-        .expect("get_report_closed_cves command should be recorded");
-    let xml = String::from_utf8(command.raw_xml().to_vec()).expect("xml command");
-    assert!(xml.contains("filter=\"severity&gt;4 first=1 rows=25\""));
+    let xml = recorded_xml(&server, "get_report_closed_cves");
+    assert_complete_report_projection_xml(
+        &xml,
+        "550e8400-e29b-41d4-a716-446655440000",
+        "severity&gt;4 first=1 rows=25",
+    );
 
     server.shutdown().await;
 }
@@ -2954,14 +3422,15 @@ async fn gvmd_adapter_get_report_closed_cves_uses_typed_command() {
 #[tokio::test]
 async fn gvmd_adapter_report_summary_drill_downs_use_typed_commands() {
     // Issue #344 requires five distinct report-summary contracts. This test
-    // guards both their typed response mapping and their shared backend
-    // filter/pagination command shape without coercing them into generic assets.
+    // guards their typed response mapping and the complete canonical request
+    // shape, including gateway-side saved-filter resolution, without coercing
+    // them into generic assets.
     let (adapter, server, token) = create_mock_adapter_v22_8().await;
     server.clear_history();
     let report_id = "550e8400-e29b-41d4-a716-446655440000";
     let query = ResultQuery {
         filter_string: Some("severity>3".to_string()),
-        filter_id: None,
+        filter_id: Some("123e4567-e89b-12d3-a456-426614174000".to_string()),
         page: 1,
         per_page: 10,
     };
@@ -2990,7 +3459,15 @@ async fn gvmd_adapter_report_summary_drill_downs_use_typed_commands() {
     assert_eq!(hosts.data[0].name.as_deref(), Some("192.0.2.10"));
     assert_eq!(ports.data[0].name.as_deref(), Some("22/tcp"));
     assert_eq!(applications.data[0].name.as_deref(), Some("OpenSSH"));
-    assert_eq!(operating_systems.data[0].name.as_deref(), Some("Debian"));
+    assert_eq!(
+        operating_systems.data[0].best_os_cpe.as_deref(),
+        Some("cpe:/o:debian:debian_linux")
+    );
+    assert_eq!(
+        operating_systems.data[0].best_os_text.as_deref(),
+        Some("Debian")
+    );
+    assert_eq!(operating_systems.data[0].hosts_count, Some(2));
     assert_eq!(cves.data[0].name.as_deref(), Some("CVE-2026-0001"));
 
     for command_name in [
@@ -3001,16 +3478,54 @@ async fn gvmd_adapter_report_summary_drill_downs_use_typed_commands() {
         "get_report_cves",
     ] {
         let xml = recorded_xml(&server, command_name);
-        assert!(
-            xml.contains(&format!("report_id=\"{report_id}\"")),
-            "xml={xml}"
+        assert_complete_report_projection_xml(
+            &xml,
+            report_id,
+            "threat=Alarm severity&gt;3 first=1 rows=10",
         );
-        assert!(
-            xml.contains("filter=\"severity&gt;3 first=1 rows=10\""),
-            "xml={xml}"
-        );
-        assert!(xml.contains("details=\"1\""), "xml={xml}");
+        if command_name == "get_report_hosts" {
+            assert!(
+                !xml.contains("lean="),
+                "report hosts must preserve lean omission: xml={xml}"
+            );
+        }
     }
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_report_projection_rejects_caller_report_id_override() {
+    // The path report id owns projection scope. A caller-supplied report_id
+    // filter must remain rejected before any projection command reaches gvmd.
+    let (adapter, server, token) = create_mock_adapter_v22_8().await;
+    server.clear_history();
+
+    let error = adapter
+        .get_report_ports(
+            &token,
+            "550e8400-e29b-41d4-a716-446655440000",
+            &ResultQuery {
+                filter_string: Some("report_id=aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa".to_string()),
+                filter_id: None,
+                page: 1,
+                per_page: 25,
+            },
+        )
+        .await
+        .expect_err("caller report_id override must be rejected");
+
+    assert!(matches!(
+        error,
+        GatewayError::InvalidInput(detail) if detail.contains("report_id")
+    ));
+    assert!(
+        server
+            .command_history()
+            .iter()
+            .all(|record| record.command_name() != "get_report_ports"),
+        "invalid projection scope must not reach gvmd"
+    );
 
     server.shutdown().await;
 }
@@ -3096,7 +3611,9 @@ async fn gvmd_adapter_operating_system_reads_preserve_typed_asset_fields() {
     assert_eq!(page.data[0].all_installs, 4);
     assert_eq!(page.data[0].highest_severity.as_deref(), Some("8.1"));
     assert!(!page.data[0].meta.writable);
-    assert!(!page.data[0].meta.in_use);
+    // The canonical OS parser derives in-use state from all installations,
+    // even when the filtered/current installation count is zero.
+    assert!(page.data[0].meta.in_use);
 
     let fetched = adapter
         .get_operating_system(token, &os_id.to_string())
@@ -3137,10 +3654,10 @@ async fn gvmd_adapter_operating_system_reads_preserve_typed_asset_fields() {
 }
 
 #[tokio::test]
-async fn gvmd_adapter_operating_system_mutations_use_backend_supported_shape() {
-    // The OS modify command accepts only a comment, and OS deletion has no
-    // ultimate flag. The mock currently rejects OS comment mutation, but its
-    // command history still proves the typed boundary shape before that reply.
+async fn gvmd_adapter_operating_system_mutations_use_canonical_asset_requests() {
+    // The removed OS-specific transition request must be replaced by the
+    // canonical complete asset request without changing this domain route.
+    // The mock rejects the mutation, but its history proves the typed shape.
     let removable_id = uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440132")
         .expect("valid operating-system id");
     let in_use_id = uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440133")
@@ -3243,17 +3760,14 @@ async fn gvmd_adapter_list_targets_unauthorized() {
 #[tokio::test]
 async fn gvmd_adapter_export_report_binary_payload() {
     let report_id = uuid::Uuid::from_u128(0x11111111_1111_1111_1111_111111111111);
+    let response = generate_binary_report_export(report_id, REPORT_EXPORT_BINARY_FORMAT_ID);
     let server = MockGmpServer::builder()
-        .mode(ServerMode::Stateful)
+        .mode(ServerMode::Fixture)
         .version(MockVersion::V22_8)
+        // Export response parsing is independent of the stateful lifecycle
+        // mock; pin the exact binary fixture this regression intends to map.
+        .override_response("get_reports", &response)
         .unix_socket_auto()
-        .seed(move |store| {
-            store.create(Resource::with_id(
-                "report",
-                "Binary export report",
-                report_id,
-            ));
-        })
         .build()
         .await
         .unwrap();
@@ -3282,6 +3796,16 @@ async fn gvmd_adapter_export_report_binary_payload() {
     assert_eq!(export.bytes, b"Hello PDF");
     assert_eq!(export.content_type.as_deref(), Some("application/pdf"));
     assert_eq!(export.extension.as_deref(), Some("pdf"));
+
+    // The canonical export constructor omits these booleans. The gateway must
+    // continue requesting a complete, unpaginated artifact even without any
+    // optional selector.
+    let xml = recorded_xml(&server, "get_reports");
+    assert!(xml.contains("details=\"1\""), "xml={xml}");
+    assert!(xml.contains("ignore_pagination=\"1\""), "xml={xml}");
+    assert!(!xml.contains("config_id="), "xml={xml}");
+    assert!(!xml.contains("filter="), "xml={xml}");
+    assert!(!xml.contains("filt_id="), "xml={xml}");
 
     server.shutdown().await;
 }
@@ -3344,6 +3868,17 @@ async fn gvmd_adapter_export_report_emits_config_and_filter_options() {
     assert!(xml.contains(&format!("report_id=\"{report_id}\"")));
     assert!(xml.contains("details=\"1\""));
     assert!(xml.contains("ignore_pagination=\"1\""));
+    for omitted in [
+        "lean=",
+        "notes_details=",
+        "overrides_details=",
+        "result_tags=",
+    ] {
+        assert!(
+            !xml.contains(omitted),
+            "unowned export option must retain canonical omission: {omitted}; xml={xml}"
+        );
+    }
 
     server.shutdown().await;
 }
@@ -3351,13 +3886,14 @@ async fn gvmd_adapter_export_report_emits_config_and_filter_options() {
 #[tokio::test]
 async fn gvmd_adapter_export_report_xml_payload() {
     let report_id = uuid::Uuid::from_u128(0x22222222_2222_2222_2222_222222222222);
+    let response = generate_xml_report_export(report_id, REPORT_EXPORT_XML_FORMAT_ID);
     let server = MockGmpServer::builder()
-        .mode(ServerMode::Stateful)
+        .mode(ServerMode::Fixture)
         .version(MockVersion::V22_8)
+        // Keep this focused on nested XML export response mapping rather than
+        // coupling it to the stateful report-lifecycle implementation.
+        .override_response("get_reports", &response)
         .unix_socket_auto()
-        .seed(move |store| {
-            store.create(Resource::with_id("report", "XML export report", report_id));
-        })
         .build()
         .await
         .unwrap();
@@ -3451,17 +3987,18 @@ async fn gvmd_adapter_create_task_emits_each_typed_target_variant() {
     let scanner_id = "11111111-1111-1111-1111-111111111111";
     let target_id = "22222222-2222-2222-2222-222222222222";
     let config_id = "33333333-3333-3333-3333-333333333333";
+    let alert_id = "44444444-4444-4444-4444-444444444444";
     let input = |name: &str, target| CreateTaskInput {
         name: name.to_string(),
         comment: Some("typed selector".to_string()),
         target,
         schedule_id: None,
-        alert_ids: vec![],
-        alterable: Some(true),
-        hosts_ordering: None,
-        observers: vec![],
-        schedule_periods: None,
-        preferences: vec![],
+        alert_ids: vec![alert_id.to_string()],
+        alterable: Some(false),
+        observers: vec!["alice".to_string()],
+        // Canonical complete values preserve this independently of scheduleId.
+        schedule_periods: Some(3),
+        preferences: vec![("auto_delete".to_string(), "keep".to_string())],
     };
 
     server.clear_history();
@@ -3498,6 +4035,11 @@ async fn gvmd_adapter_create_task_emits_each_typed_target_variant() {
     assert!(
         recorded_xml(&server, "create_task").contains(&format!("<agent_group id=\"{target_id}\""))
     );
+    assert_complete_specialized_task_xml(
+        &recorded_xml(&server, "create_task"),
+        scanner_id,
+        alert_id,
+    );
 
     server.clear_history();
     let _ = adapter
@@ -3512,8 +4054,9 @@ async fn gvmd_adapter_create_task_emits_each_typed_target_variant() {
             ),
         )
         .await;
-    assert!(recorded_xml(&server, "create_task")
-        .contains(&format!("<oci_image_target id=\"{target_id}\"")));
+    let xml = recorded_xml(&server, "create_task");
+    assert!(xml.contains(&format!("<oci_image_target id=\"{target_id}\"")));
+    assert_complete_specialized_task_xml(&xml, scanner_id, alert_id);
 
     server.clear_history();
     let _ = adapter
@@ -3528,8 +4071,9 @@ async fn gvmd_adapter_create_task_emits_each_typed_target_variant() {
             ),
         )
         .await;
-    assert!(recorded_xml(&server, "create_task")
-        .contains(&format!("<web_application_target id=\"{target_id}\"")));
+    let xml = recorded_xml(&server, "create_task");
+    assert!(xml.contains(&format!("<web_application_target id=\"{target_id}\"")));
+    assert_complete_specialized_task_xml(&xml, scanner_id, alert_id);
 
     server.clear_history();
     let import = CreateTaskInput {
@@ -3539,7 +4083,6 @@ async fn gvmd_adapter_create_task_emits_each_typed_target_variant() {
         schedule_id: None,
         alert_ids: vec![],
         alterable: None,
-        hosts_ordering: None,
         observers: vec![],
         schedule_periods: None,
         preferences: vec![],
@@ -3547,13 +4090,352 @@ async fn gvmd_adapter_create_task_emits_each_typed_target_variant() {
     let _ = adapter.create_task(&token, import).await;
     let xml = recorded_xml(&server, "create_task");
     assert!(xml.contains("<target id=\"0\""));
+    assert!(xml.contains("<comment>report owner</comment>"));
     assert!(!xml.contains("<scanner"));
+
+    server.shutdown().await;
+}
+
+fn assert_complete_specialized_task_xml(xml: &str, scanner_id: &str, alert_id: &str) {
+    // The adapter must populate every public common field on each canonical
+    // specialized request instead of only constructing its target selector.
+    assert!(xml.contains("<usage_type>scan</usage_type>"), "xml={xml}");
+    assert!(
+        xml.contains(&format!("<scanner id=\"{scanner_id}\"")),
+        "xml={xml}"
+    );
+    assert!(
+        xml.contains("<comment>typed selector</comment>"),
+        "xml={xml}"
+    );
+    assert!(xml.contains("<alterable>0</alterable>"), "xml={xml}");
+    assert!(
+        xml.contains("<schedule_periods>3</schedule_periods>"),
+        "xml={xml}"
+    );
+    assert!(
+        xml.contains(&format!("<alert id=\"{alert_id}\"")),
+        "xml={xml}"
+    );
+    assert!(xml.contains("<observers>alice</observers>"), "xml={xml}");
+    assert!(
+        xml.contains("<scanner_name>auto_delete</scanner_name>"),
+        "xml={xml}"
+    );
+    assert!(xml.contains("<value>keep</value>"), "xml={xml}");
+}
+
+#[tokio::test]
+async fn gvmd_adapter_specialized_tasks_keep_gmp_22_8_capability_gates() {
+    let (adapter, server, token) = create_mock_adapter().await;
+    let scanner_id = "11111111-1111-1111-1111-111111111111";
+    let target_id = "22222222-2222-2222-2222-222222222222";
+    let variants = [
+        CreateTaskTarget::AgentGroup {
+            agent_group_id: target_id.to_string(),
+            scanner_id: scanner_id.to_string(),
+        },
+        CreateTaskTarget::OciImage {
+            oci_image_target_id: target_id.to_string(),
+            scanner_id: scanner_id.to_string(),
+        },
+        CreateTaskTarget::WebApplication {
+            web_application_target_id: target_id.to_string(),
+            scanner_id: scanner_id.to_string(),
+        },
+    ];
+
+    // Each specialized semantic request must be rejected before transport on
+    // GMP 22.7; canonicalization must not turn it into an ungated create_task.
+    for (index, target) in variants.into_iter().enumerate() {
+        server.clear_history();
+        let error = adapter
+            .create_task(
+                &token,
+                CreateTaskInput {
+                    name: format!("Gated specialized task {index}"),
+                    comment: None,
+                    target,
+                    schedule_id: None,
+                    alert_ids: vec![],
+                    alterable: None,
+                    observers: vec![],
+                    schedule_periods: None,
+                    preferences: vec![],
+                },
+            )
+            .await
+            .expect_err("GMP 22.7 must reject specialized task creation");
+        assert!(
+            matches!(error, GatewayError::NotImplemented(_)),
+            "unexpected gate error: {error:?}"
+        );
+        assert!(
+            server
+                .command_history()
+                .iter()
+                .all(|record| record.command_name() != "create_task"),
+            "unsupported specialized requests must not reach gvmd"
+        );
+    }
+
+    // Import tasks are not part of the GMP 22.8 specialized capability gate.
+    let imported = adapter
+        .create_task(
+            &token,
+            CreateTaskInput {
+                name: "Ungated import".to_string(),
+                comment: Some("existing import semantics".to_string()),
+                target: CreateTaskTarget::Import,
+                schedule_id: None,
+                alert_ids: vec![],
+                alterable: None,
+                observers: vec![],
+                schedule_periods: None,
+                preferences: vec![],
+            },
+        )
+        .await
+        .expect("import task should remain available before GMP 22.8");
+    assert!(!imported.is_empty());
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_specialized_task_preferences_stay_redacted_from_traces() {
+    let _trace_lock = lock_tracing().await;
+    let logs = capture_tracing();
+    let (adapter, server, token) = create_mock_adapter_v22_8().await;
+    let secret = "specialized-preference-secret-525";
+
+    let _ = adapter
+        .create_task(
+            &token,
+            CreateTaskInput {
+                name: "Redacted web task".to_string(),
+                comment: None,
+                target: CreateTaskTarget::WebApplication {
+                    web_application_target_id: "22222222-2222-2222-2222-222222222222".to_string(),
+                    scanner_id: "11111111-1111-1111-1111-111111111111".to_string(),
+                },
+                schedule_id: None,
+                alert_ids: vec![],
+                alterable: None,
+                observers: vec![],
+                schedule_periods: None,
+                preferences: vec![("extension.preference".to_string(), secret.to_string())],
+            },
+        )
+        .await;
+
+    let output = String::from_utf8(logs.lock().unwrap().clone()).expect("trace output is UTF-8");
+    assert!(output.contains("tasks.create"), "output={output}");
+    assert!(!output.contains(secret), "output={output}");
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_canonical_audit_lifecycle_preserves_public_contract() {
+    let (adapter, server, token) = create_mock_adapter_v22_8().await;
+    let target_id = create_task_target(&adapter, &token, "Canonical audit target").await;
+    server.clear_history();
+
+    // This lifecycle covers canonical create/list/get/modify/delete and all
+    // existing actions while asserting pagination, read-back, and report IDs.
+    let audit_id = adapter
+        .create_audit(
+            &token,
+            CreateTaskInput {
+                name: "Canonical audit".to_string(),
+                comment: Some("created through REST-domain input".to_string()),
+                target: CreateTaskTarget::Classic {
+                    target_id,
+                    scan_config_id: "00000000-0000-0000-0000-000000000301".to_string(),
+                    scanner_id: "08b69003-5fc2-4037-a479-93b440211c73".to_string(),
+                },
+                schedule_id: None,
+                alert_ids: vec![],
+                alterable: Some(true),
+                observers: vec!["alice".to_string()],
+                schedule_periods: Some(4),
+                preferences: vec![("auto_delete".to_string(), "keep".to_string())],
+            },
+        )
+        .await
+        .expect("canonical audit creation should succeed");
+    let create_xml = recorded_xml(&server, "create_task");
+    assert!(create_xml.contains("<usage_type>audit</usage_type>"));
+    assert!(create_xml.contains("<comment>created through REST-domain input</comment>"));
+    assert!(create_xml.contains("<alterable>1</alterable>"));
+    assert!(create_xml.contains("<schedule_periods>4</schedule_periods>"));
+    assert!(create_xml.contains("<observers>alice</observers>"));
+    assert!(create_xml.contains("<scanner_name>auto_delete</scanner_name>"));
+
+    let detail = adapter
+        .get_audit(&token, &audit_id)
+        .await
+        .expect("canonical audit detail should decode");
+    assert_eq!(detail.id, audit_id);
+    assert_eq!(
+        detail.comment.as_deref(),
+        Some("created through REST-domain input")
+    );
+
+    let page = adapter
+        .list_audits(
+            &token,
+            &TaskQuery {
+                filter_string: None,
+                filter_id: None,
+                page: 1,
+                per_page: 1,
+            },
+        )
+        .await
+        .expect("canonical audit list should decode typed counts");
+    assert_eq!(page.pagination.page, 1);
+    assert_eq!(page.pagination.per_page, 1);
+    // PR #667's stateful mock treats first/rows as resource predicates; this
+    // known fixture limitation returns an empty page. Assert that the adapter
+    // still sends the canonical pagination contract. Count precedence and
+    // page arithmetic have direct unit coverage in filters_test.rs.
+    assert_eq!(page.pagination.total, 0);
+    assert_eq!(page.pagination.total_pages, 0);
+    assert!(page.data.is_empty());
+    let list_xml = server
+        .command_history()
+        .iter()
+        .rev()
+        .find(|record| {
+            record.command_name() == "get_tasks"
+                && String::from_utf8_lossy(record.raw_xml()).contains("filter=")
+        })
+        .map(|record| String::from_utf8_lossy(record.raw_xml()).into_owned())
+        .expect("audit list command should be recorded");
+    assert!(list_xml.contains("usage_type=\"audit\""), "xml={list_xml}");
+    assert!(
+        list_xml.contains("filter=\"first=1 rows=1\""),
+        "xml={list_xml}"
+    );
+
+    let modified = adapter
+        .modify_audit(
+            &token,
+            &audit_id,
+            ModifyTaskInput {
+                name: Some("Canonical audit updated".to_string()),
+                comment: Some("read back".to_string()),
+                preferences: vec![("auto_delete".to_string(), "no".to_string())],
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("canonical audit modify should return the read-back value");
+    assert_eq!(modified.name, "Canonical audit updated");
+    assert_eq!(modified.comment.as_deref(), Some("read back"));
+    assert_eq!(modified.usage_type.as_deref(), Some("audit"));
+
+    let started = adapter
+        .start_audit(&token, &audit_id)
+        .await
+        .expect("audit should start");
+    assert!(!started.report_id.is_empty());
+    adapter
+        .stop_audit(&token, &audit_id)
+        .await
+        .expect("running audit should stop");
+    let resumed = adapter
+        .resume_audit(&token, &audit_id)
+        .await
+        .expect("stopped audit should resume");
+    assert_eq!(resumed.report_id, started.report_id);
+    adapter
+        .stop_audit(&token, &audit_id)
+        .await
+        .expect("resumed audit should stop before deletion");
+
+    server.clear_history();
+    adapter
+        .delete_audit(&token, &audit_id)
+        .await
+        .expect("audit should be deleted non-ultimately");
+    let delete_xml = recorded_xml(&server, "delete_task");
+    assert!(delete_xml.contains(&format!("task_id=\"{audit_id}\"")));
+    assert!(delete_xml.contains("ultimate=\"0\""));
+    assert!(matches!(
+        adapter.get_audit(&token, &audit_id).await,
+        Err(GatewayError::NotFound(_))
+    ));
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_audit_mutations_reject_scan_task_ids_before_writes() {
+    let (adapter, server, token) = create_mock_adapter_v22_8().await;
+    let target_id = create_task_target(&adapter, &token, "Scan-only target").await;
+    let task_id = adapter
+        .create_task(
+            &token,
+            CreateTaskInput {
+                name: "Scan-only task".to_string(),
+                comment: None,
+                target: CreateTaskTarget::Classic {
+                    target_id,
+                    scan_config_id: "daba56c8-73ec-11df-a475-002264764cea".to_string(),
+                    scanner_id: "08b69003-5fc2-4037-a479-93b440211c73".to_string(),
+                },
+                schedule_id: None,
+                alert_ids: vec![],
+                alterable: None,
+                observers: vec![],
+                schedule_periods: None,
+                preferences: vec![],
+            },
+        )
+        .await
+        .expect("scan task should be created");
+
+    server.clear_history();
+    assert!(matches!(
+        adapter
+            .modify_audit(
+                &token,
+                &task_id,
+                ModifyTaskInput {
+                    name: Some("must not be applied".to_string()),
+                    ..Default::default()
+                },
+            )
+            .await,
+        Err(GatewayError::NotFound(_))
+    ));
+    assert!(matches!(
+        adapter.delete_audit(&token, &task_id).await,
+        Err(GatewayError::NotFound(_))
+    ));
+    assert!(
+        server
+            .command_history()
+            .iter()
+            .all(|record| !matches!(record.command_name(), "modify_task" | "delete_task")),
+        "audit routes must reject scan ids before mutation"
+    );
+    let task = adapter
+        .get_task(&token, &task_id)
+        .await
+        .expect("scan task should remain unchanged");
+    assert_eq!(task.name, "Scan-only task");
 
     server.shutdown().await;
 }
 
 #[tokio::test]
 async fn gvmd_adapter_feed_filter_uses_typed_command_and_preserves_access_flags() {
+    // A filtered feed response still carries all three independently typed
+    // access flags; mapping must not collapse or drop any of them.
     let (adapter, server, token) = create_mock_adapter().await;
     server.clear_history();
 
@@ -3570,6 +4452,9 @@ async fn gvmd_adapter_feed_filter_uses_typed_command_and_preserves_access_flags(
     let xml = recorded_xml(&server, "get_feeds");
     assert!(xml.contains("type=\"NVT\""));
     assert!(feeds.data.iter().all(|feed| feed.feed_type == "NVT"));
+    assert!(feeds.feed_owner_configured);
+    assert!(feeds.feed_roles_configured);
+    assert!(feeds.feed_resources_access);
 
     let error = adapter
         .list_feeds(
@@ -3585,6 +4470,41 @@ async fn gvmd_adapter_feed_filter_uses_typed_command_and_preserves_access_flags(
     server.shutdown().await;
 }
 
+#[tokio::test]
+async fn gvmd_adapter_missing_feed_access_flags_map_to_required_false_booleans() {
+    // Older gvmd responses may omit the access metadata. Canonical parsing
+    // preserves that absence, while the stable REST contract requires all
+    // three fields, so the adapter must publish conservative false values.
+    let server = MockGmpServer::builder()
+        .mode(ServerMode::Fixture)
+        .version(MockVersion::V22_7)
+        .override_response(
+            "get_feeds",
+            r#"<get_feeds_response status="200" status_text="OK"><feed><type>NVT</type><name>NVT Feed</name><version>202609290000</version></feed></get_feeds_response>"#,
+        )
+        .unix_socket_auto()
+        .build()
+        .await
+        .expect("mock server should start");
+    let adapter = GvmdAdapter::unix_socket(server.socket_path().expect("mock socket"));
+    let token = "missing-feed-access-flags";
+    adapter
+        .connect_session(token, "admin", "admin")
+        .await
+        .expect("mock session should authenticate");
+
+    let feeds = adapter
+        .list_feeds(token, &FeedQuery::default())
+        .await
+        .expect("feed list with absent metadata");
+
+    assert!(!feeds.feed_owner_configured);
+    assert!(!feeds.feed_roles_configured);
+    assert!(!feeds.feed_resources_access);
+
+    server.shutdown().await;
+}
+
 fn recorded_xml(server: &MockGmpServer, command_name: &str) -> String {
     let history = server.command_history();
     let command = history
@@ -3592,6 +4512,26 @@ fn recorded_xml(server: &MockGmpServer, command_name: &str) -> String {
         .find(|record| record.command_name() == command_name)
         .unwrap_or_else(|| panic!("{command_name} command should be recorded"));
     String::from_utf8(command.raw_xml().to_vec()).expect("xml command should be UTF-8")
+}
+
+fn assert_complete_report_projection_xml(xml: &str, report_id: &str, filter: &str) {
+    // Canonical projection constructors carry identity only. This assertion
+    // protects every adapter call site's explicit detail semantics and the
+    // resolved inline-filter contract while preserving omission defaults.
+    assert!(
+        xml.contains(&format!("report_id=\"{report_id}\"")),
+        "xml={xml}"
+    );
+    assert!(xml.contains(&format!("filter=\"{filter}\"")), "xml={xml}");
+    assert!(xml.contains("details=\"1\""), "xml={xml}");
+    assert!(
+        !xml.contains("filt_id="),
+        "saved filters must be resolved inline: xml={xml}"
+    );
+    assert!(
+        !xml.contains("ignore_pagination="),
+        "projection pagination must remain in the inline filter: xml={xml}"
+    );
 }
 
 #[tokio::test]
@@ -3603,7 +4543,10 @@ async fn gvmd_adapter_list_cves_uses_typed_secinfo_request_with_pagination_filte
         .list_cves(
             &token,
             &SupportingResourceQuery {
-                filter_string: Some("name~CVE".to_string()),
+                // The reviewed mock deliberately rejects its old permissive
+                // `~` fixture syntax. Use a supported inline sort term while
+                // still verifying filter and pagination forwarding.
+                filter_string: Some("sort=name".to_string()),
                 filter_id: None,
                 page: 2,
                 per_page: 1,
@@ -3612,7 +4555,7 @@ async fn gvmd_adapter_list_cves_uses_typed_secinfo_request_with_pagination_filte
         .await
         .expect("list_cves should succeed against the mock backend");
 
-    assert_eq!(page.data.len(), 2);
+    assert_eq!(page.data.len(), 1);
     assert_eq!(page.pagination.page, 2);
     assert_eq!(page.pagination.per_page, 1);
     assert_eq!(page.pagination.total, 2);
@@ -3620,7 +4563,7 @@ async fn gvmd_adapter_list_cves_uses_typed_secinfo_request_with_pagination_filte
     let xml = recorded_xml(&server, "get_info");
     assert!(xml.contains("type=\"CVE\""), "xml={xml}");
     assert!(
-        xml.contains("filter=\"name~CVE first=2 rows=1\""),
+        xml.contains("filter=\"sort=name first=2 rows=1\""),
         "xml={xml}"
     );
 
@@ -3786,6 +4729,256 @@ async fn gvmd_adapter_list_timezones_returns_not_implemented_on_v22_7() {
     assert!(
         matches!(error, GatewayError::NotImplemented(ref detail) if detail.contains("get_timezones")),
         "expected unsupported 22.7 backend to map to NotImplemented, got {error:?}"
+    );
+
+    server.shutdown().await;
+}
+
+async fn create_user_setting_adapter() -> (GvmdAdapter, MockGmpServer, String) {
+    let filter_id =
+        uuid::Uuid::parse_str("123e4567-e89b-12d3-a456-426614175290").expect("valid filter id");
+    let server = MockGmpServer::builder()
+        .mode(ServerMode::Stateful)
+        .version(MockVersion::V22_8)
+        .seed(move |store| {
+            let mut filter = Resource::with_id("filter", "Timezone settings", filter_id);
+            filter.set_attr("term", "name=timezone");
+            store.create(filter);
+        })
+        .unix_socket_auto()
+        .build()
+        .await
+        .unwrap();
+    let adapter = GvmdAdapter::unix_socket(server.socket_path().unwrap());
+    let token = "user-setting-test-session";
+    adapter
+        .connect_session(token, "admin", "admin")
+        .await
+        .unwrap();
+    (adapter, server, token.to_string())
+}
+
+#[tokio::test]
+async fn gvmd_adapter_user_setting_list_preserves_filter_resolution_order_and_full_window() {
+    // The REST list remains unpaginated and name-sorted. Canonical requests
+    // must express that complete window explicitly, and saved filter IDs stay
+    // gateway-owned rather than crossing the GMP boundary.
+    let (adapter, server, token) = create_user_setting_adapter().await;
+
+    let all = adapter
+        .list_user_settings(
+            &token,
+            &UserSettingQuery {
+                filter_string: None,
+                filter_id: None,
+            },
+        )
+        .await
+        .expect("list all user settings");
+    assert_eq!(
+        all.data
+            .iter()
+            .map(|setting| setting.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["rows_per_page", "timezone"]
+    );
+
+    server.clear_history();
+    let filtered = adapter
+        .list_user_settings(
+            &token,
+            &UserSettingQuery {
+                filter_string: None,
+                filter_id: Some("123e4567-e89b-12d3-a456-426614175290".to_string()),
+            },
+        )
+        .await
+        .expect("resolve and apply saved user-setting filter");
+    assert_eq!(filtered.data.len(), 1);
+    assert_eq!(filtered.data[0].name, "timezone");
+
+    let history = server.command_history();
+    assert_eq!(
+        history
+            .iter()
+            .map(|record| record.command_name())
+            .collect::<Vec<_>>(),
+        vec!["get_filters", "get_settings"]
+    );
+    let xml = recorded_xml(&server, "get_settings");
+    for attribute in [
+        "filter=\"name=timezone\"",
+        "first=\"1\"",
+        "max=\"-1\"",
+        "sort_field=\"name\"",
+        "sort_order=\"ascending\"",
+    ] {
+        assert!(xml.contains(attribute), "missing {attribute}; xml={xml}");
+    }
+    assert!(
+        !xml.contains("filt_id="),
+        "saved filter ID leaked; xml={xml}"
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_user_setting_detail_maps_empty_items_to_not_found() {
+    // Canonical detail responses use the same items collection as list reads;
+    // an empty successful response is still the gateway's 404 condition.
+    let (adapter, server, token) = create_user_setting_adapter().await;
+
+    let setting = adapter
+        .get_user_setting(&token, "00000000-0000-0000-0000-000000000001")
+        .await
+        .expect("default timezone setting exists");
+    assert_eq!(setting.name, "timezone");
+
+    let missing = adapter
+        .get_user_setting(&token, "123e4567-e89b-12d3-a456-426614175299")
+        .await
+        .expect_err("empty detail response must be not found");
+    assert!(matches!(missing, GatewayError::NotFound(_)));
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_user_setting_modify_reads_back_the_canonical_result() {
+    // A successful mutation returns the authoritative post-write detail rather
+    // than fabricating a response from the submitted value.
+    let (adapter, server, token) = create_user_setting_adapter().await;
+    server.clear_history();
+
+    let setting = adapter
+        .modify_user_setting(
+            &token,
+            "00000000-0000-0000-0000-000000000001",
+            ModifyUserSettingInput {
+                value: "Europe/Berlin".to_string(),
+            },
+        )
+        .await
+        .expect("modify and read back timezone setting");
+
+    assert_eq!(setting.value.as_deref(), Some("Europe/Berlin"));
+    assert_eq!(
+        server
+            .command_history()
+            .iter()
+            .map(|record| record.command_name())
+            .collect::<Vec<_>>(),
+        vec!["modify_setting", "get_settings"]
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_user_setting_modify_preserves_explicit_empty_clear() {
+    // An empty string is a meaningful clear, not an omitted value. The typed
+    // builder must emit and the read-back must retain that empty value.
+    let (adapter, server, token) = create_user_setting_adapter().await;
+    server.clear_history();
+
+    let setting = adapter
+        .modify_user_setting(
+            &token,
+            "00000000-0000-0000-0000-000000000002",
+            ModifyUserSettingInput {
+                value: String::new(),
+            },
+        )
+        .await
+        .expect("clear rows-per-page setting");
+
+    assert!(
+        setting.value.is_none(),
+        "canonical response parsing represents an empty value as absent"
+    );
+    let xml = recorded_xml(&server, "modify_setting");
+    assert!(xml.contains("<value></value>"), "xml={xml}");
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_user_setting_values_stay_redacted_from_diagnostics() {
+    // Confidential setting values may enter request objects and read-back
+    // models, but neither tracing nor Debug diagnostics may reveal them.
+    let _guard = lock_tracing().await;
+    let logs = capture_tracing();
+    let (adapter, server, token) = create_user_setting_adapter().await;
+    let secret = "user-setting-trace-secret-529";
+
+    let setting = adapter
+        .modify_user_setting(
+            &token,
+            "00000000-0000-0000-0000-000000000001",
+            ModifyUserSettingInput {
+                value: secret.to_string(),
+            },
+        )
+        .await
+        .expect("modify user setting");
+
+    let output = String::from_utf8(logs.lock().unwrap().clone()).unwrap();
+    assert!(!output.contains(secret), "output={output}");
+    assert!(!format!("{setting:?}").contains(secret));
+    for record in server.command_history() {
+        assert!(!String::from_utf8_lossy(record.raw_xml()).contains(secret));
+    }
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_failed_user_setting_modify_short_circuits_read_back() {
+    // A rejected modify must surface its mapped error immediately and must not
+    // issue a detail read that could obscure the original failure.
+    let server = MockGmpServer::builder()
+        .mode(ServerMode::Stateful)
+        .version(MockVersion::V22_8)
+        .inject_fault(Fault::on_command(
+            "modify_setting",
+            FaultKind::ErrorStatus {
+                code: 503,
+                message: "user-setting modification unavailable".to_string(),
+            },
+        ))
+        .unix_socket_auto()
+        .build()
+        .await
+        .unwrap();
+    let adapter = GvmdAdapter::unix_socket(server.socket_path().unwrap());
+    let token = "user-setting-error-session";
+    adapter
+        .connect_session(token, "admin", "admin")
+        .await
+        .unwrap();
+    server.clear_history();
+
+    let error = adapter
+        .modify_user_setting(
+            token,
+            "00000000-0000-0000-0000-000000000001",
+            ModifyUserSettingInput {
+                value: "must-not-read-back".to_string(),
+            },
+        )
+        .await
+        .expect_err("faulted modification must fail");
+
+    assert!(matches!(error, GatewayError::BackendUnavailable(_)));
+    assert!(!format!("{error:?}").contains("must-not-read-back"));
+    assert_eq!(
+        server
+            .command_history()
+            .iter()
+            .map(|record| record.command_name())
+            .collect::<Vec<_>>(),
+        vec!["modify_setting"]
     );
 
     server.shutdown().await;

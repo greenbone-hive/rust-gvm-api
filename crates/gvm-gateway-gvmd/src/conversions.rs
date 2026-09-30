@@ -23,7 +23,7 @@ use gvm_gateway_domain::{
 };
 use gvm_gmp::{
     commands::{assets::AssetType, configs::ConfigUsageType},
-    AlertCondition, AlertEvent, AlertMethod, AliveTest, CredentialType, EntityId, HostsOrdering,
+    AlertCondition, AlertEvent, AlertMethod, AliveTest, CredentialType, EntityId,
     PermissionSubjectType, SnmpAuthAlgorithm, SnmpPrivacyAlgorithm, UserAuthType,
 };
 
@@ -322,7 +322,7 @@ pub(crate) fn permission_from_gmp(permission: gvm_gmp::responses::Permission) ->
     }
 }
 
-pub(crate) fn user_setting_from_gmp(setting: gvm_gmp::responses::UserSetting) -> UserSetting {
+pub(crate) fn user_setting_from_gmp(setting: gvm_gmp::responses::Setting) -> UserSetting {
     UserSetting {
         id: setting.id.to_string(),
         name: setting.name,
@@ -780,9 +780,9 @@ pub(crate) fn report_operating_system_from_gmp(
     operating_system: gvm_gmp::responses::ReportOperatingSystemSummary,
 ) -> ReportOperatingSystem {
     ReportOperatingSystem {
-        id: operating_system.id,
-        name: operating_system.name,
-        severity: operating_system.severity,
+        best_os_cpe: operating_system.best_os_cpe,
+        best_os_text: operating_system.best_os_txt,
+        hosts_count: operating_system.hosts_count,
     }
 }
 
@@ -925,23 +925,23 @@ pub(crate) fn parse_asset_type(value: &str) -> AssetType {
     }
 }
 
-pub(crate) fn parse_config_usage_type(value: &str) -> ConfigUsageType {
+pub(crate) fn parse_config_usage_type(
+    value: &str,
+) -> Result<Option<ConfigUsageType>, GatewayError> {
     match value {
-        "scan" => ConfigUsageType::Scan,
-        "audit" => ConfigUsageType::Audit,
-        "policy" => ConfigUsageType::Policy,
-        other => ConfigUsageType::custom(other),
-    }
-}
-
-pub(crate) fn parse_hosts_ordering(value: &str) -> Result<HostsOrdering, GatewayError> {
-    match value {
-        "sequential" => Ok(HostsOrdering::Sequential),
-        "random" => Ok(HostsOrdering::Random),
-        "reverse" => Ok(HostsOrdering::Reverse),
-        _ => Err(GatewayError::InvalidInput(format!(
-            "invalid hostsOrdering: {value}"
-        ))),
+        "scan" => Ok(Some(ConfigUsageType::Scan)),
+        "policy" => Ok(Some(ConfigUsageType::Policy)),
+        custom
+            if !custom.is_empty()
+                && custom
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-')) =>
+        {
+            Ok(None)
+        }
+        _ => Err(GatewayError::InvalidInput(
+            "usageType must be a nonempty token".to_string(),
+        )),
     }
 }
 
@@ -996,6 +996,10 @@ pub(crate) fn parse_permission_subject_type(
 pub(crate) fn map_gvm_error(error: gvm_client::GvmError) -> GatewayError {
     match error {
         gvm_client::GvmError::Parse(error) => map_parse_error(error),
+        // Canonical complete requests validate before any bytes are sent. Keep
+        // those caller-correctable failures at the same 400 boundary as a
+        // validation error reported by gvmd itself.
+        gvm_client::GvmError::Request(error) => GatewayError::InvalidInput(error.to_string()),
         gvm_client::GvmError::UnsupportedCommand { .. } => {
             GatewayError::NotImplemented(error.to_string())
         }

@@ -28,7 +28,7 @@ use crate::{
         ok_json, problem_response, GetReportQueryDoc, ReportListQueryDoc, ReportResultsQueryDoc,
         ResourceIdPathDoc,
     },
-    query::{parse_collection_query, parse_delete_resource_query, DeleteResourceQueryParams},
+    query::{decoded_query_pairs, parse_collection_query},
     results::{NvtRefResponse, ResultListResponse, ResultResponse, Threat},
     router::bearer_token,
     targets::validate_uuid,
@@ -313,20 +313,20 @@ impl From<ReportApplicationPage> for ReportApplicationListResponse {
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 #[schemars(rename = "ReportOperatingSystem")]
 pub(crate) struct ReportOperatingSystemResponse {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    severity: Option<String>,
+    #[serde(rename = "bestOsCpe", skip_serializing_if = "Option::is_none")]
+    best_os_cpe: Option<String>,
+    #[serde(rename = "bestOsText", skip_serializing_if = "Option::is_none")]
+    best_os_text: Option<String>,
+    #[serde(rename = "hostsCount", skip_serializing_if = "Option::is_none")]
+    hosts_count: Option<u32>,
 }
 
 impl From<ReportOperatingSystem> for ReportOperatingSystemResponse {
     fn from(operating_system: ReportOperatingSystem) -> Self {
         Self {
-            id: operating_system.id,
-            name: operating_system.name,
-            severity: operating_system.severity,
+            best_os_cpe: operating_system.best_os_cpe,
+            best_os_text: operating_system.best_os_text,
+            hosts_count: operating_system.hosts_count,
         }
     }
 }
@@ -720,7 +720,25 @@ pub async fn get_report(
     }
 }
 
-/// Delete report handler.
+/// Reject the obsolete report-deletion permanence selector.
+///
+/// Report deletion is always permanent in gvmd. Accepting either value would
+/// let legacy clients mistake a destructive operation for a trashcan move.
+fn reject_report_ultimate_query(query: Option<&str>) -> Result<(), GatewayError> {
+    if query
+        .into_iter()
+        .flat_map(decoded_query_pairs)
+        .any(|(key, _)| key == "ultimate")
+    {
+        return Err(GatewayError::InvalidInput(
+            "the `ultimate` query parameter is obsolete for report deletion; report deletion is always permanent"
+                .to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Permanently delete a report.
 pub async fn delete_report(
     State(service): State<GatewayService>,
     headers: HeaderMap,
@@ -736,11 +754,15 @@ pub async fn delete_report(
         Err(error) => return RestError::from_gateway_error(error, instance).into_response(),
     };
 
-    let ultimate = match parse_delete_resource_query(uri.query().unwrap_or("")) {
-        Ok(ultimate) => ultimate,
+    match reject_report_ultimate_query(uri.query()) {
+        Ok(()) => {}
+        Err(GatewayError::InvalidInput(detail)) => {
+            return RestError::from_gateway_error(GatewayError::InvalidInput(detail), instance)
+                .into_response();
+        }
         Err(error) => return RestError::from_gateway_error(error, instance).into_response(),
-    };
-    match service.delete_report(&session, &id, ultimate).await {
+    }
+    match service.delete_report(&session, &id).await {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(error) => RestError::from_gateway_error(error, instance).into_response(),
     }
@@ -1105,11 +1127,12 @@ pub(crate) fn delete_report_docs(op: TransformOperation<'_>) -> TransformOperati
         .id("deleteReport")
         .tag("Reports")
         .summary("Delete a report")
-        .description("Deletes a report. Pass `ultimate=true` to request permanent backend deletion instead of the default non-ultimate delete.")
+        .description("Permanently deletes a report. Report deletion cannot be undone and has no trash or caller-selectable permanence mode. The obsolete `ultimate` query parameter is rejected with `400 bad_request`.")
         .security_requirement("bearerAuth")
-        .input::<(Path<ResourceIdPathDoc>, Query<DeleteResourceQueryParams>)>()
+        .input::<Path<ResourceIdPathDoc>>()
         .response_with::<204, (), _>(|response| response.description("Report deleted"));
 
+    let op = problem_response::<400>(op, "Invalid request");
     let op = problem_response::<401>(op, "Authentication required or session expired");
     problem_response::<404>(op, "Resource not found")
 }

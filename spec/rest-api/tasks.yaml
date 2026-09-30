@@ -342,8 +342,6 @@ components:
             format: uuid
         alterable:
           type: boolean
-        hostsOrdering:
-          $ref: "./common.yaml#/components/schemas/HostsOrdering"
         observers:
           type: array
           items:
@@ -391,8 +389,6 @@ components:
             format: uuid
         alterable:
           type: boolean
-        hostsOrdering:
-          $ref: "./common.yaml#/components/schemas/HostsOrdering"
         observers:
           type: array
           items:
@@ -497,8 +493,6 @@ components:
             format: uuid
         alterable:
           type: boolean
-        hostsOrdering:
-          $ref: "./common.yaml#/components/schemas/HostsOrdering"
         observers:
           type: array
           items:

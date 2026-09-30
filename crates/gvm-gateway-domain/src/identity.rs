@@ -3,6 +3,8 @@
 
 //! Identity and access-control domain types and commands.
 
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{Pagination, ResourceRef};
@@ -268,7 +270,7 @@ pub struct ModifyPermissionInput {
 }
 
 /// Current-user setting representation.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Deserialize, Eq, PartialEq, Serialize)]
 pub struct UserSetting {
     /// Setting identifier.
     pub id: String,
@@ -282,6 +284,18 @@ pub struct UserSetting {
     pub comment: Option<String>,
 }
 
+impl fmt::Debug for UserSetting {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("UserSetting")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("value", &self.value.as_ref().map(|_| "<redacted>"))
+            .field("comment", &self.comment)
+            .finish()
+    }
+}
+
 /// Current-user settings response.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct UserSettingList {
@@ -290,8 +304,17 @@ pub struct UserSettingList {
 }
 
 /// User-setting update command.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct ModifyUserSettingInput {
     /// Setting value to apply.
     pub value: String,
+}
+
+impl fmt::Debug for ModifyUserSettingInput {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ModifyUserSettingInput")
+            .field("value", &"<redacted>")
+            .finish()
+    }
 }

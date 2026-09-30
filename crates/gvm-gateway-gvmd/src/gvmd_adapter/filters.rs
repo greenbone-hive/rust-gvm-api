@@ -39,10 +39,6 @@ pub(super) fn needs_client_side_pagination_fallback<T>(items: &[T], total: u32, 
     page > 1 && items.is_empty() && total == 0
 }
 
-pub(super) fn backend_ignored_pagination<T>(items: &[T], per_page: u32) -> bool {
-    items.len() > per_page as usize
-}
-
 pub(super) fn paginated_filter(
     prefix: Option<&str>,
     filter_string: Option<&str>,
