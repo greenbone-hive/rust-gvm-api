@@ -9,13 +9,13 @@ The REST surface of the `gvm-gateway`, exposing Greenbone Vulnerability Manageme
 - **Standards-first**: OpenAPI 3.1 specification, JSON:API-inspired resource design, proper HTTP semantics
 - **Security-first**: Session-token authentication, deny-by-default CORS, security headers, rate limiting, audit logging
 - **Observable**: Structured logging and OpenTelemetry (OTel) traces via OTLP
-- **Performant**: Async throughout, connection pooling to gvmd, streaming for large responses
+- **Performant**: Async throughout, serialized execution on each session-bound gvmd connection, explicit backpressure, asynchronous export jobs, and bounded report imports
 
 ### Non-Goals
 
-- Full GMP protocol parity in v0.1 (start with the most-used operations)
-- Built-in user management (delegates to gvmd's user/role system via GMP)
-- Web UI (API only — UIs are separate consumers)
+- Full GMP protocol parity (the published surface covers deliberately selected gvmd capabilities)
+- An independent identity store (user, group, role, permission, and setting resources delegate to gvmd)
+- A product UI (the embedded Redoc page is operational API documentation only)
 
 ### rust-gvm typed response policy
 
@@ -24,12 +24,13 @@ For GMP-backed endpoints, adapter/application conversion must use the structured
 **Hard requirement:** `rust-gvm-api` must not parse or process raw GMP XML responses directly.
 All GMP XML processing and protocol-shape handling belong in `rust-gvm`.
 
-Current mandatory coverage (from `rust-gvm` PR #68):
-- tasks (`GetTasksResponse`, `CreateTaskResponse`, `StartTaskResponse` + action aliases)
-- reports (`GetReportsResponse`, `DeleteReportResponse`)
-- results (`GetResultsResponse`)
-
-When a structured model exists upstream, use it as the source for API mapping.
+All production gvmd adapter operations use a semantic request implementing
+`GmpRequest` and consume its associated typed response. Architecture tests
+require zero direct `.call(...)` sites, zero manual `::from_response(...)`
+pairings, and no raw XML construction or parsing in production adapter modules.
+The covered resource families and the disposition of upstream commands are
+tracked in [typed GMP execution adoption](../../docs/typed-gmp-execution-adoption.md)
+and [upstream surface dispositions](../../docs/upstream-surface-dispositions.md).
 
 
 ## 2. Architecture
@@ -127,9 +128,11 @@ Collection/item resource modeling is the default. Action-style routes are allowe
 
 Accepted action-style exceptions:
 
-- `POST /api/v1/tasks/{id}/start`
-- `POST /api/v1/tasks/{id}/stop`
-- `POST /api/v1/tasks/{id}/resume`
+- state transitions: task and audit `start`, `stop`, and `resume`
+- copy operations: target, task, agent-group, generic-config, OCI-image-target,
+  web-application-target, filter, and tag `clone`
+- controller operations without stable child resources: agent `sync` and
+  credential-store `actions/verify`
 
 Rules for these exceptions:
 
@@ -139,6 +142,15 @@ Rules for these exceptions:
 - If a future action can be modeled more clearly as a real resource, that design should be preferred during review.
 
 ### Resource Endpoints
+
+The tables below explain representative workflows. The root
+[`openapi.yaml`](openapi.yaml) is the exhaustive path, method, schema, and
+status-code contract. Its implemented families include targets; agents and
+agent groups; generic assets and configs; OCI-image and web-application
+targets; tasks and audits; reports, report drill-downs, results, and export
+jobs; scan configs and policies; scanners and operating systems; alerts and
+schedules; credentials and credential stores; port lists; identity resources;
+feeds; supporting resources; SecInfo resources; and system endpoints.
 
 #### Targets
 
@@ -223,6 +235,12 @@ places report contents in logs, traces, metrics labels, or problem details.
 | `GET` | `/api/v1/scan-configs/{id}` | Get scan config |
 | `PUT` | `/api/v1/scan-configs/{id}` | Update scan config |
 | `DELETE` | `/api/v1/scan-configs/{id}` | Delete scan config |
+| `GET` | `/api/v1/scan-configs/{id}/nvts` | List selected NVTs |
+| `GET` | `/api/v1/scan-configs/{id}/nvts/{oid}` | Get one selected NVT |
+| `GET` | `/api/v1/scan-configs/{id}/preferences` | List scanner preferences |
+| `GET`, `PUT` | `/api/v1/scan-configs/{id}/preferences/{name}` | Read or update one scanner preference |
+| `PUT` | `/api/v1/scan-configs/{id}/families/{family}/nvts` | Replace one family's NVT selection |
+| `PUT` | `/api/v1/scan-configs/{id}/family-selection` | Replace family selection |
 
 Scan-config creation does not select an implicit backend default. The request
 must name an active scan configuration in `baseScanConfigId`; missing,
@@ -334,7 +352,7 @@ Protected routes accept either an existing Bearer session token or request-scope
 |--------|------|-------------|
 | `GET` | `/health` | Liveness probe |
 | `GET` | `/ready` | Readiness probe (checks gvmd connectivity) |
-| `GET` | `/api/v1/version` | GMP protocol version reported by the proxied gvmd; `apiVersion` is the REST API contract version, not the proxy binary version |
+| `GET` | `/api/v1/version` | GMP protocol version reported by the proxied gvmd; `apiVersion` is the REST contract and gateway package version |
 | `GET` | `/api/v1/timezones` | Authenticated backend-sourced timezone catalog from gvmd; returns `501` on backends that do not support `get_timezones` |
 | `GET` | `/api/v1/openapi.json` | OpenAPI 3.1 spec |
 
@@ -470,7 +488,9 @@ telemetry_deployment_environment = "staging"
 telemetry_service_instance_id = "gateway-01"
 ```
 
-CLI flags override config file values; environment variables override both.
+Configuration precedence is defaults, then the selected config file, then
+environment variables, then the supported `--bind` CLI override. `--config`
+selects the file; it is not a general value-override layer.
 
 Transport-security notes:
 - `disabled` means intentional plain HTTP.
@@ -485,109 +505,26 @@ Logging notes:
 
 This explicit mode contract supersedes the earlier TLS-only ingress assumption from issue `#27` while preserving its shared session/connection model.
 
-## 5. Implementation Phases (REST-first, aligned with #26 and #27)
+## 5. Implementation Status And Contract Governance
 
-This plan is aligned with:
+The REST gateway, ports-and-adapters crate boundaries, session-bound backend
+execution, request-scoped Basic authentication, transport-security modes,
+graceful shutdown, telemetry, packaging, and the resource families described
+above are implemented.
 
-- General architecture proposal: https://github.com/greenbone-hive/rust-gvm-api/issues/26
-- Connection pooling + session handling proposal: https://github.com/greenbone-hive/rust-gvm-api/issues/27
+The runtime OpenAPI document is derived from the Aide-instrumented Axum router.
+Contract tests compare it with the curated release specification, including
+paths, methods, operation metadata, parameters, request bodies, response
+statuses, headers, media types, and schemas. Release packaging additionally
+requires the curated OpenAPI version to match the workspace version.
 
-Scope of this plan is **REST API only** (implementation of the proposed OpenAPI spec under `spec/rest-api/`).
-**gRPC is explicitly deferred to a later iteration.**
+All production gvmd execution crosses the typed rust-gvm `GmpRequest`
+boundary. Unit, integration, contract, architecture, and compose-backed live
+tests protect the REST contract and backend translation. New behavior remains
+spec-first and requires focused regression coverage.
 
-### Delivery approach: acceptance-test first (mandatory)
-
-For every use case and endpoint, development follows this loop:
-
-1. Write or extend an **acceptance test** for the behavior.
-2. Run the test and confirm it **fails** (red) for the expected reason.
-3. Implement the minimal code to satisfy the behavior.
-4. Re-run and confirm the acceptance test is **green**.
-5. Refactor while keeping the acceptance test green.
-
-No implementation work should start without an acceptance test that defines the expected behavior.
-
-### Phase 1: Architecture skeleton (hexagonal baseline)
-
-- Create crate boundaries per #26:
-  - `gvm-gateway-domain` (session model, domain services, port traits)
-  - `gvm-gateway-app` (use cases: session lifecycle + GMP execution)
-  - `gvm-gateway-rest` (REST incoming adapter)
-  - `gvm-gateway-gvmd` (outgoing adapter)
-  - `gvm-gateway` (composition root)
-- Keep domain free from framework/I/O dependencies.
-- Wire REST adapter to application use cases only.
-- Keep gRPC crate/work out of scope for this iteration.
-
-### Phase 2: Session and connection core (from #27)
-
-- Implement domain `SessionManager` with `create/get/touch/expire/remove`.
-- Enforce atomic limits:
-  - global max sessions
-  - per-user max sessions
-- Implement gvmd adapter connection store keyed by session token.
-- Add one in-flight GMP command serialization per session (single-flight queue).
-- Implement backpressure behavior for queue saturation/timeouts.
-- Implement idle-expiry cleanup and explicit teardown.
-
-### Phase 3: REST adapter foundation (spec-first)
-
-- Generate REST server stubs/types from the OpenAPI 3.1 spec in `spec/rest-api/`.
-- Implement session endpoints first (acceptance-test first for each endpoint):
-  - `POST /session`
-  - `GET /session`
-  - `DELETE /session`
-- Implement bearer-token extraction and session resolution middleware.
-- Map domain errors to HTTP status/problem responses consistently.
-
-### Phase 4: Resource endpoint implementation (proposed spec)
-
-Implement REST resources against the shared application execution path (`execute(token, command)`):
-
-- Targets
-- Tasks (+ start/stop/resume) — use `rust-gvm` structured task responses
-- Reports (+ report results) — use `rust-gvm` structured report responses
-- Results — use `rust-gvm` structured result responses
-- Scan configs
-- Scanners
-- Alerts
-- Schedules
-- Credentials
-- Port lists
-- Feeds
-- Version/System
-
-For each resource (acceptance-test first):
-- preserve API contract from OpenAPI spec
-- ensure token-scoped execution and per-session GMP serialization
-- keep adapter thin (translation only, no business logic, no raw GMP XML handling)
-
-### Phase 5: REST hardening and release readiness
-
-- Add structured observability for REST flow (logs, OTel tracing).
-- Implement OTel tracer setup with OTLP exporter and explicit service/resource attributes.
-- Ensure W3C Trace Context propagation across incoming HTTP, application use cases, and gvmd adapter calls.
-- Add resilience checks for session expiry, backend disconnects, and queue backpressure.
-- Implement graceful shutdown and connection draining for the REST gateway:
-  - handle `SIGTERM`/shutdown signals explicitly
-  - stop accepting new application requests once drain mode begins
-  - keep `/health` live but degrade `/ready` to `503 notReady` while draining
-  - allow in-flight requests to complete up to a bounded drain timeout
-  - after the timeout, return from the serve loop so the process can exit even if blocked handlers remain
-- Emit structured shutdown telemetry for state transitions, rejected requests, and drain-timeout exits.
-- Build OCI image artifacts for the REST gateway and verify they run under both Podman and Docker.
-- Document the local container/dev workflow in terms of Compose-compatible stacks rather than Docker-only assumptions.
-- Add/maintain integration and E2E tests focused on REST behavior (written first, fail-first):
-  - session lifecycle
-  - concurrent calls on same token serialize correctly
-  - limit enforcement and teardown behavior
-  - graceful shutdown drain completion and bounded-timeout behavior
-- Prepare first REST-focused release cut.
-
-### Deferred to next iteration
-
-- gRPC adapter implementation and `.proto` contract integration.
-- Cross-adapter parity tests (REST vs gRPC).
+gRPC and MCP adapters remain planned work. Their design documents are
+forward-looking and do not describe shipped runtime surfaces.
 
 ## 6. Error Handling
 
@@ -611,29 +548,29 @@ For each resource (acceptance-test first):
 
 | Dependency | Purpose |
 |------------|---------|
-| `gvm-client` / `gvm-gmp` | GMP protocol client + structured response models (tasks/reports/results from rust-gvm PR #68) |
+| `gvm-client` / `gvm-connection` / `gvm-gmp` / `gvm-protocol` | Typed GMP requests and responses, client execution, and gvmd transport from rust-gvm |
 | `axum` | HTTP framework |
 | `tower` / `tower-http` | Middleware (CORS, compression, auth, trace context propagation) |
 | `tokio` | Async runtime |
-| `utoipa` | OpenAPI spec generation |
+| `aide` / `schemars` | Router-derived OpenAPI generation and JSON Schema metadata |
 | `serde` / `serde_json` | Serialization |
 | `uuid` | Opaque session-token / resource identifier support |
 | `clap` | CLI argument parsing |
 | `tracing` + `tracing-opentelemetry` + `opentelemetry` + `opentelemetry-otlp` | Structured logging + OTel export |
-| `prometheus` | Metrics |
+| `tokio-rustls` | Native TLS listener support |
 
 ### Dev/Test
 
 | Dependency | Purpose |
 |------------|---------|
-| `rstest` | Parameterized tests |
-| `wiremock` | HTTP mock server (for downstream tests) |
-| `assert_json_diff` | JSON response assertion |
+| `gvm-mock-server` | Typed GMP integration and contract test backend |
+| `reqwest` | Live HTTP/E2E clients |
+| `serde_yaml` | Curated OpenAPI parsing and parity checks |
 
 ## 8. Security Considerations
 
 - **No credential storage**: GMP credentials are used only to establish a session; bearer session tokens must be treated as secrets and redacted from logs
-- **Transport security**: REST TLS / termination-mode configuration is deferred to #130 and is not part of Phase 3 until explicitly re-scoped
+- **Transport security**: Explicit `disabled`, `terminated_by_proxy`, and `native` modes; native TLS fails closed when certificate or key material is absent or invalid
 - **Input validation**: All request bodies validated before GMP translation
 - **No unsafe code**: `#[deny(unsafe_code)]` crate-wide
 - **CORS**: Configurable origin allowlist (deny by default)
@@ -643,6 +580,5 @@ For each resource (acceptance-test first):
 
 ## 9. Open Questions
 
-- [ ] Should we support GMP filter syntax passthrough or only structured query params?
 - [ ] WebSocket vs SSE for real-time task status updates?
 - [ ] Should request-scoped Basic auth remain a compatibility path long-term, or should clients be encouraged to use explicit sessions for all workflows?

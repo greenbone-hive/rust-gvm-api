@@ -575,7 +575,9 @@ fn add_probe_server_overrides(normalized_paths: &mut Map<String, Value>) {
 /// Configure the top-level generated OpenAPI document.
 pub(crate) fn configure(api: TransformOpenApi<'_>) -> TransformOpenApi<'_> {
     api.title("GVM REST API")
-        .description("Generated OpenAPI for the currently implemented REST adapter surface.")
+        .description(
+            "Runtime-generated OpenAPI for the implemented Rust REST adapter. GMP command construction and response parsing remain behind the typed rust-gvm boundary. Protected operations accept either an existing bearer session or request-scoped HTTP Basic authentication; POST /session creates a persistent bearer session, while request-scoped Basic authentication tears its backend context down after the request.",
+        )
         .version(env!("CARGO_PKG_VERSION"))
         .license(License {
             name: "AGPL-3.0-or-later".to_string(),

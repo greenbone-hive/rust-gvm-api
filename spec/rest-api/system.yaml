@@ -57,7 +57,7 @@ paths:
       operationId: getVersion
       tags: [System]
       summary: Get proxied gvmd version information
-      description: Returns the GMP protocol version reported by the proxied gvmd. The `apiVersion` field identifies the REST API contract version, not the proxy binary version.
+      description: Returns the GMP protocol version reported by the proxied gvmd. The `apiVersion` field identifies the REST API contract version and is aligned with the gateway package version.
       security: []
       responses:
         "200":
@@ -142,9 +142,9 @@ components:
       properties:
         apiVersion:
           type: string
-          description: REST API contract version, not the proxy binary version.
+          description: REST API contract version, aligned with the gateway package version.
           examples:
-            - "0.1.0"
+            - "0.5.0"
         gmpVersion:
           type: string
           description: GMP protocol version reported by the proxied gvmd.

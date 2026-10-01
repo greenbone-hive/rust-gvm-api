@@ -20,6 +20,8 @@ OpenAPI path and operation counts are the compatibility baseline and must not
 change solely because of this internal boundary migration. Issue
 [#500](https://github.com/greenbone-hive/rust-gvm-api/issues/500) deliberately
 contracts the Technology Preview ticket surface to 121 paths and 198 operations.
+The later report-import endpoint keeps 121 paths and brings the current contract
+to 199 operations.
 
 ## Migration rules
 
@@ -48,7 +50,8 @@ these migrated modules from reintroducing the raw call/parser boundary.
 After those migrations and the ticket-surface removal, production code under
 `src/gvmd_adapter` contains no direct `.call(...)` sites, no
 `call_with_session(...)` helper, and no manual `::from_response(...)` pairings.
-The generated REST OpenAPI contains 121 paths and 198 operations.
+The generated REST OpenAPI contains 121 paths and 199 operations. All production
+gvmd adapter resource families now use the typed rust-gvm execution boundary.
 
 ## Raw compatibility exceptions
 
