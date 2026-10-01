@@ -21,7 +21,7 @@ impl E2eHarness {
     pub async fn list_scan_configs(&self, token: &str) -> Result<Vec<ScanConfig>> {
         let response: ListResponse<ScanConfig> = self
             .send_json(
-                self.authed(Method::GET, "/api/v1/scan-configs", token),
+                self.authed(Method::GET, "/api/v1/scan-configs?perPage=1000", token),
                 StatusCode::OK,
                 "list scan configs",
             )

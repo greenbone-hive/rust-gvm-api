@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Greenbone AG
 
-use serde::Deserialize;
+use std::fmt;
+
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct HealthResponse {
@@ -298,6 +300,59 @@ pub struct NvtFamily {
     pub max_nvt_count: Option<u32>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct ScanConfigPreferenceNvt {
+    pub oid: String,
+    pub name: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct ScanConfigPreference {
+    pub nvt: Option<ScanConfigPreferenceNvt>,
+    pub name: String,
+    pub id: Option<String>,
+    #[serde(rename = "type")]
+    pub preference_type: Option<String>,
+    pub value: Option<String>,
+    #[serde(default)]
+    pub alternatives: Vec<String>,
+    pub default: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct ScanConfigPreferenceList {
+    pub data: Vec<ScanConfigPreference>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct ScanConfigFamilySelection {
+    pub name: String,
+    pub growing: bool,
+    pub all: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetScanConfigFamilySelection {
+    pub families: Vec<ScanConfigFamilySelection>,
+    pub auto_add_new_families: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetScanConfigNvtSelection {
+    pub nvt_oids: Vec<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetScanConfigPreference {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nvt_oid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct Schedule {
     pub id: String,
@@ -323,13 +378,45 @@ pub struct Alert {
     pub writable: bool,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct CredentialStore {
     pub id: Option<String>,
     pub name: String,
     pub provider: Option<String>,
     pub default: Option<bool>,
     pub writable: Option<bool>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CredentialStoreCapability {
+    Unsupported,
+    Supported(Vec<CredentialStore>),
+}
+
+#[derive(Clone, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoreBackedCredentialRequest {
+    pub name: String,
+    pub comment: String,
+    #[serde(rename = "type")]
+    pub credential_type: String,
+    pub credential_store_id: String,
+    pub vault_id: String,
+    pub host_identifier: String,
+}
+
+impl fmt::Debug for StoreBackedCredentialRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("StoreBackedCredentialRequest")
+            .field("name", &self.name)
+            .field("comment", &self.comment)
+            .field("credential_type", &self.credential_type)
+            .field("credential_store_id", &self.credential_store_id)
+            .field("vault_id", &"<redacted>")
+            .field("host_identifier", &"<redacted>")
+            .finish()
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]

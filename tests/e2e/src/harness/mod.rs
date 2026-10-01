@@ -18,7 +18,7 @@ mod resources;
 mod dto_test;
 
 pub use assertions::{assert_problem_response, assert_problem_response_any};
-pub use config::E2eConfig;
+pub use config::{CredentialStoreFixture, E2eConfig};
 pub use dto::*;
 
 use http::truncate;
@@ -52,6 +52,42 @@ impl E2eHarness {
 
     fn authed(&self, method: Method, path: &str, token: &str) -> reqwest::RequestBuilder {
         self.request(method, path).bearer_auth(token)
+    }
+
+    fn authed_path_segments(
+        &self,
+        method: Method,
+        segments: &[&str],
+        token: &str,
+    ) -> Result<reqwest::RequestBuilder> {
+        let url = self.url_with_path_segments(segments)?;
+        Ok(self.client.request(method, url).bearer_auth(token))
+    }
+
+    fn authed_path_segments_with_query(
+        &self,
+        method: Method,
+        segments: &[&str],
+        query: &[(&str, &str)],
+        token: &str,
+    ) -> Result<reqwest::RequestBuilder> {
+        let mut url = self.url_with_path_segments(segments)?;
+        url.query_pairs_mut().extend_pairs(query.iter().copied());
+        Ok(self.client.request(method, url).bearer_auth(token))
+    }
+
+    fn url_with_path_segments(&self, segments: &[&str]) -> Result<reqwest::Url> {
+        let mut url =
+            reqwest::Url::parse(&format!("{}/", self.config.base_url.trim_end_matches('/')))
+                .context("parse E2E base URL")?;
+        {
+            let mut path = url
+                .path_segments_mut()
+                .map_err(|_| anyhow::anyhow!("E2E base URL cannot accept path segments"))?;
+            path.pop_if_empty();
+            path.extend(segments.iter().copied());
+        }
+        Ok(url)
     }
 }
 
