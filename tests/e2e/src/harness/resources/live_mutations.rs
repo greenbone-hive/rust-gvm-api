@@ -103,34 +103,6 @@ impl E2eHarness {
         Ok(response.data)
     }
 
-    pub async fn get_scan_config_preference(
-        &self,
-        token: &str,
-        scan_config_id: &str,
-        name: &str,
-        nvt_oid: Option<&str>,
-    ) -> Result<ScanConfigPreference> {
-        let segments = &[
-            "api",
-            "v1",
-            "scan-configs",
-            scan_config_id,
-            "preferences",
-            name,
-        ];
-        let request = match nvt_oid {
-            Some(nvt_oid) => self.authed_path_segments_with_query(
-                Method::GET,
-                segments,
-                &[("nvtOid", nvt_oid)],
-                token,
-            )?,
-            None => self.authed_path_segments(Method::GET, segments, token)?,
-        };
-        self.send_json(request, StatusCode::OK, "get scan-config preference")
-            .await
-    }
-
     pub async fn set_scan_config_family_selection(
         &self,
         token: &str,

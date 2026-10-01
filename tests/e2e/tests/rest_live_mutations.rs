@@ -45,14 +45,14 @@ async fn rest_scan_config_live_mutations_replace_read_back_restore_and_delete() 
             &snapshot,
             &fixture.selected_nvts,
         )?;
-        let copied_preference = harness
-            .get_scan_config_preference(
-                &session.token,
-                &created.id,
-                &fixture.preference.name,
-                fixture.preference_nvt_oid.as_deref(),
-            )
-            .await?;
+        let copied_preference = read_scan_config_preference(
+            &harness,
+            &session.token,
+            &created.id,
+            &fixture.preference.name,
+            fixture.preference_nvt_oid.as_deref(),
+        )
+        .await?;
         ensure!(
             copied_preference == fixture.preference,
             "copied scan config did not preserve the preference snapshot"
@@ -446,9 +446,14 @@ async fn exercise_preference_mutation(
             Some(&fixture.preference_mutation),
         )
         .await?;
-    let mutated = harness
-        .get_scan_config_preference(token, scan_config_id, &fixture.preference.name, nvt_oid)
-        .await?;
+    let mutated = read_scan_config_preference(
+        harness,
+        token,
+        scan_config_id,
+        &fixture.preference.name,
+        nvt_oid,
+    )
+    .await?;
     ensure!(
         mutated.value.as_deref() == Some(fixture.preference_mutation.as_str()),
         "preference mutation was not persisted by gvmd"
@@ -463,9 +468,14 @@ async fn exercise_preference_mutation(
             None,
         )
         .await?;
-    let reset = harness
-        .get_scan_config_preference(token, scan_config_id, &fixture.preference.name, nvt_oid)
-        .await?;
+    let reset = read_scan_config_preference(
+        harness,
+        token,
+        scan_config_id,
+        &fixture.preference.name,
+        nvt_oid,
+    )
+    .await?;
     ensure!(
         reset.value.as_deref() != Some(fixture.preference_mutation.as_str()),
         "preference reset retained the explicitly mutated value"
@@ -480,14 +490,34 @@ async fn exercise_preference_mutation(
             Some(original),
         )
         .await?;
-    let restored = harness
-        .get_scan_config_preference(token, scan_config_id, &fixture.preference.name, nvt_oid)
-        .await?;
+    let restored = read_scan_config_preference(
+        harness,
+        token,
+        scan_config_id,
+        &fixture.preference.name,
+        nvt_oid,
+    )
+    .await?;
     ensure!(
         restored.value.as_deref() == Some(original),
         "preference snapshot was not restored"
     );
     Ok(())
+}
+
+async fn read_scan_config_preference(
+    harness: &E2eHarness,
+    token: &str,
+    scan_config_id: &str,
+    name: &str,
+    nvt_oid: Option<&str>,
+) -> Result<ScanConfigPreference> {
+    harness
+        .list_scan_config_preferences(token, scan_config_id, nvt_oid)
+        .await?
+        .into_iter()
+        .find(|preference| preference.name == name)
+        .with_context(|| format!("scan-config preference {name} disappeared from readback"))
 }
 
 async fn restore_scan_config_selection(
