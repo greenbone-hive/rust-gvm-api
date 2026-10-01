@@ -7,8 +7,8 @@ use anyhow::{bail, ensure, Context, Result};
 use gvm_gateway_e2e::harness::{
     CreatedResource, CredentialStore, CredentialStoreCapability, CredentialStoreFixture,
     E2eHarness, NvtCatalogEntry, ScanConfig, ScanConfigFamilySelection, ScanConfigPreference,
-    SessionResponse, SetScanConfigFamilySelection, SetScanConfigNvtSelection,
-    SetScanConfigPreference, StoreBackedCredentialRequest,
+    ScanConfigPreferenceNvt, SessionResponse, SetScanConfigFamilySelection,
+    SetScanConfigNvtSelection, SetScanConfigPreference, StoreBackedCredentialRequest,
 };
 
 const UNSUPPORTED_FIXTURE_UUID: &str = "57500000-0000-4000-8000-000000000575";
@@ -282,6 +282,7 @@ struct ScanConfigFixture {
     feed_family_nvts: Vec<NvtCatalogEntry>,
     preference: ScanConfigPreference,
     preference_nvt_oid: Option<String>,
+    preference_mutation_name: String,
     preference_mutation: String,
 }
 
@@ -326,6 +327,10 @@ async fn discover_scan_config_fixture(
                 .list_scan_config_preferences(token, &base.id, None)
                 .await?,
         ) {
+            let preference_nvt_oid = preference.nvt.as_ref().map(|nvt| nvt.oid.clone());
+            let Some(preference_mutation_name) = preference_mutation_name(&preference) else {
+                continue;
+            };
             let selected_nvt = selected_nvts[0].clone();
             let family = selected_nvt
                 .family
@@ -342,16 +347,18 @@ async fn discover_scan_config_fixture(
                     selected_nvt,
                     feed_family_nvts,
                     preference,
-                    preference_nvt_oid: None,
+                    preference_nvt_oid,
+                    preference_mutation_name,
                     preference_mutation: mutation,
                 });
             }
         }
 
-        // Scanner preferences are fetched first because a broad config can
-        // select tens of thousands of NVTs. The bounded fallback still finds
-        // a representative feed preference without making the live gate
-        // proportional to the full feed size.
+        // The unfiltered effective preference collection is fetched first
+        // because a broad config can select tens of thousands of NVTs. The
+        // bounded per-NVT fallback still finds a representative feed
+        // preference without making the live gate proportional to the full
+        // feed size.
         for selected_nvt in selected_nvts.clone().into_iter().take(256) {
             let family = selected_nvt
                 .family
@@ -362,6 +369,9 @@ async fn discover_scan_config_fixture(
                     .list_scan_config_preferences(token, &base.id, Some(&selected_nvt.oid))
                     .await?,
             ) {
+                let Some(preference_mutation_name) = preference_mutation_name(&preference) else {
+                    continue;
+                };
                 let feed_family_nvts = harness.list_all_feed_nvts_for_family(token, family).await?;
                 if !feed_family_nvts.is_empty() {
                     let preference_nvt_oid = selected_nvt.oid.clone();
@@ -373,6 +383,7 @@ async fn discover_scan_config_fixture(
                         feed_family_nvts,
                         preference,
                         preference_nvt_oid: Some(preference_nvt_oid),
+                        preference_mutation_name,
                         preference_mutation: mutation,
                     });
                 }
@@ -424,6 +435,19 @@ fn derive_preference_mutation(preference: &ScanConfigPreference) -> Option<Strin
         .then_some(candidate)
 }
 
+fn preference_mutation_name(preference: &ScanConfigPreference) -> Option<String> {
+    let Some(nvt) = preference.nvt.as_ref() else {
+        return Some(preference.name.clone());
+    };
+    Some(format!(
+        "{}:{}:{}:{}",
+        nvt.oid,
+        preference.id.as_deref()?,
+        preference.preference_type.as_deref()?,
+        preference.name
+    ))
+}
+
 async fn exercise_preference_mutation(
     harness: &E2eHarness,
     token: &str,
@@ -440,7 +464,7 @@ async fn exercise_preference_mutation(
         .set_scan_config_preference(
             token,
             scan_config_id,
-            &fixture.preference.name,
+            &fixture.preference_mutation_name,
             nvt_oid,
             Some(&fixture.preference_mutation),
         )
@@ -462,7 +486,7 @@ async fn exercise_preference_mutation(
         .set_scan_config_preference(
             token,
             scan_config_id,
-            &fixture.preference.name,
+            &fixture.preference_mutation_name,
             nvt_oid,
             None,
         )
@@ -484,7 +508,7 @@ async fn exercise_preference_mutation(
         .set_scan_config_preference(
             token,
             scan_config_id,
-            &fixture.preference.name,
+            &fixture.preference_mutation_name,
             nvt_oid,
             Some(original),
         )
@@ -828,6 +852,40 @@ fn preference_mutation_prefers_alternatives_and_derives_safe_entry_values() {
     preference.value = Some("80,443".to_string());
     preference.alternatives.clear();
     assert!(derive_preference_mutation(&preference).is_none());
+}
+
+#[test]
+fn preference_mutation_name_preserves_nvt_identity() {
+    let scanner = ScanConfigPreference {
+        nvt: None,
+        name: "max_checks".to_string(),
+        id: None,
+        preference_type: None,
+        value: Some("4".to_string()),
+        alternatives: Vec::new(),
+        default: None,
+    };
+    assert_eq!(
+        preference_mutation_name(&scanner).as_deref(),
+        Some("max_checks")
+    );
+
+    let nvt = ScanConfigPreference {
+        nvt: Some(ScanConfigPreferenceNvt {
+            oid: "1.3.6.1.4.1.25623.1.0.100000".to_string(),
+            name: Some("Fixture NVT".to_string()),
+        }),
+        name: "Timeout".to_string(),
+        id: Some("7".to_string()),
+        preference_type: Some("entry".to_string()),
+        value: Some("10".to_string()),
+        alternatives: Vec::new(),
+        default: Some("5".to_string()),
+    };
+    assert_eq!(
+        preference_mutation_name(&nvt).as_deref(),
+        Some("1.3.6.1.4.1.25623.1.0.100000:7:entry:Timeout")
+    );
 }
 
 async fn ready_session() -> Result<(E2eHarness, SessionResponse)> {
