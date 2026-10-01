@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Greenbone AG
 
-use std::{env, time::Duration};
+use std::{env, fmt, time::Duration};
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 
 const DEFAULT_BASE_URL: &str = "http://127.0.0.1:8080";
 const DEFAULT_USERNAME: &str = "admin";
@@ -26,6 +26,52 @@ pub struct E2eConfig {
     pub poll_interval: Duration,
     pub pdf_report_format_id: String,
     pub csv_report_format_id: String,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub struct CredentialStoreFixture {
+    pub preferred_store_id: Option<String>,
+    pub vault_id: String,
+    pub host_identifier: String,
+    pub credential_type: String,
+    pub restore_comment: String,
+}
+
+impl CredentialStoreFixture {
+    pub fn from_env() -> Result<Self> {
+        let credential_type =
+            env_or_default("GVM_GATEWAY_E2E_CREDENTIAL_STORE_CREDENTIAL_TYPE", "cs_up");
+        if !matches!(
+            credential_type.as_str(),
+            "cs_cc" | "cs_pw" | "cs_pgp" | "cs_smime" | "cs_snmp" | "cs_up" | "cs_usk"
+        ) {
+            bail!("GVM_GATEWAY_E2E_CREDENTIAL_STORE_CREDENTIAL_TYPE must be a supported cs_* type");
+        }
+        Ok(Self {
+            preferred_store_id: env::var("GVM_GATEWAY_E2E_CREDENTIAL_STORE_ID")
+                .ok()
+                .filter(|value| !value.trim().is_empty()),
+            vault_id: required_non_empty_env("GVM_GATEWAY_E2E_CREDENTIAL_STORE_VAULT_ID")?,
+            host_identifier: required_non_empty_env(
+                "GVM_GATEWAY_E2E_CREDENTIAL_STORE_HOST_IDENTIFIER",
+            )?,
+            credential_type,
+            restore_comment: required_env("GVM_GATEWAY_E2E_CREDENTIAL_STORE_RESTORE_COMMENT")?,
+        })
+    }
+}
+
+impl fmt::Debug for CredentialStoreFixture {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("CredentialStoreFixture")
+            .field("preferred_store_id", &self.preferred_store_id)
+            .field("vault_id", &"<redacted>")
+            .field("host_identifier", &"<redacted>")
+            .field("credential_type", &self.credential_type)
+            .field("restore_comment", &"<redacted>")
+            .finish()
+    }
 }
 
 impl E2eConfig {
@@ -70,4 +116,18 @@ fn env_u64_or_default(key: &str, default: u64) -> Result<u64> {
             .with_context(|| format!("parse {key}={raw} as u64")),
         Err(_) => Ok(default),
     }
+}
+
+fn required_env(key: &str) -> Result<String> {
+    env::var(key).with_context(|| {
+        format!("credential-store capability is supported; set {key} to run the safe live fixture")
+    })
+}
+
+fn required_non_empty_env(key: &str) -> Result<String> {
+    let value = required_env(key)?;
+    if value.is_empty() {
+        bail!("credential-store capability is supported; {key} must not be empty");
+    }
+    Ok(value)
 }
