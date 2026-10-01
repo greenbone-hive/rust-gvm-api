@@ -38,7 +38,7 @@ pub(crate) fn test_ports() -> GatewayPorts {
         targets: Arc::new(MockTargetPort::default()),
         tasks: Arc::new(MockTaskPort),
         auth: Arc::new(MockAuthPort::default()),
-        reports: Arc::new(MockReportPort),
+        reports: Arc::new(MockReportPort::default()),
         results: Arc::new(MockResultPort),
         scan_configs: Arc::new(MockScanConfigPort),
         scanners: Arc::new(MockScannerPort),

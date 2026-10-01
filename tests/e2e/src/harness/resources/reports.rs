@@ -4,6 +4,26 @@
 use super::super::*;
 
 impl E2eHarness {
+    pub async fn import_report(
+        &self,
+        token: &str,
+        task_id: &str,
+        in_assets: Option<bool>,
+        report_xml: &[u8],
+    ) -> Result<CreatedResource> {
+        let mut path = format!("/api/v1/reports?taskId={task_id}");
+        if let Some(in_assets) = in_assets {
+            path.push_str(&format!("&inAssets={in_assets}"));
+        }
+        self.send_created_json(
+            self.authed(Method::POST, &path, token)
+                .header(reqwest::header::CONTENT_TYPE, "application/xml")
+                .body(report_xml.to_vec()),
+            "import report",
+        )
+        .await
+    }
+
     pub async fn get_report_summary_page(
         &self,
         token: &str,

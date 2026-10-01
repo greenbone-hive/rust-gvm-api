@@ -5,34 +5,44 @@
 
 use aide::transform::TransformOperation;
 use axum::{
-    extract::{OriginalUri, Path, Query, State},
-    http::{HeaderMap, StatusCode},
+    body::to_bytes,
+    extract::{OriginalUri, Path, Query, Request, State},
+    http::{header, HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     Json,
 };
 use gvm_gateway_app::GatewayService;
 use gvm_gateway_domain::{
-    GatewayError, GetReportOpts, ReportApplication, ReportApplicationPage, ReportClosedCvePage,
-    ReportCve, ReportCvePage, ReportErrorPage, ReportHost, ReportHostPage, ReportOperatingSystem,
-    ReportOperatingSystemPage, ReportPortPage, ReportPortSummary, ReportQuery,
-    ReportVulnerabilityPage, ResultQuery, TlsCertificate, TlsCertificatePage,
+    GatewayError, GetReportOpts, ImportReportInput, ReportApplication, ReportApplicationPage,
+    ReportClosedCvePage, ReportCve, ReportCvePage, ReportErrorPage, ReportHost, ReportHostPage,
+    ReportOperatingSystem, ReportOperatingSystemPage, ReportPortPage, ReportPortSummary,
+    ReportQuery, ReportVulnerabilityPage, ResultQuery, TlsCertificate, TlsCertificatePage,
 };
 use schemars::JsonSchema;
 use serde::Serialize;
 use uuid::Uuid;
 
 use crate::{
-    dto::{datetime_schema, parse_uuid, PaginationResponse, ResourceRefResponse},
+    dto::{
+        datetime_schema, parse_uuid, PaginationResponse, ResourceCreatedResponse,
+        ResourceRefResponse,
+    },
     error::RestError,
+    handler::created_resource,
     openapi::{
-        ok_json, problem_response, GetReportQueryDoc, ReportListQueryDoc, ReportResultsQueryDoc,
-        ResourceIdPathDoc,
+        created_json, ok_json, problem_response, GetReportQueryDoc, ImportReportQueryDoc,
+        ReportListQueryDoc, ReportResultsQueryDoc, ResourceIdPathDoc,
     },
     query::{decoded_query_pairs, parse_collection_query},
     results::{NvtRefResponse, ResultListResponse, ResultResponse, Threat},
     router::bearer_token,
     targets::validate_uuid,
 };
+
+/// Maximum accepted report envelope size (10 MiB).
+pub const MAX_REPORT_IMPORT_BYTES: usize = 10 * 1024 * 1024;
+
+const REPORT_IMPORT_MEDIA_TYPE: &str = "application/xml";
 
 // ============================================================================
 // Response DTOs
@@ -580,6 +590,60 @@ pub struct ReportListQuery {
     pub per_page: u32,
 }
 
+/// Parsed metadata for `POST /reports`.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ImportReportQuery {
+    /// Existing import-task UUID.
+    pub task_id: String,
+    /// Optional host-asset import selector.
+    pub in_assets: Option<bool>,
+}
+
+impl ImportReportQuery {
+    /// Parse import metadata without inspecting the opaque report body.
+    pub fn try_from_query_string(query: &str) -> Result<Self, GatewayError> {
+        let mut task_id = None;
+        let mut in_assets = None;
+
+        for (key, value) in decoded_query_pairs(query) {
+            match key.as_ref() {
+                "taskId" => {
+                    validate_uuid("taskId", value.as_ref())?;
+                    task_id = Some(value.into_owned());
+                }
+                "inAssets" => {
+                    in_assets = Some(value.parse::<bool>().map_err(|_| {
+                        GatewayError::InvalidInput("inAssets must be true or false".to_string())
+                    })?);
+                }
+                _ => {}
+            }
+        }
+
+        Ok(Self {
+            task_id: task_id
+                .ok_or_else(|| GatewayError::InvalidInput("taskId is required".to_string()))?,
+            in_assets,
+        })
+    }
+}
+
+fn has_report_import_media_type(headers: &HeaderMap) -> bool {
+    headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.split(';').next())
+        .is_some_and(|value| value.trim().eq_ignore_ascii_case(REPORT_IMPORT_MEDIA_TYPE))
+}
+
+fn content_length_exceeds_limit(headers: &HeaderMap) -> bool {
+    headers
+        .get(header::CONTENT_LENGTH)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<u64>().ok())
+        .is_some_and(|length| length > MAX_REPORT_IMPORT_BYTES as u64)
+}
+
 impl ReportListQuery {
     /// Parse query parameters from a raw query string.
     pub fn try_from_query_string(query: &str) -> Result<Self, GatewayError> {
@@ -682,6 +746,65 @@ pub async fn list_reports(
         Ok(reports) => (StatusCode::OK, Json(ReportListResponse::from(reports))).into_response(),
         Err(error) => RestError::from_gateway_error(error, instance).into_response(),
     }
+}
+
+/// Import one bounded XML report envelope.
+pub async fn import_report(State(service): State<GatewayService>, request: Request) -> Response {
+    let (parts, body) = request.into_parts();
+    let instance = parts.uri.path().to_string();
+    let session = match bearer_token(&parts.headers) {
+        Ok(session) => session,
+        Err(error) => return RestError::from_gateway_error(error, instance).into_response(),
+    };
+    let query = match ImportReportQuery::try_from_query_string(parts.uri.query().unwrap_or("")) {
+        Ok(query) => query,
+        Err(error) => return RestError::from_gateway_error(error, instance).into_response(),
+    };
+    if !has_report_import_media_type(&parts.headers) {
+        return RestError::unsupported_media_type(
+            "report imports require Content-Type application/xml",
+            instance,
+        )
+        .into_response();
+    }
+    if content_length_exceeds_limit(&parts.headers) {
+        return report_import_too_large(instance);
+    }
+
+    let report_xml = match to_bytes(body, MAX_REPORT_IMPORT_BYTES).await {
+        Ok(bytes) => bytes,
+        Err(_) => return report_import_too_large(instance),
+    };
+    if report_xml.is_empty() {
+        return RestError::from_gateway_error(
+            GatewayError::InvalidInput("report body must not be empty".to_string()),
+            instance,
+        )
+        .into_response();
+    }
+
+    match service
+        .import_report(
+            &session,
+            ImportReportInput {
+                task_id: query.task_id,
+                report_xml: report_xml.to_vec(),
+                in_assets: query.in_assets,
+            },
+        )
+        .await
+    {
+        Ok(id) => created_resource("/api/v1/reports", &id),
+        Err(error) => RestError::from_gateway_error(error, instance).into_response(),
+    }
+}
+
+fn report_import_too_large(instance: String) -> Response {
+    RestError::payload_too_large(
+        format!("report body must not exceed {MAX_REPORT_IMPORT_BYTES} bytes"),
+        instance,
+    )
+    .into_response()
 }
 
 /// Get report handler.
@@ -1087,6 +1210,43 @@ pub async fn get_report_cves(
 // ============================================================================
 // OpenAPI transforms
 // ============================================================================
+
+/// OpenAPI transform for `POST /api/v1/reports`.
+pub(crate) fn import_report_docs(mut op: TransformOperation<'_>) -> TransformOperation<'_> {
+    op = op
+        .id("importReport")
+        .tag("Reports")
+        .summary("Import a report")
+        .description("Imports exactly one XML report envelope into an existing import task. The 10 MiB limit is enforced while the request body is read, and report contents are never included in diagnostics or problem details.")
+        .security_requirement("bearerAuth")
+        .input::<Query<ImportReportQueryDoc>>()
+        .response_with::<201, Json<ResourceCreatedResponse>, _>(created_json("Report imported"));
+    op.inner_mut().request_body = Some(
+        serde_json::from_value(serde_json::json!({
+            "required": true,
+            "content": {
+                "application/xml": {
+                    "schema": {
+                        "type": "string",
+                        "format": "binary",
+                        "minLength": 1,
+                        "maxLength": MAX_REPORT_IMPORT_BYTES
+                    }
+                }
+            }
+        }))
+        .expect("static report-import request body is valid"),
+    );
+
+    let op = problem_response::<400>(op, "Invalid task metadata or report envelope");
+    let op = problem_response::<401>(op, "Authentication required or session expired");
+    let op = problem_response::<404>(op, "Import task not found");
+    let op = problem_response::<413>(op, "Report body exceeds the upload limit");
+    let op = problem_response::<415>(op, "Content-Type is not application/xml");
+    let op = problem_response::<501>(op, "Backend does not support report import");
+    let op = problem_response::<502>(op, "Backend service unreachable or connection failed");
+    problem_response::<504>(op, "Backend request timed out")
+}
 
 /// OpenAPI transform for `GET /api/v1/reports`.
 pub(crate) fn list_reports_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {

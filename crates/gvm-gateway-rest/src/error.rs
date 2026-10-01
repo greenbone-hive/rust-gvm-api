@@ -98,6 +98,30 @@ impl RestError {
         )
     }
 
+    /// Builds a 413 problem details response for a bounded upload violation.
+    pub fn payload_too_large(detail: impl Into<String>, instance: impl Into<String>) -> Self {
+        Self::from_custom_parts(
+            "payload-too-large",
+            "payload_too_large",
+            "Payload Too Large",
+            StatusCode::PAYLOAD_TOO_LARGE,
+            Some(detail.into()),
+            Some(instance.into()),
+        )
+    }
+
+    /// Builds a 415 problem details response for a disallowed request media type.
+    pub fn unsupported_media_type(detail: impl Into<String>, instance: impl Into<String>) -> Self {
+        Self::from_custom_parts(
+            "unsupported-media-type",
+            "unsupported_media_type",
+            "Unsupported Media Type",
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            Some(detail.into()),
+            Some(instance.into()),
+        )
+    }
+
     /// Builds a 503 problem details response.
     pub fn service_unavailable(detail: impl Into<String>, instance: impl Into<String>) -> Self {
         Self::from_custom_parts(

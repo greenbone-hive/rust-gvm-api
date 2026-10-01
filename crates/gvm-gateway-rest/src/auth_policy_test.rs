@@ -54,6 +54,10 @@ fn treats_non_session_api_routes_as_protected_by_default() {
         classify_runtime_route(&Method::GET, "/api/v1/future-resource"),
         Some(RestRouteAuthPolicy::Protected)
     );
+    assert_eq!(
+        classify_runtime_route(&Method::POST, "/api/v1/reports"),
+        Some(RestRouteAuthPolicy::Protected)
+    );
 }
 
 #[test]

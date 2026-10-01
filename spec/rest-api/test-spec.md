@@ -150,6 +150,12 @@ async fn test_server() -> TestServer {
 | Test | Request | Setup | Expected |
 |------|---------|-------|----------|
 | `list_reports` | `GET /api/v1/reports` | Reports exist | 200, summaries |
+| `import_report` | `POST /api/v1/reports?taskId={id}` + `application/xml` body | Import task exists | 201 + stable report ID + `Location`; report is readable |
+| `import_report_in_assets_omitted_and_false` | Two imports with omitted and `false` `inAssets` | Import task exists | Typed request preserves omission versus explicit false |
+| `import_report_rejects_invalid_metadata` | Missing/invalid `taskId` or invalid `inAssets` | — | 400 RFC 9457 without payload contents |
+| `import_report_rejects_media_type` | Non-`application/xml` body | — | 415 RFC 9457 |
+| `import_report_rejects_empty_or_invalid_envelope` | Empty, malformed, or multiple-report body | — | 400 RFC 9457 without payload contents |
+| `import_report_rejects_oversized_body` | Body greater than 10485760 bytes | — | 413 before an unbounded body buffer |
 | `get_report_with_results` | `GET /api/v1/reports/{id}` | Report exists | 200, includes requested result page |
 | `get_report_results_paginated` | `GET /api/v1/reports/{id}/results?page=1&perPage=50` | Large report | 200, 50 results |
 | `get_report_vulnerabilities_paginated` | `GET /api/v1/reports/{id}/vulnerabilities?page=1&perPage=50` | Report exists | 200, paginated vulnerability findings |
@@ -233,6 +239,7 @@ async fn test_server() -> TestServer {
 |------|-------|
 | `create_target_location_header` | Resource creation returns `201 Created` + canonical `Location` |
 | `create_task_location_header` | Resource creation returns `201 Created` + canonical `Location` |
+| `import_report_location_header` | Report import returns `201 Created` + canonical report `Location` |
 | `create_scan_config_location_header` | Resource creation returns `201 Created` + canonical `Location` |
 | `create_session_location_header` | Session creation returns `201 Created` + canonical `Location` |
 | `method_not_allowed` | Unsupported method on a published resource returns `405` |

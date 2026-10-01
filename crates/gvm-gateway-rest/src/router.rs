@@ -90,7 +90,8 @@ use crate::{
         get_report_operating_systems, get_report_operating_systems_docs, get_report_ports,
         get_report_ports_docs, get_report_results, get_report_results_docs,
         get_report_tls_certificates, get_report_tls_certificates_docs, get_report_vulnerabilities,
-        get_report_vulnerabilities_docs, list_reports, list_reports_docs,
+        get_report_vulnerabilities_docs, import_report, import_report_docs, list_reports,
+        list_reports_docs,
     },
     results::{get_result, get_result_docs, list_results, list_results_docs},
     scan_configs::{
@@ -787,6 +788,10 @@ fn documented_router() -> ApiRouter<GatewayService> {
         )
         // Reports
         .api_route("/api/v1/reports", get_with(list_reports, list_reports_docs))
+        .api_route(
+            "/api/v1/reports",
+            post_with(import_report, import_report_docs),
+        )
         .api_route(
             "/api/v1/reports/{id}",
             get_with(get_report, get_report_docs),

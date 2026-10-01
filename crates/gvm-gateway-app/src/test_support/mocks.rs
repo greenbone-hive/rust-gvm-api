@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Greenbone AG
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use gvm_gateway_domain::{
@@ -17,7 +17,7 @@ use gvm_gateway_domain::{
     CredentialStore, Cve, CvePage, DfnCertAdvisory, DfnCertAdvisoryPage, FeedList, FeedPort,
     FeedQuery, Filter, FilterPage, GatewayError, GenericAsset, GenericAssetPage, GenericConfig,
     GenericConfigPage, GenericConfigQuery, GetReportOpts, Group, GroupPage, Host, HostPage,
-    IdentityPort, IdentityQuery, JobArtifact, ModifyAgentControlScanConfigInput,
+    IdentityPort, IdentityQuery, ImportReportInput, JobArtifact, ModifyAgentControlScanConfigInput,
     ModifyAgentGroupInput, ModifyAgentInput, ModifyAlertInput, ModifyAssetInput,
     ModifyCredentialInput, ModifyCredentialStoreInput, ModifyFilterInput, ModifyGroupInput,
     ModifyHostInput, ModifyNoteInput, ModifyOperatingSystemInput, ModifyOverrideInput,
@@ -777,10 +777,21 @@ impl AuthPort for MockAuthPort {
 
 /// Mock report port for tests that validate report resource session flow.
 #[derive(Clone, Default)]
-pub(crate) struct MockReportPort;
+pub(crate) struct MockReportPort {
+    pub(crate) imported: Arc<Mutex<Option<ImportReportInput>>>,
+}
 
 #[async_trait]
 impl ReportPort for MockReportPort {
+    async fn import_report(
+        &self,
+        _: &str,
+        input: ImportReportInput,
+    ) -> Result<String, GatewayError> {
+        *self.imported.lock().unwrap() = Some(input);
+        Ok("550e8400-e29b-41d4-a716-446655440000".to_string())
+    }
+
     async fn list_reports(&self, _: &str, query: &ReportQuery) -> Result<ReportPage, GatewayError> {
         Ok(ReportPage {
             data: vec![],

@@ -4,11 +4,72 @@
 use serde_json::json;
 
 use super::{
-    reject_report_ultimate_query, GetReportQuery, ReportApplicationListResponse,
-    ReportClosedCveListResponse, ReportCveListResponse, ReportErrorListResponse,
-    ReportHostListResponse, ReportOperatingSystemListResponse, ReportPortListResponse,
-    ReportResultsQuery, ReportVulnerabilityListResponse,
+    has_report_import_media_type, reject_report_ultimate_query, GetReportQuery, ImportReportQuery,
+    ReportApplicationListResponse, ReportClosedCveListResponse, ReportCveListResponse,
+    ReportErrorListResponse, ReportHostListResponse, ReportOperatingSystemListResponse,
+    ReportPortListResponse, ReportResultsQuery, ReportVulnerabilityListResponse,
 };
+use axum::http::{header, HeaderMap, HeaderValue};
+
+#[test]
+fn report_import_query_preserves_omission_and_explicit_false() {
+    // `inAssets` is tri-state at the GMP boundary: omission must not collapse
+    // into false, while both published boolean spellings remain accepted.
+    let task_id = "123e4567-e89b-12d3-a456-426614174000";
+    let omitted = ImportReportQuery::try_from_query_string(&format!("taskId={task_id}"))
+        .expect("required taskId should parse");
+    assert_eq!(omitted.task_id, task_id);
+    assert_eq!(omitted.in_assets, None);
+
+    let explicit_false =
+        ImportReportQuery::try_from_query_string(&format!("taskId={task_id}&inAssets=false"))
+            .expect("explicit false should parse");
+    assert_eq!(explicit_false.in_assets, Some(false));
+
+    let explicit_true =
+        ImportReportQuery::try_from_query_string(&format!("taskId={task_id}&inAssets=true"))
+            .expect("explicit true should parse");
+    assert_eq!(explicit_true.in_assets, Some(true));
+}
+
+#[test]
+fn report_import_query_rejects_missing_or_invalid_metadata() {
+    // Invalid relationships must fail before opaque payload bytes can reach a
+    // backend session.
+    for query in [
+        "",
+        "taskId=not-a-uuid",
+        "taskId=123e4567-e89b-12d3-a456-426614174000&inAssets=0",
+    ] {
+        assert!(
+            ImportReportQuery::try_from_query_string(query).is_err(),
+            "invalid query should fail: {query}"
+        );
+    }
+}
+
+#[test]
+fn report_import_media_type_allowlist_accepts_only_application_xml() {
+    // Parameters on the one allowlisted XML media type are harmless, but
+    // alternate XML or generic binary types are outside this upload contract.
+    for accepted in ["application/xml", "application/xml; charset=utf-8"] {
+        let mut headers = HeaderMap::new();
+        headers.insert(header::CONTENT_TYPE, HeaderValue::from_static(accepted));
+        assert!(
+            has_report_import_media_type(&headers),
+            "media type={accepted}"
+        );
+    }
+    for rejected in ["text/xml", "application/octet-stream", "application/json"] {
+        let mut headers = HeaderMap::new();
+        headers.insert(header::CONTENT_TYPE, HeaderValue::from_static(rejected));
+        assert!(
+            !has_report_import_media_type(&headers),
+            "media type={rejected}"
+        );
+    }
+    assert!(!has_report_import_media_type(&HeaderMap::new()));
+}
 
 #[test]
 fn report_delete_rejects_every_obsolete_ultimate_spelling_but_ignores_unrelated_queries() {

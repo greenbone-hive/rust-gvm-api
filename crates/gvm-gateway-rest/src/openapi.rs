@@ -20,9 +20,10 @@ use crate::auth_policy::{
 mod doc;
 
 pub(crate) use doc::{
-    CreateAuditDoc, CreateTargetDoc, CreateTaskDoc, GetReportQueryDoc, ModifyTargetDoc,
-    ModifyTaskDoc, ProblemDetailDoc, ReportListQueryDoc, ReportResultsQueryDoc, ResourceIdPathDoc,
-    ResultListQueryDoc, ScanConfigListQueryDoc, TargetListQueryDoc, TaskListQueryDoc,
+    CreateAuditDoc, CreateTargetDoc, CreateTaskDoc, GetReportQueryDoc, ImportReportQueryDoc,
+    ModifyTargetDoc, ModifyTaskDoc, ProblemDetailDoc, ReportListQueryDoc, ReportResultsQueryDoc,
+    ResourceIdPathDoc, ResultListQueryDoc, ScanConfigListQueryDoc, TargetListQueryDoc,
+    TaskListQueryDoc,
 };
 
 pub(crate) fn ok_json<T>(

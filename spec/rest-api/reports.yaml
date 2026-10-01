@@ -25,6 +25,74 @@ paths:
           $ref: "./common.yaml#/components/responses/Unauthorized"
         "502":
           $ref: "./common.yaml#/components/responses/BadGateway"
+    post:
+      operationId: importReport
+      tags: [Reports]
+      summary: Import a report
+      description: |
+        Creates a report by importing exactly one XML report envelope into an
+        existing import task. The request body is treated as opaque bytes by
+        the gateway and is validated as a single report envelope by the typed
+        rust-gvm request. The body is limited to 10485760 bytes while it is
+        read. Report contents are never included in logs, traces, metrics
+        labels, or problem details.
+      parameters:
+        - name: taskId
+          in: query
+          required: true
+          description: UUID of the existing import task that will own the report.
+          schema:
+            type: string
+            format: uuid
+        - name: inAssets
+          in: query
+          required: false
+          description: Whether hosts from the report should be added to assets. Omission preserves the backend default and is distinct from explicit false.
+          schema:
+            type: boolean
+      requestBody:
+        required: true
+        content:
+          application/xml:
+            schema:
+              type: string
+              format: binary
+              minLength: 1
+              maxLength: 10485760
+      responses:
+        "201":
+          description: Report imported
+          headers:
+            Location:
+              $ref: "./common.yaml#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "./common.yaml#/components/schemas/ResourceCreated"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "413":
+          description: Report body exceeds the 10485760-byte upload limit
+          content:
+            application/problem+json:
+              schema:
+                $ref: "./common.yaml#/components/schemas/ProblemDetail"
+        "415":
+          description: Request Content-Type is not application/xml
+          content:
+            application/problem+json:
+              schema:
+                $ref: "./common.yaml#/components/schemas/ProblemDetail"
+        "501":
+          $ref: "./common.yaml#/components/responses/NotImplemented"
+        "502":
+          $ref: "./common.yaml#/components/responses/BadGateway"
+        "504":
+          $ref: "./common.yaml#/components/responses/GatewayTimeout"
 
   /reports/{id}:
     parameters:
