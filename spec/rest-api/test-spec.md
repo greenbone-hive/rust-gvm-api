@@ -8,7 +8,7 @@
          ┌──────────┐
          │   E2E    │  Against real gvmd (Compose stack via Podman or Docker)
         ┌┴──────────┴┐
-        │ Integration │  axum test client + mock GMP pool
+        │ Integration │  axum test client + mock session/backend
        ┌┴────────────┴┐
        │    Unit       │  Individual functions, no I/O
       └────────────────┘
@@ -19,7 +19,7 @@
 | Category | Scope | Dependencies | Speed |
 |----------|-------|-------------|-------|
 | Unit | Individual functions, conversions, validation | None | < 1s each |
-| Integration | Route handlers with mock GMP | axum `TestServer` | < 5s each |
+| Integration | Route handlers with mock gateway/backend ports | axum test client | < 5s each |
 | E2E | Full server against gvmd | Compose-compatible stack (Podman or Docker) | < 30s each |
 | Contract | OpenAPI spec compliance | Generated spec | < 2s each |
 
@@ -95,18 +95,11 @@
 
 ### 3.1 Test Infrastructure
 
-```rust
-// Current crate-local harness lives under crates/gvm-gateway/tests/common/mod.rs.
-use axum::Router;
-use axum_test::TestServer;
-
-/// Creates a test server with a mock GMP connection pool.
-async fn test_server() -> TestServer {
-    let mock_pool = MockGmpPool::new();
-    let app = build_router(mock_pool);
-    TestServer::new(app).unwrap()
-}
-```
+The crate-local harness under `crates/gvm-gateway/tests/common/mod.rs` composes
+a `GatewayService` with `StaticGvmdAdapter` ports for isolated HTTP tests or a
+`GvmdAdapter` connected to `gvm-mock-server` for typed protocol integration.
+Tests build the same Axum router used by the runtime and exercise it either
+in-process or through a loopback listener.
 
 ### 3.2 Health Endpoints
 
@@ -304,7 +297,7 @@ services:
 | `throughput_list_targets` | Requests/sec for `GET /targets` | > 1000 rps |
 | `latency_p99_get_target` | p99 latency for `GET /targets/{id}` | < 50ms |
 | `latency_large_report` | Time to first byte for large report | < 500ms |
-| `connection_pool_saturation` | Behavior when pool exhausted | Queues, doesn't crash |
+| `session_queue_saturation` | Behavior when a session execution queue is exhausted | Returns explicit backpressure without crashing |
 | `memory_large_report` | Peak memory during 100MB report | < 200MB |
 
 ## 6. Test Data & Fixtures

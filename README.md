@@ -71,7 +71,14 @@ See [Gateway Architecture](docs/gateway-architecture.md) for the authoritative a
 
 ## Status
 
-The repository now contains a working REST gateway baseline in the `gvm-gateway*` workspace crates, including container/runtime packaging, shutdown control, transport-security modes, and tracing. gRPC and MCP remain planned surfaces; their specs and roadmap should be read as forward-looking design material rather than shipped runtime behavior.
+The repository contains the production REST gateway in the `gvm-gateway*`
+workspace crates, including container/runtime packaging, shutdown control,
+transport-security modes, and tracing. Every production gvmd adapter operation
+uses rust-gvm's typed request/response execution boundary; this repository does
+not construct or parse GMP XML. The runtime-generated OpenAPI document is
+contract-tested against the curated release specification. gRPC and MCP remain
+planned surfaces; their specs and roadmap should be read as forward-looking
+design material rather than shipped runtime behavior.
 
 ## Shared Session Model
 
@@ -221,11 +228,13 @@ Useful follow-up commands:
 
 ## Documentation
 
+- Runtime API documentation: `GET /api/v1/docs`
+- Runtime-generated OpenAPI: `GET /api/v1/openapi.json`
 - Release-shipped user docs source:
   - [docs/user/index.md](docs/user/index.md)
-  - [docs/user/overview.md](docs/user/overview.md)
   - [docs/user/usage.md](docs/user/usage.md)
   - [docs/user/examples.md](docs/user/examples.md)
+  - [docs/user/migration.md](docs/user/migration.md)
 - [REST API OpenSpec](spec/rest-api/openspec.md)
 - [gRPC API OpenSpec](spec/grpc-api/openspec.md)
 - [Gateway Architecture](docs/gateway-architecture.md)

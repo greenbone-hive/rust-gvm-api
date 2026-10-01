@@ -6,19 +6,29 @@ openapi: 3.1.0
 info:
   title: GVM REST API
   description: |
-    RESTful API for Greenbone Vulnerability Management (GVM).
+    RESTful API for Greenbone Vulnerability Management (GVM), implemented as
+    a Rust ports-and-adapters gateway. GMP command construction and response
+    parsing remain behind the typed rust-gvm boundary; HTTP clients never send
+    or receive GMP XML.
 
-    Authenticate once to receive a session token; use that token for all
-    subsequent requests. Sessions reduce connection overhead for multi-request
-    workflows — the server manages all connection state on your behalf.
+    Multi-request workflows normally authenticate once to receive a session
+    token. Protected operations also support request-scoped HTTP Basic
+    authentication for single calls. The server manages backend connection
+    state on the caller's behalf in both modes.
 
     ## Authentication flow
 
     1. `POST /api/v1/session` with HTTP Basic credentials.
     2. On success the API returns an opaque `sessionToken`.
-    3. Include the token on all subsequent requests as:
+    3. Include the token on subsequent requests as:
        `Authorization: Bearer <sessionToken>`
     4. `DELETE /api/v1/session` ends the session.
+
+    Alternatively, send `Authorization: Basic <credentials>` directly to a
+    protected operation. The gateway creates a backend execution context for
+    that request and tears it down before returning. `GET` and `DELETE`
+    `/api/v1/session` remain bearer-only because they inspect or destroy an
+    existing persistent session.
 
     Sessions expire after a configurable idle timeout (default 5 min).
     One active session token maps to one authenticated backend execution
@@ -36,10 +46,7 @@ info:
     Responses return `traceparent` and, when present, `tracestate` for correlation.
     `baggage` is accepted as parent context input but is not echoed back in responses.
 
-    > **Note:** A future version of the API may support stateless per-request
-    > authentication for simpler single-call use cases. For now, session-based
-    > auth is the only supported mechanism.
-  version: 0.1.0
+  version: 0.5.0
   license:
     name: AGPL-3.0-or-later
     identifier: AGPL-3.0-or-later

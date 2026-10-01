@@ -44,6 +44,16 @@ fi
 package_name="rust-gvm-api-docs-${version}"
 staging_root="${repo_root}/dist/docs-package"
 package_root="${staging_root}/${package_name}"
+source_openapi_version="$(
+  awk '/^info:$/ { in_info = 1; next }
+       in_info && /^  version:/ { gsub(/"/, "", $2); print $2; exit }' \
+    "${repo_root}/spec/rest-api/openapi.yaml"
+)"
+
+if [[ -z "${source_openapi_version}" || "${source_openapi_version}" != "${version}" ]]; then
+  echo "OpenAPI info.version '${source_openapi_version:-missing}' does not match package version '${version}'" >&2
+  exit 1
+fi
 
 rm -rf "${package_root}"
 mkdir -p "${package_root}/api/rest" "${package_root}/examples"
@@ -52,6 +62,7 @@ mkdir -p "${output_dir}"
 cp "${repo_root}/docs/user/index.md" "${package_root}/README.md"
 cp "${repo_root}/docs/user/usage.md" "${package_root}/usage.md"
 cp "${repo_root}/docs/user/examples.md" "${package_root}/examples.md"
+cp "${repo_root}/docs/user/migration.md" "${package_root}/migration.md"
 cp -R "${repo_root}/docs/user/examples/." "${package_root}/examples/"
 cp "${repo_root}/packaging/gvm-gateway.toml" "${package_root}/package-config.example.toml"
 cp "${repo_root}/packaging/gvm-gateway.container.toml" "${package_root}/container-config.example.toml"

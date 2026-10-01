@@ -55,6 +55,92 @@ fn generated_openapi_matches_curated_spec() {
 }
 
 #[test]
+fn generated_and_curated_metadata_describe_the_current_typed_contract() {
+    // Top-level metadata is what runtime Redoc and release-shipped clients see.
+    // Keep it tied to the compiled API version and implemented authentication
+    // modes instead of allowing route-level parity to hide stale guidance.
+    let generated = build_openapi();
+    let curated = root_spec();
+    let version = env!("CARGO_PKG_VERSION");
+
+    assert_eq!(generated["info"]["version"], json!(version));
+    assert_eq!(curated["info"]["version"], json!(version));
+
+    for (name, document) in [("generated", &generated), ("curated", &curated)] {
+        let description = document["info"]["description"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{name} OpenAPI must have an info description"));
+        assert!(
+            description.contains("typed rust-gvm"),
+            "{name} OpenAPI must describe the typed rust-gvm ownership boundary"
+        );
+        assert!(
+            description.contains("request-scoped HTTP Basic"),
+            "{name} OpenAPI must describe implemented request-scoped Basic authentication"
+        );
+        assert!(
+            !description.contains("future version"),
+            "{name} OpenAPI must not describe implemented authentication as future work"
+        );
+    }
+
+    for file_name in ["audits.yaml", "policies.yaml"] {
+        let document = read_yaml(
+            &root_spec_path()
+                .parent()
+                .expect("spec directory")
+                .join(file_name),
+        );
+        assert_eq!(
+            document["info"]["version"],
+            json!(version),
+            "standalone OpenAPI fragment {file_name} has stale version metadata"
+        );
+    }
+
+    let system = read_yaml(
+        &root_spec_path()
+            .parent()
+            .expect("spec directory")
+            .join("system.yaml"),
+    );
+    for (name, description) in [
+        (
+            "generated version operation",
+            generated["paths"]["/version"]["get"]["description"].as_str(),
+        ),
+        (
+            "generated apiVersion schema",
+            generated["components"]["schemas"]["VersionInfo"]["properties"]["apiVersion"]
+                ["description"]
+                .as_str(),
+        ),
+        (
+            "curated version operation",
+            system["paths"]["/version"]["get"]["description"].as_str(),
+        ),
+        (
+            "curated apiVersion schema",
+            system["components"]["schemas"]["VersionInfo"]["properties"]["apiVersion"]
+                ["description"]
+                .as_str(),
+        ),
+    ] {
+        assert!(
+            description
+                .unwrap_or_else(|| panic!("{name} must have a description"))
+                .contains("gateway package version"),
+            "{name} must describe the implemented version alignment"
+        );
+    }
+    assert_eq!(
+        system["components"]["schemas"]["VersionInfo"]["properties"]["apiVersion"]["examples"],
+        json!([version]),
+        "VersionInfo.apiVersion example must match the compiled API version"
+    );
+}
+
+#[test]
 fn generated_and_curated_openapi_exclude_the_removed_ticket_surface() {
     // Issue #500 removes the contract instead of retaining a compatibility
     // operation, so paths, operation ids, tags, and schemas must all disappear.

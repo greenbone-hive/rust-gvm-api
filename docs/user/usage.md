@@ -36,8 +36,8 @@ container example config:
 
 - `container-config.example.toml`
 
-In a normal container setup the gateway listens on `0.0.0.0:8080` and runs
-and assumes it is running behind a TLS-terminating proxy.
+In a normal container setup the gateway listens on `0.0.0.0:8080` and assumes
+it is running behind a TLS-terminating proxy.
 
 ## Configuration reference
 
@@ -145,3 +145,21 @@ This operational UI is outside the REST API contract. It uses the generated
 repository-bundled Redoc 2.5.3 asset from the gateway. The route's Content
 Security Policy permits scripts and contract requests only from the gateway
 itself, so browsers do not need outbound network access to render it.
+
+## API contract and version
+
+The running gateway derives `/api/v1/openapi.json` from its instrumented Axum
+router. Release documentation packages contain the matching curated OpenAPI
+files under `api/rest/`. Contract tests compare the generated and curated
+documents so their paths, operations, parameters, request bodies, responses,
+headers, media types, and schemas stay aligned.
+
+`GET /api/v1/version` reports two distinct values:
+
+- `apiVersion` is the REST contract and package version. It matches the
+  top-level OpenAPI `info.version` for that release.
+- `gmpVersion` is the protocol version reported by the connected gvmd backend.
+
+The REST representation is backed by typed rust-gvm requests and responses.
+GMP XML is an internal backend protocol and is never part of the public HTTP
+contract.

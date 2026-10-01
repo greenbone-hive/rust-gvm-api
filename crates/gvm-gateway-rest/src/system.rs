@@ -61,7 +61,7 @@ pub(crate) struct ReadinessStatusResponse {
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 #[schemars(rename = "VersionInfo")]
 pub(crate) struct VersionInfoResponse {
-    /// REST API contract version, not the proxy binary version.
+    /// REST API contract version, aligned with the gateway package version.
     #[serde(rename = "apiVersion")]
     api_version: String,
     /// GMP protocol version reported by the proxied gvmd.
@@ -223,7 +223,7 @@ pub(crate) fn version_docs(op: TransformOperation<'_>) -> TransformOperation<'_>
         .tag("System")
         .summary("Get proxied gvmd version information")
         .description(
-            "Returns the GMP protocol version reported by the proxied gvmd. The `apiVersion` field identifies the REST API contract version, not the proxy binary version.",
+            "Returns the GMP protocol version reported by the proxied gvmd. The `apiVersion` field identifies the REST API contract version and is aligned with the gateway package version.",
         )
         .response_with::<200, Json<VersionInfoResponse>, _>(|response| {
             response.description("Proxied gvmd version information")

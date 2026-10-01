@@ -14,10 +14,12 @@ schedules, and tasks, as well as access to scan results and reports.
 - Example config files:
   - [package-config.example.toml](./package-config.example.toml)
   - [container-config.example.toml](./container-config.example.toml)
-- OpenAPI specification for this release:
+- Curated OpenAPI specification for this release (contract-tested against the
+  runtime-generated `/api/v1/openapi.json` document):
   - [openapi.yaml](./api/rest/openapi.yaml)
 
 ## Version alignment
 
 Use the documentation package that shipped with the same release version as the
-gateway you are running.
+gateway you are running. Its OpenAPI `info.version` matches the gateway's
+`apiVersion`.

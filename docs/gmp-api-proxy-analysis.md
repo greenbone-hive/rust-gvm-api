@@ -1,5 +1,11 @@
 # GMP API Proxy Analysis
 
+Status: architecture analysis. REST is implemented; gRPC and MCP are
+forward-looking. The current REST contract is defined by
+[`spec/rest-api/openapi.yaml`](../spec/rest-api/openapi.yaml), and current
+runtime ownership is defined by
+[`gateway-architecture.md`](gateway-architecture.md).
+
 ## 1. Scope
 
 This document explains how `rust-gvm-api` should expose a gateway in front of `gvmd`.
@@ -141,8 +147,8 @@ Examples:
 
 | Canonical operation | REST | gRPC | MCP |
 | --- | --- | --- | --- |
-| `sessions.create` | `POST /api/v1/sessions` | `CreateSession` | `sessions.create` |
-| `system.get_version` | `GET /api/v1/system/version` | `GetVersion` | `system.get_version` |
+| `sessions.create` | `POST /api/v1/session` | `CreateSession` | `sessions.create` |
+| `system.get_version` | `GET /api/v1/version` | `GetVersion` | `system.get_version` |
 | `tasks.start` | `POST /api/v1/tasks/{id}/start` | `StartTask` | `tasks.start` |
 
 Wire shapes differ. Capability must not.

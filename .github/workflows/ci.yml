@@ -131,6 +131,7 @@ jobs:
           tar tzf "${archive}" | grep -q '/README.md$'
           tar tzf "${archive}" | grep -q '/usage.md$'
           tar tzf "${archive}" | grep -q '/examples.md$'
+          tar tzf "${archive}" | grep -q '/migration.md$'
           tar tzf "${archive}" | grep -q '/examples/scan-target.sh$'
           tar tzf "${archive}" | grep -q '/examples/import-users.sh$'
           tar tzf "${archive}" | grep -q '/examples/users.csv$'

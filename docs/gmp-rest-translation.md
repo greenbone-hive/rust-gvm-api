@@ -2,7 +2,7 @@
 
 Status: explanatory architecture note
 
-Reviewed: 2026-09-15
+Reviewed: 2026-10-01
 
 This document explains the Greenbone Management Protocol (GMP) boundary and
 compares two ways of exposing it to HTTP clients:
@@ -21,8 +21,8 @@ The analysis is based on these repository snapshots:
 
 - [`greenbone/gsa` at `4ba9551`](https://github.com/greenbone/gsa/tree/4ba9551bcd82bc53e22684ab5bb0eacc73419729)
 - [`greenbone/gsad` at `b98497f`](https://github.com/greenbone/gsad/tree/b98497f2cad94888b594aa6af1c84719d3c36a03)
-- `greenbone-hive/rust-gvm-api` `main` at `0ff45e7`
-- [`greenbone-hive/rust-gvm` at the API-pinned `5a43e1e`](https://github.com/greenbone-hive/rust-gvm/tree/5a43e1e90a0645202a79c10d47bef15b6684aeab)
+- `greenbone-hive/rust-gvm-api` `main` at `bee2479`
+- [`greenbone-hive/rust-gvm` v0.7.0 at the API-pinned `acdabf5`](https://github.com/greenbone-hive/rust-gvm/tree/acdabf5a039d78df82e86b69ee8a374df8575c7a)
 
 GSA and GSAD are valuable behavioral references, but they are not the
 normative GMP specification. Their bridge is tailored to the needs of the GSA
