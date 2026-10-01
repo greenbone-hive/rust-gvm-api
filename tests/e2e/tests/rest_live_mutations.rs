@@ -418,8 +418,7 @@ fn derive_preference_mutation(preference: &ScanConfigPreference) -> Option<Strin
             .parse::<i64>()
             .ok()
             .and_then(|value| value.checked_add(1))
-            .map(|value| value.to_string())
-            .unwrap_or_else(|| "issue-575-e2e".to_string()),
+            .map(|value| value.to_string())?,
     };
     (candidate != current && preference.default.as_deref() != Some(candidate.as_str()))
         .then_some(candidate)
@@ -823,6 +822,11 @@ fn preference_mutation_prefers_alternatives_and_derives_safe_entry_values() {
     );
 
     preference.preference_type = Some("password".to_string());
+    assert!(derive_preference_mutation(&preference).is_none());
+
+    preference.preference_type = Some("entry".to_string());
+    preference.value = Some("80,443".to_string());
+    preference.alternatives.clear();
     assert!(derive_preference_mutation(&preference).is_none());
 }
 
