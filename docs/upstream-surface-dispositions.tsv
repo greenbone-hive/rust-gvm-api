@@ -1,0 +1,264 @@
+# rust-gvm-tag	v0.7.0
+# rust-gvm-revision	acdabf5a039d78df82e86b69ee8a374df8575c7a
+method	disposition	rationale	evidence
+authenticate	internal	Authentication establishes gateway execution contexts and is not exposed as a raw GMP operation.	spec/rest-api/sessions.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/session.rs
+clone_agent_group	exposed	The operation has a direct agent or agent-group REST resource/action.	spec/rest-api/emerging.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/agents.rs
+clone_alert	omitted	The REST alert contract intentionally exposes CRUD only and does not add clone, test, or trigger controller actions.	spec/rest-api/alerts.yaml; docs/upstream-surface-dispositions.md alert-action family
+clone_audit	exposed	The operation has a direct audit collection, item, clone, or lifecycle REST operation.	spec/rest-api/audits.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/tasks.rs
+clone_config	exposed	The operation has a direct generic-config read, clone, or delete REST operation.	spec/rest-api/emerging.yaml /configs paths
+clone_filter	exposed	The operation has a direct filter collection, item, or clone REST operation.	spec/rest-api/supporting-resources.yaml /filters paths
+clone_group	omitted	Identity clone commands are deliberately absent from the REST identity contract.	spec/rest-api/identity.yaml; parent #381
+clone_note	omitted	The REST note contract deliberately has no clone action.	spec/rest-api/supporting-resources.yaml /notes paths; parent #381
+clone_oci_image_target	exposed	The operation has a direct classic or specialized target REST collection, item, or clone operation.	spec/rest-api/targets.yaml; spec/rest-api/emerging.yaml specialized-target paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/targets.rs
+clone_override	omitted	The REST override contract deliberately has no clone action.	spec/rest-api/supporting-resources.yaml /overrides paths; parent #381
+clone_permission	omitted	Identity clone commands are deliberately absent from the REST identity contract.	spec/rest-api/identity.yaml; parent #381
+clone_port_list	omitted	Port-list clone and range subcommands are not independent REST resources in the current contract.	spec/rest-api/port-lists.yaml; parent #381
+clone_report_config	omitted	Report-configuration administration and discovery are deliberately outside the REST surface.	docs/upstream-surface-dispositions.md report-configuration family; parent #381
+clone_report_format	deferred	Report-format administration requires a dedicated administration and artifact-validation contract.	docs/upstream-surface-dispositions.md report-format family; parent #381
+clone_role	omitted	Identity clone commands are deliberately absent from the REST identity contract.	spec/rest-api/identity.yaml; parent #381
+clone_scan_config	mapped	Specialized clone/name/comment helpers map to generic config clone or scan-config update workflows.	spec/rest-api/emerging.yaml /configs/{id}/clone; spec/rest-api/scan-configs.yaml /scan-configs/{id}
+clone_scanner	deferred	Scanner administration and verification require a dedicated appliance-ownership and secret-handling contract.	docs/upstream-surface-dispositions.md scanner-administration family; #401
+clone_schedule	omitted	The REST schedule contract deliberately has no clone action.	spec/rest-api/schedules.yaml; parent #381
+clone_tag	exposed	The operation has a direct tag collection, item, or clone REST operation.	spec/rest-api/supporting-resources.yaml /tags paths
+clone_task	exposed	The operation has a direct task collection, item, clone, or lifecycle REST operation.	spec/rest-api/tasks.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/tasks.rs
+clone_tls_certificate	omitted	TLS certificate administration is outside the current gateway surface.	docs/upstream-surface-dispositions.md TLS-certificate family; parent #381
+clone_user	omitted	Identity clone commands are deliberately absent from the REST identity contract.	spec/rest-api/identity.yaml; parent #381
+clone_web_application_target	exposed	The operation has a direct classic or specialized target REST collection, item, or clone operation.	spec/rest-api/targets.yaml; spec/rest-api/emerging.yaml specialized-target paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/targets.rs
+create_agent_group	exposed	The operation has a direct agent or agent-group REST resource/action.	spec/rest-api/emerging.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/agents.rs
+create_agent_group_task	mapped	Specialized and compatibility task constructors map to typed modes of the single task-creation workflow.	spec/rest-api/tasks.yaml POST /tasks; crates/gvm-gateway-domain/src/tasks.rs
+create_alert	exposed	The operation has a direct alert collection or item REST operation.	spec/rest-api/alerts.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/alerts.rs
+create_asset	omitted	Generic asset creation is deliberately absent; typed host creation owns the supported creation workflow.	spec/rest-api/emerging.yaml /assets paths; spec/rest-api/supporting-resources.yaml /hosts
+create_audit	exposed	The operation has a direct audit collection, item, clone, or lifecycle REST operation.	spec/rest-api/audits.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/tasks.rs
+create_config	omitted	Generic config creation and mutation are excluded in favor of the typed scan-config and policy contracts.	spec/rest-api/emerging.yaml /configs paths; spec/rest-api/scan-configs.yaml; spec/rest-api/policies.yaml
+create_container_image_task	mapped	Specialized and compatibility task constructors map to typed modes of the single task-creation workflow.	spec/rest-api/tasks.yaml POST /tasks; crates/gvm-gateway-domain/src/tasks.rs
+create_container_task	mapped	Specialized and compatibility task constructors map to typed modes of the single task-creation workflow.	spec/rest-api/tasks.yaml POST /tasks; crates/gvm-gateway-domain/src/tasks.rs
+create_credential	exposed	The operation has a direct credential collection or item REST operation.	spec/rest-api/credentials.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/credentials.rs
+create_credential_store_credential	mapped	Store-backed credential helpers are selected by credential type within the common credential create/update workflows.	spec/rest-api/credentials.yaml /credentials paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/credentials.rs
+create_filter	exposed	The operation has a direct filter collection, item, or clone REST operation.	spec/rest-api/supporting-resources.yaml /filters paths
+create_group	exposed	The operation has a direct identity collection or item REST operation.	spec/rest-api/identity.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/identity.rs
+create_host	exposed	The operation has a direct host collection or item REST operation.	spec/rest-api/supporting-resources.yaml /hosts paths
+create_import_task	mapped	Specialized and compatibility task constructors map to typed modes of the single task-creation workflow.	spec/rest-api/tasks.yaml POST /tasks; crates/gvm-gateway-domain/src/tasks.rs
+create_note	exposed	The operation has a direct note collection or item REST operation.	spec/rest-api/supporting-resources.yaml /notes paths
+create_oci_image_target	exposed	The operation has a direct classic or specialized target REST collection, item, or clone operation.	spec/rest-api/targets.yaml; spec/rest-api/emerging.yaml specialized-target paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/targets.rs
+create_oci_image_target_task	mapped	Specialized and compatibility task constructors map to typed modes of the single task-creation workflow.	spec/rest-api/tasks.yaml POST /tasks; crates/gvm-gateway-domain/src/tasks.rs
+create_override	exposed	The operation has a direct override collection or item REST operation.	spec/rest-api/supporting-resources.yaml /overrides paths
+create_permission	exposed	The operation has a direct identity collection or item REST operation.	spec/rest-api/identity.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/identity.rs
+create_port_list	exposed	The operation has a direct port-list collection or item REST operation.	spec/rest-api/port-lists.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/port_lists.rs
+create_port_range	omitted	Port-list clone and range subcommands are not independent REST resources in the current contract.	spec/rest-api/port-lists.yaml; parent #381
+create_report_config	omitted	Report-configuration administration and discovery are deliberately outside the REST surface.	docs/upstream-surface-dispositions.md report-configuration family; parent #381
+create_role	exposed	The operation has a direct identity collection or item REST operation.	spec/rest-api/identity.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/identity.rs
+create_scan_config	exposed	The operation has a direct scan-config collection or item REST operation.	spec/rest-api/scan-configs.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/scan_configs.rs
+create_scanner	deferred	Scanner administration and verification require a dedicated appliance-ownership and secret-handling contract.	docs/upstream-surface-dispositions.md scanner-administration family; #401
+create_schedule	exposed	The operation has a direct schedule collection or item REST operation.	spec/rest-api/schedules.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/schedules.rs
+create_tag	exposed	The operation has a direct tag collection, item, or clone REST operation.	spec/rest-api/supporting-resources.yaml /tags paths
+create_target	exposed	The operation has a direct classic or specialized target REST collection, item, or clone operation.	spec/rest-api/targets.yaml; spec/rest-api/emerging.yaml specialized-target paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/targets.rs
+create_task	exposed	The operation has a direct task collection, item, clone, or lifecycle REST operation.	spec/rest-api/tasks.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/tasks.rs
+create_ticket	omitted	The gateway deliberately exposes no ticket surface.	docs/ticket-surface-scope.md; docs/gateway-architecture.md
+create_tls_certificate	omitted	TLS certificate administration is outside the current gateway surface.	docs/upstream-surface-dispositions.md TLS-certificate family; parent #381
+create_user	exposed	The operation has a direct identity collection or item REST operation.	spec/rest-api/identity.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/identity.rs
+create_web_application_target	exposed	The operation has a direct classic or specialized target REST collection, item, or clone operation.	spec/rest-api/targets.yaml; spec/rest-api/emerging.yaml specialized-target paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/targets.rs
+create_web_application_task	mapped	Specialized and compatibility task constructors map to typed modes of the single task-creation workflow.	spec/rest-api/tasks.yaml POST /tasks; crates/gvm-gateway-domain/src/tasks.rs
+delete_agent	exposed	The operation has a direct agent or agent-group REST resource/action.	spec/rest-api/emerging.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/agents.rs
+delete_agent_group	exposed	The operation has a direct agent or agent-group REST resource/action.	spec/rest-api/emerging.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/agents.rs
+delete_alert	exposed	The operation has a direct alert collection or item REST operation.	spec/rest-api/alerts.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/alerts.rs
+delete_asset	exposed	The operation has a direct generic-asset collection or item REST operation.	spec/rest-api/emerging.yaml /assets paths
+delete_audit	exposed	The operation has a direct audit collection, item, clone, or lifecycle REST operation.	spec/rest-api/audits.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/tasks.rs
+delete_audit_report	mapped	Audit/scan-specific report helpers map to the type-neutral report collection, item, host, and delete workflows.	spec/rest-api/reports.yaml; docs/upstream-surface-dispositions.md report-workflow family
+delete_config	exposed	The operation has a direct generic-config read, clone, or delete REST operation.	spec/rest-api/emerging.yaml /configs paths
+delete_credential	exposed	The operation has a direct credential collection or item REST operation.	spec/rest-api/credentials.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/credentials.rs
+delete_filter	exposed	The operation has a direct filter collection, item, or clone REST operation.	spec/rest-api/supporting-resources.yaml /filters paths
+delete_group	exposed	The operation has a direct identity collection or item REST operation.	spec/rest-api/identity.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/identity.rs
+delete_host	exposed	The operation has a direct host collection or item REST operation.	spec/rest-api/supporting-resources.yaml /hosts paths
+delete_note	exposed	The operation has a direct note collection or item REST operation.	spec/rest-api/supporting-resources.yaml /notes paths
+delete_oci_image_target	exposed	The operation has a direct classic or specialized target REST collection, item, or clone operation.	spec/rest-api/targets.yaml; spec/rest-api/emerging.yaml specialized-target paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/targets.rs
+delete_operating_system_asset	exposed	The operation has a direct operating-system collection or item REST operation.	spec/rest-api/supporting-resources.yaml /operating-systems paths
+delete_override	exposed	The operation has a direct override collection or item REST operation.	spec/rest-api/supporting-resources.yaml /overrides paths
+delete_permission	exposed	The operation has a direct identity collection or item REST operation.	spec/rest-api/identity.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/identity.rs
+delete_port_list	exposed	The operation has a direct port-list collection or item REST operation.	spec/rest-api/port-lists.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/port_lists.rs
+delete_port_range	omitted	Port-list clone and range subcommands are not independent REST resources in the current contract.	spec/rest-api/port-lists.yaml; parent #381
+delete_report	exposed	The operation has a direct report, report-subresource, result, or report-import REST operation.	spec/rest-api/reports.yaml; spec/rest-api/results.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/reports.rs
+delete_report_config	omitted	Report-configuration administration and discovery are deliberately outside the REST surface.	docs/upstream-surface-dispositions.md report-configuration family; parent #381
+delete_report_format	deferred	Report-format administration requires a dedicated administration and artifact-validation contract.	docs/upstream-surface-dispositions.md report-format family; parent #381
+delete_role	exposed	The operation has a direct identity collection or item REST operation.	spec/rest-api/identity.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/identity.rs
+delete_scan_config	exposed	The operation has a direct scan-config collection or item REST operation.	spec/rest-api/scan-configs.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/scan_configs.rs
+delete_scanner	deferred	Scanner administration and verification require a dedicated appliance-ownership and secret-handling contract.	docs/upstream-surface-dispositions.md scanner-administration family; #401
+delete_schedule	exposed	The operation has a direct schedule collection or item REST operation.	spec/rest-api/schedules.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/schedules.rs
+delete_tag	exposed	The operation has a direct tag collection, item, or clone REST operation.	spec/rest-api/supporting-resources.yaml /tags paths
+delete_target	exposed	The operation has a direct classic or specialized target REST collection, item, or clone operation.	spec/rest-api/targets.yaml; spec/rest-api/emerging.yaml specialized-target paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/targets.rs
+delete_task	exposed	The operation has a direct task collection, item, clone, or lifecycle REST operation.	spec/rest-api/tasks.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/tasks.rs
+delete_tls_certificate	omitted	TLS certificate administration is outside the current gateway surface.	docs/upstream-surface-dispositions.md TLS-certificate family; parent #381
+delete_user	exposed	The operation has a direct identity collection or item REST operation.	spec/rest-api/identity.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/identity.rs
+delete_web_application_target	exposed	The operation has a direct classic or specialized target REST collection, item, or clone operation.	spec/rest-api/targets.yaml; spec/rest-api/emerging.yaml specialized-target paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/targets.rs
+describe_auth	deferred	Authentication-configuration discovery and mutation require a separately reviewed administration and secret-handling contract.	docs/upstream-surface-dispositions.md authentication-configuration family; #401
+empty_trashcan	deferred	Bulk trash cleanup and restoration need resource-specific authorization and destructive-operation review.	docs/upstream-surface-dispositions.md trash cleanup and recovery family; parent #381
+export_scan_report	mapped	Synchronous upstream export helpers are represented by the bounded asynchronous report-export job workflow.	spec/rest-api/report-exports.yaml; crates/gvm-gateway-app/src/jobs.rs
+get_agent	exposed	The operation has a direct agent or agent-group REST resource/action.	spec/rest-api/emerging.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/agents.rs
+get_agent_group	exposed	The operation has a direct agent or agent-group REST resource/action.	spec/rest-api/emerging.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/agents.rs
+get_agent_groups	exposed	The operation has a direct agent or agent-group REST resource/action.	spec/rest-api/emerging.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/agents.rs
+get_agent_installer_instruction	exposed	The operation has a direct agent or agent-group REST resource/action.	spec/rest-api/emerging.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/agents.rs
+get_agent_support_bundle	exposed	The operation has a direct agent or agent-group REST resource/action.	spec/rest-api/emerging.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/agents.rs
+get_agents	exposed	The operation has a direct agent or agent-group REST resource/action.	spec/rest-api/emerging.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/agents.rs
+get_aggregates	omitted	Broad system discovery and global settings are outside the bounded public system surface.	docs/upstream-surface-dispositions.md system-discovery and global-settings families; parent #381
+get_alert	exposed	The operation has a direct alert collection or item REST operation.	spec/rest-api/alerts.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/alerts.rs
+get_alerts	exposed	The operation has a direct alert collection or item REST operation.	spec/rest-api/alerts.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/alerts.rs
+get_asset	exposed	The operation has a direct generic-asset collection or item REST operation.	spec/rest-api/emerging.yaml /assets paths
+get_assets	exposed	The operation has a direct generic-asset collection or item REST operation.	spec/rest-api/emerging.yaml /assets paths
+get_audit	exposed	The operation has a direct audit collection, item, clone, or lifecycle REST operation.	spec/rest-api/audits.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/tasks.rs
+get_audit_report	mapped	Audit/scan-specific report helpers map to the type-neutral report collection, item, host, and delete workflows.	spec/rest-api/reports.yaml; docs/upstream-surface-dispositions.md report-workflow family
+get_audit_report_hosts	mapped	Audit/scan-specific report helpers map to the type-neutral report collection, item, host, and delete workflows.	spec/rest-api/reports.yaml; docs/upstream-surface-dispositions.md report-workflow family
+get_audit_reports	mapped	Audit/scan-specific report helpers map to the type-neutral report collection, item, host, and delete workflows.	spec/rest-api/reports.yaml; docs/upstream-surface-dispositions.md report-workflow family
+get_audits	exposed	The operation has a direct audit collection, item, clone, or lifecycle REST operation.	spec/rest-api/audits.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/tasks.rs
+get_cert_bund_advisories	exposed	The specialized SecInfo operation has a direct collection or item REST resource.	spec/rest-api/supporting-resources.yaml SecInfo paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/supporting_resources.rs
+get_cert_bund_advisory	exposed	The specialized SecInfo operation has a direct collection or item REST resource.	spec/rest-api/supporting-resources.yaml SecInfo paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/supporting_resources.rs
+get_config	exposed	The operation has a direct generic-config read, clone, or delete REST operation.	spec/rest-api/emerging.yaml /configs paths
+get_configs	exposed	The operation has a direct generic-config read, clone, or delete REST operation.	spec/rest-api/emerging.yaml /configs paths
+get_cpe	exposed	The specialized SecInfo operation has a direct collection or item REST resource.	spec/rest-api/supporting-resources.yaml SecInfo paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/supporting_resources.rs
+get_cpes	exposed	The specialized SecInfo operation has a direct collection or item REST resource.	spec/rest-api/supporting-resources.yaml SecInfo paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/supporting_resources.rs
+get_credential_store	exposed	The operation has a direct credential-store collection, item, or verify REST operation.	spec/rest-api/credentials.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/credentials.rs
+get_credential_stores	exposed	The operation has a direct credential-store collection, item, or verify REST operation.	spec/rest-api/credentials.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/credentials.rs
+get_credentials	exposed	The operation has a direct credential collection or item REST operation.	spec/rest-api/credentials.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/credentials.rs
+get_cve	exposed	The specialized SecInfo operation has a direct collection or item REST resource.	spec/rest-api/supporting-resources.yaml SecInfo paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/supporting_resources.rs
+get_cves	exposed	The specialized SecInfo operation has a direct collection or item REST resource.	spec/rest-api/supporting-resources.yaml SecInfo paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/supporting_resources.rs
+get_dfn_cert_advisories	exposed	The specialized SecInfo operation has a direct collection or item REST resource.	spec/rest-api/supporting-resources.yaml SecInfo paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/supporting_resources.rs
+get_dfn_cert_advisory	exposed	The specialized SecInfo operation has a direct collection or item REST resource.	spec/rest-api/supporting-resources.yaml SecInfo paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/supporting_resources.rs
+get_features	omitted	Broad system discovery and global settings are outside the bounded public system surface.	docs/upstream-surface-dispositions.md system-discovery and global-settings families; parent #381
+get_feed	mapped	The type-filtered upstream helper maps to the feed collection's type query mode.	spec/rest-api/feeds.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/feeds.rs
+get_feeds	exposed	Feed status discovery has a direct REST collection.	spec/rest-api/feeds.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/feeds.rs
+get_filter	exposed	The operation has a direct filter collection, item, or clone REST operation.	spec/rest-api/supporting-resources.yaml /filters paths
+get_filters	exposed	The operation has a direct filter collection, item, or clone REST operation.	spec/rest-api/supporting-resources.yaml /filters paths
+get_group	exposed	The operation has a direct identity collection or item REST operation.	spec/rest-api/identity.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/identity.rs
+get_groups	exposed	The operation has a direct identity collection or item REST operation.	spec/rest-api/identity.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/identity.rs
+get_help	omitted	Broad system discovery and global settings are outside the bounded public system surface.	docs/upstream-surface-dispositions.md system-discovery and global-settings families; parent #381
+get_host	exposed	The operation has a direct host collection or item REST operation.	spec/rest-api/supporting-resources.yaml /hosts paths
+get_hosts	exposed	The operation has a direct host collection or item REST operation.	spec/rest-api/supporting-resources.yaml /hosts paths
+get_info	omitted	Generic SecInfo dispatch and observed-vulnerability detail are intentionally not exposed.	docs/upstream-surface-dispositions.md generic SecInfo family; parent #381
+get_info_list	omitted	Generic SecInfo dispatch and observed-vulnerability detail are intentionally not exposed.	docs/upstream-surface-dispositions.md generic SecInfo family; parent #381
+get_integration_config	deferred	Integration-configuration administration needs a separately reviewed ownership and secret-handling contract.	docs/upstream-surface-dispositions.md integration-configuration family; parent #381
+get_integration_configs	deferred	Integration-configuration administration needs a separately reviewed ownership and secret-handling contract.	docs/upstream-surface-dispositions.md integration-configuration family; parent #381
+get_legacy_aggregates	omitted	Broad system discovery and global settings are outside the bounded public system surface.	docs/upstream-surface-dispositions.md system-discovery and global-settings families; parent #381
+get_license	omitted	License content and administration are appliance concerns outside the gateway resource surface.	docs/upstream-surface-dispositions.md license-administration family; parent #381
+get_note	exposed	The operation has a direct note collection or item REST operation.	spec/rest-api/supporting-resources.yaml /notes paths
+get_notes	exposed	The operation has a direct note collection or item REST operation.	spec/rest-api/supporting-resources.yaml /notes paths
+get_nvt	exposed	The operation has a direct NVT, NVT-family, or scan-config-scoped NVT REST read.	spec/rest-api/supporting-resources.yaml /nvts and /nvt-families; spec/rest-api/scan-configs.yaml /nvts paths
+get_nvt_families	exposed	The operation has a direct NVT, NVT-family, or scan-config-scoped NVT REST read.	spec/rest-api/supporting-resources.yaml /nvts and /nvt-families; spec/rest-api/scan-configs.yaml /nvts paths
+get_nvt_preference	mapped	NVT preference helpers map to scan-config-scoped preference collection and item reads.	spec/rest-api/scan-configs.yaml /preferences paths; docs/upstream-surface-dispositions.md NVT preference family
+get_nvt_preferences	mapped	NVT preference helpers map to scan-config-scoped preference collection and item reads.	spec/rest-api/scan-configs.yaml /preferences paths; docs/upstream-surface-dispositions.md NVT preference family
+get_nvts	exposed	The operation has a direct NVT, NVT-family, or scan-config-scoped NVT REST read.	spec/rest-api/supporting-resources.yaml /nvts and /nvt-families; spec/rest-api/scan-configs.yaml /nvts paths
+get_oci_image_target	exposed	The operation has a direct classic or specialized target REST collection, item, or clone operation.	spec/rest-api/targets.yaml; spec/rest-api/emerging.yaml specialized-target paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/targets.rs
+get_oci_image_targets	exposed	The operation has a direct classic or specialized target REST collection, item, or clone operation.	spec/rest-api/targets.yaml; spec/rest-api/emerging.yaml specialized-target paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/targets.rs
+get_operating_system_asset	exposed	The operation has a direct operating-system collection or item REST operation.	spec/rest-api/supporting-resources.yaml /operating-systems paths
+get_operating_system_assets	exposed	The operation has a direct operating-system collection or item REST operation.	spec/rest-api/supporting-resources.yaml /operating-systems paths
+get_override	exposed	The operation has a direct override collection or item REST operation.	spec/rest-api/supporting-resources.yaml /overrides paths
+get_overrides	exposed	The operation has a direct override collection or item REST operation.	spec/rest-api/supporting-resources.yaml /overrides paths
+get_permission	exposed	The operation has a direct identity collection or item REST operation.	spec/rest-api/identity.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/identity.rs
+get_permissions	exposed	The operation has a direct identity collection or item REST operation.	spec/rest-api/identity.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/identity.rs
+get_policies	exposed	The operation has a direct policy collection or item REST read.	spec/rest-api/policies.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/scan_configs.rs
+get_policy	exposed	The operation has a direct policy collection or item REST read.	spec/rest-api/policies.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/scan_configs.rs
+get_port_list	exposed	The operation has a direct port-list collection or item REST operation.	spec/rest-api/port-lists.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/port_lists.rs
+get_port_lists	exposed	The operation has a direct port-list collection or item REST operation.	spec/rest-api/port-lists.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/port_lists.rs
+get_report	exposed	The operation has a direct report, report-subresource, result, or report-import REST operation.	spec/rest-api/reports.yaml; spec/rest-api/results.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/reports.rs
+get_report_applications	exposed	The operation has a direct report, report-subresource, result, or report-import REST operation.	spec/rest-api/reports.yaml; spec/rest-api/results.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/reports.rs
+get_report_closed_cves	exposed	The operation has a direct report, report-subresource, result, or report-import REST operation.	spec/rest-api/reports.yaml; spec/rest-api/results.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/reports.rs
+get_report_config	omitted	Report-configuration administration and discovery are deliberately outside the REST surface.	docs/upstream-surface-dispositions.md report-configuration family; parent #381
+get_report_configs	omitted	Report-configuration administration and discovery are deliberately outside the REST surface.	docs/upstream-surface-dispositions.md report-configuration family; parent #381
+get_report_cves	exposed	The operation has a direct report, report-subresource, result, or report-import REST operation.	spec/rest-api/reports.yaml; spec/rest-api/results.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/reports.rs
+get_report_errors	exposed	The operation has a direct report, report-subresource, result, or report-import REST operation.	spec/rest-api/reports.yaml; spec/rest-api/results.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/reports.rs
+get_report_export	mapped	Synchronous upstream export helpers are represented by the bounded asynchronous report-export job workflow.	spec/rest-api/report-exports.yaml; crates/gvm-gateway-app/src/jobs.rs
+get_report_format	exposed	Report-format discovery has direct read-only REST resources.	spec/rest-api/supporting-resources.yaml /report-formats paths
+get_report_formats	exposed	Report-format discovery has direct read-only REST resources.	spec/rest-api/supporting-resources.yaml /report-formats paths
+get_report_hosts	exposed	The operation has a direct report, report-subresource, result, or report-import REST operation.	spec/rest-api/reports.yaml; spec/rest-api/results.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/reports.rs
+get_report_operating_systems	exposed	The operation has a direct report, report-subresource, result, or report-import REST operation.	spec/rest-api/reports.yaml; spec/rest-api/results.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/reports.rs
+get_report_ports	exposed	The operation has a direct report, report-subresource, result, or report-import REST operation.	spec/rest-api/reports.yaml; spec/rest-api/results.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/reports.rs
+get_report_tls_certificates	exposed	The operation has a direct report, report-subresource, result, or report-import REST operation.	spec/rest-api/reports.yaml; spec/rest-api/results.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/reports.rs
+get_report_vulns	exposed	The operation has a direct report, report-subresource, result, or report-import REST operation.	spec/rest-api/reports.yaml; spec/rest-api/results.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/reports.rs
+get_reports	exposed	The operation has a direct report, report-subresource, result, or report-import REST operation.	spec/rest-api/reports.yaml; spec/rest-api/results.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/reports.rs
+get_resource_name	omitted	Broad system discovery and global settings are outside the bounded public system surface.	docs/upstream-surface-dispositions.md system-discovery and global-settings families; parent #381
+get_resource_names	omitted	Broad system discovery and global settings are outside the bounded public system surface.	docs/upstream-surface-dispositions.md system-discovery and global-settings families; parent #381
+get_result	exposed	The operation has a direct report, report-subresource, result, or report-import REST operation.	spec/rest-api/reports.yaml; spec/rest-api/results.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/reports.rs
+get_results	exposed	The operation has a direct report, report-subresource, result, or report-import REST operation.	spec/rest-api/reports.yaml; spec/rest-api/results.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/reports.rs
+get_role	exposed	The operation has a direct identity collection or item REST operation.	spec/rest-api/identity.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/identity.rs
+get_roles	exposed	The operation has a direct identity collection or item REST operation.	spec/rest-api/identity.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/identity.rs
+get_scan_config	exposed	The operation has a direct scan-config collection or item REST operation.	spec/rest-api/scan-configs.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/scan_configs.rs
+get_scan_config_nvt	exposed	The operation has a direct NVT, NVT-family, or scan-config-scoped NVT REST read.	spec/rest-api/supporting-resources.yaml /nvts and /nvt-families; spec/rest-api/scan-configs.yaml /nvts paths
+get_scan_config_nvts	exposed	The operation has a direct NVT, NVT-family, or scan-config-scoped NVT REST read.	spec/rest-api/supporting-resources.yaml /nvts and /nvt-families; spec/rest-api/scan-configs.yaml /nvts paths
+get_scan_configs	exposed	The operation has a direct scan-config collection or item REST operation.	spec/rest-api/scan-configs.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/scan_configs.rs
+get_scan_report	mapped	Audit/scan-specific report helpers map to the type-neutral report collection, item, host, and delete workflows.	spec/rest-api/reports.yaml; docs/upstream-surface-dispositions.md report-workflow family
+get_scanner	exposed	Scanner discovery has direct read-only REST resources.	spec/rest-api/scanners.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/scanners.rs
+get_scanners	exposed	Scanner discovery has direct read-only REST resources.	spec/rest-api/scanners.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/scanners.rs
+get_schedule	exposed	The operation has a direct schedule collection or item REST operation.	spec/rest-api/schedules.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/schedules.rs
+get_schedules	exposed	The operation has a direct schedule collection or item REST operation.	spec/rest-api/schedules.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/schedules.rs
+get_settings	omitted	Broad system discovery and global settings are outside the bounded public system surface.	docs/upstream-surface-dispositions.md system-discovery and global-settings families; parent #381
+get_system_reports	omitted	Broad system discovery and global settings are outside the bounded public system surface.	docs/upstream-surface-dispositions.md system-discovery and global-settings families; parent #381
+get_tag	exposed	The operation has a direct tag collection, item, or clone REST operation.	spec/rest-api/supporting-resources.yaml /tags paths
+get_tags	exposed	The operation has a direct tag collection, item, or clone REST operation.	spec/rest-api/supporting-resources.yaml /tags paths
+get_target	exposed	The operation has a direct classic or specialized target REST collection, item, or clone operation.	spec/rest-api/targets.yaml; spec/rest-api/emerging.yaml specialized-target paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/targets.rs
+get_targets	exposed	The operation has a direct classic or specialized target REST collection, item, or clone operation.	spec/rest-api/targets.yaml; spec/rest-api/emerging.yaml specialized-target paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/targets.rs
+get_task	exposed	The operation has a direct task collection, item, clone, or lifecycle REST operation.	spec/rest-api/tasks.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/tasks.rs
+get_tasks	exposed	The operation has a direct task collection, item, clone, or lifecycle REST operation.	spec/rest-api/tasks.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/tasks.rs
+get_tickets	omitted	The gateway deliberately exposes no ticket surface.	docs/ticket-surface-scope.md; docs/gateway-architecture.md
+get_timezones	exposed	Timezone discovery has a direct authenticated REST collection.	spec/rest-api/system.yaml /timezones; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/system.rs
+get_tls_certificate	exposed	TLS certificate discovery has direct read-only REST resources.	spec/rest-api/supporting-resources.yaml /tls-certificates paths
+get_tls_certificates	exposed	TLS certificate discovery has direct read-only REST resources.	spec/rest-api/supporting-resources.yaml /tls-certificates paths
+get_user	exposed	The operation has a direct identity collection or item REST operation.	spec/rest-api/identity.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/identity.rs
+get_users	exposed	The operation has a direct identity collection or item REST operation.	spec/rest-api/identity.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/identity.rs
+get_version	exposed	The backend GMP version is exposed through the public version resource.	spec/rest-api/system.yaml /version; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/system.rs
+get_vulnerabilities	exposed	Observed-vulnerability discovery has a direct REST collection.	spec/rest-api/supporting-resources.yaml /vulnerabilities
+get_vulnerability	omitted	Generic SecInfo dispatch and observed-vulnerability detail are intentionally not exposed.	docs/upstream-surface-dispositions.md generic SecInfo family; parent #381
+get_web_application_target	exposed	The operation has a direct classic or specialized target REST collection, item, or clone operation.	spec/rest-api/targets.yaml; spec/rest-api/emerging.yaml specialized-target paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/targets.rs
+get_web_application_targets	exposed	The operation has a direct classic or specialized target REST collection, item, or clone operation.	spec/rest-api/targets.yaml; spec/rest-api/emerging.yaml specialized-target paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/targets.rs
+import_policy	omitted	Policy import is not part of the explicit-base copy creation contract.	spec/rest-api/policies.yaml; parent #381
+import_report	exposed	The operation has a direct report, report-subresource, result, or report-import REST operation.	spec/rest-api/reports.yaml; spec/rest-api/results.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/reports.rs
+import_report_format	deferred	Report-format administration requires a dedicated administration and artifact-validation contract.	docs/upstream-surface-dispositions.md report-format family; parent #381
+import_scan_config	omitted	Scan-config import is not part of the explicit-base copy creation contract.	spec/rest-api/scan-configs.yaml; docs/upstream-surface-dispositions.md scan-config family
+modify_agent	exposed	The operation has a direct agent or agent-group REST resource/action.	spec/rest-api/emerging.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/agents.rs
+modify_agent_control_scan_config	exposed	The operation has a direct agent or agent-group REST resource/action.	spec/rest-api/emerging.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/agents.rs
+modify_agent_group	exposed	The operation has a direct agent or agent-group REST resource/action.	spec/rest-api/emerging.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/agents.rs
+modify_alert	exposed	The operation has a direct alert collection or item REST operation.	spec/rest-api/alerts.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/alerts.rs
+modify_asset	exposed	The operation has a direct generic-asset collection or item REST operation.	spec/rest-api/emerging.yaml /assets paths
+modify_audit	exposed	The operation has a direct audit collection, item, clone, or lifecycle REST operation.	spec/rest-api/audits.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/tasks.rs
+modify_auth	deferred	Authentication-configuration discovery and mutation require a separately reviewed administration and secret-handling contract.	docs/upstream-surface-dispositions.md authentication-configuration family; #401
+modify_config	omitted	Generic config creation and mutation are excluded in favor of the typed scan-config and policy contracts.	spec/rest-api/emerging.yaml /configs paths; spec/rest-api/scan-configs.yaml; spec/rest-api/policies.yaml
+modify_credential	exposed	The operation has a direct credential collection or item REST operation.	spec/rest-api/credentials.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/credentials.rs
+modify_credential_store_credential	mapped	Store-backed credential helpers are selected by credential type within the common credential create/update workflows.	spec/rest-api/credentials.yaml /credentials paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/credentials.rs
+modify_filter	exposed	The operation has a direct filter collection, item, or clone REST operation.	spec/rest-api/supporting-resources.yaml /filters paths
+modify_group	exposed	The operation has a direct identity collection or item REST operation.	spec/rest-api/identity.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/identity.rs
+modify_host	exposed	The operation has a direct host collection or item REST operation.	spec/rest-api/supporting-resources.yaml /hosts paths
+modify_integration_config	deferred	Integration-configuration administration needs a separately reviewed ownership and secret-handling contract.	docs/upstream-surface-dispositions.md integration-configuration family; parent #381
+modify_license	omitted	License content and administration are appliance concerns outside the gateway resource surface.	docs/upstream-surface-dispositions.md license-administration family; parent #381
+modify_note	exposed	The operation has a direct note collection or item REST operation.	spec/rest-api/supporting-resources.yaml /notes paths
+modify_oci_image_target	exposed	The operation has a direct classic or specialized target REST collection, item, or clone operation.	spec/rest-api/targets.yaml; spec/rest-api/emerging.yaml specialized-target paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/targets.rs
+modify_override	exposed	The operation has a direct override collection or item REST operation.	spec/rest-api/supporting-resources.yaml /overrides paths
+modify_permission	exposed	The operation has a direct identity collection or item REST operation.	spec/rest-api/identity.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/identity.rs
+modify_policy_set_comment	mapped	Specialized policy name/comment helpers map to the single policy update workflow.	spec/rest-api/policies.yaml /policies/{id}
+modify_policy_set_name	mapped	Specialized policy name/comment helpers map to the single policy update workflow.	spec/rest-api/policies.yaml /policies/{id}
+modify_port_list	exposed	The operation has a direct port-list collection or item REST operation.	spec/rest-api/port-lists.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/port_lists.rs
+modify_report_config	omitted	Report-configuration administration and discovery are deliberately outside the REST surface.	docs/upstream-surface-dispositions.md report-configuration family; parent #381
+modify_report_format	deferred	Report-format administration requires a dedicated administration and artifact-validation contract.	docs/upstream-surface-dispositions.md report-format family; parent #381
+modify_role	exposed	The operation has a direct identity collection or item REST operation.	spec/rest-api/identity.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/identity.rs
+modify_scan_config	exposed	The operation has a direct scan-config collection or item REST operation.	spec/rest-api/scan-configs.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/scan_configs.rs
+modify_scan_config_set_comment	mapped	Specialized clone/name/comment helpers map to generic config clone or scan-config update workflows.	spec/rest-api/emerging.yaml /configs/{id}/clone; spec/rest-api/scan-configs.yaml /scan-configs/{id}
+modify_scan_config_set_name	mapped	Specialized clone/name/comment helpers map to generic config clone or scan-config update workflows.	spec/rest-api/emerging.yaml /configs/{id}/clone; spec/rest-api/scan-configs.yaml /scan-configs/{id}
+modify_scanner	deferred	Scanner administration and verification require a dedicated appliance-ownership and secret-handling contract.	docs/upstream-surface-dispositions.md scanner-administration family; #401
+modify_schedule	exposed	The operation has a direct schedule collection or item REST operation.	spec/rest-api/schedules.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/schedules.rs
+modify_tag	exposed	The operation has a direct tag collection, item, or clone REST operation.	spec/rest-api/supporting-resources.yaml /tags paths
+modify_target	exposed	The operation has a direct classic or specialized target REST collection, item, or clone operation.	spec/rest-api/targets.yaml; spec/rest-api/emerging.yaml specialized-target paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/targets.rs
+modify_task	exposed	The operation has a direct task collection, item, clone, or lifecycle REST operation.	spec/rest-api/tasks.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/tasks.rs
+modify_ticket	omitted	The gateway deliberately exposes no ticket surface.	docs/ticket-surface-scope.md; docs/gateway-architecture.md
+modify_tls_certificate	omitted	TLS certificate administration is outside the current gateway surface.	docs/upstream-surface-dispositions.md TLS-certificate family; parent #381
+modify_user	exposed	The operation has a direct identity collection or item REST operation.	spec/rest-api/identity.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/identity.rs
+modify_web_application_target	exposed	The operation has a direct classic or specialized target REST collection, item, or clone operation.	spec/rest-api/targets.yaml; spec/rest-api/emerging.yaml specialized-target paths; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/targets.rs
+move_task	omitted	Cross-container task movement has no REST resource contract.	spec/rest-api/tasks.yaml; parent #381
+restore	deferred	Bulk trash cleanup and restoration need resource-specific authorization and destructive-operation review.	docs/upstream-surface-dispositions.md trash cleanup and recovery family; parent #381
+resume_audit	exposed	The operation has a direct audit collection, item, clone, or lifecycle REST operation.	spec/rest-api/audits.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/tasks.rs
+resume_task	exposed	The operation has a direct task collection, item, clone, or lifecycle REST operation.	spec/rest-api/tasks.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/tasks.rs
+run_wizard	omitted	Open-ended wizard execution has no approved product or REST contract.	docs/upstream-surface-dispositions.md wizard-execution family; parent #381
+start_audit	exposed	The operation has a direct audit collection, item, clone, or lifecycle REST operation.	spec/rest-api/audits.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/tasks.rs
+start_task	exposed	The operation has a direct task collection, item, clone, or lifecycle REST operation.	spec/rest-api/tasks.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/tasks.rs
+stop_audit	exposed	The operation has a direct audit collection, item, clone, or lifecycle REST operation.	spec/rest-api/audits.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/tasks.rs
+stop_task	exposed	The operation has a direct task collection, item, clone, or lifecycle REST operation.	spec/rest-api/tasks.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/tasks.rs
+sync_agents	exposed	The operation has a direct agent or agent-group REST resource/action.	spec/rest-api/emerging.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/agents.rs
+test_alert	omitted	The REST alert contract intentionally exposes CRUD only and does not add clone, test, or trigger controller actions.	spec/rest-api/alerts.yaml; docs/upstream-surface-dispositions.md alert-action family
+trigger_alert	omitted	The REST alert contract intentionally exposes CRUD only and does not add clone, test, or trigger controller actions.	spec/rest-api/alerts.yaml; docs/upstream-surface-dispositions.md alert-action family
+verify_credential_store	exposed	The operation has a direct credential-store collection, item, or verify REST operation.	spec/rest-api/credentials.yaml; crates/gvm-gateway-gvmd/src/gvmd_adapter/ports/credentials.rs
+verify_report_format	deferred	Report-format administration requires a dedicated administration and artifact-validation contract.	docs/upstream-surface-dispositions.md report-format family; parent #381
+verify_scanner	deferred	Scanner administration and verification require a dedicated appliance-ownership and secret-handling contract.	docs/upstream-surface-dispositions.md scanner-administration family; #401

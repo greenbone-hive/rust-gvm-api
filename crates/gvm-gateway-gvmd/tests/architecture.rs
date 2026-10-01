@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Greenbone AG
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
 };
@@ -18,6 +18,12 @@ const RUST_GVM_COMPONENTS: &[&str] = &[
 // baseline and must remain immutable across all five workspace dependencies.
 const RUST_GVM_RELEASE_TAG: &str = "v0.7.0";
 const RUST_GVM_RELEASE_REVISION: &str = "acdabf5a039d78df82e86b69ee8a374df8575c7a";
+const RUST_GVM_TYPED_FACADE_METHOD_COUNT: usize = 261;
+const RUST_GVM_TYPED_FACADE_SNAPSHOT: &str = "tests/fixtures/rust-gvm-v0.7.0-typed-facade.tsv";
+const RUST_GVM_DISPOSITION_LEDGER: &str = "../../docs/upstream-surface-dispositions.tsv";
+const ALLOWED_DISPOSITIONS: &[&str] = &[
+    "exposed", "mapped", "internal", "blocked", "deferred", "omitted",
+];
 
 const REMOVED_CANONICAL_TRANSITION_TYPES: &[&str] = &[
     "CreateTargetOpts",
@@ -110,6 +116,20 @@ struct Finding {
     line: usize,
     marker: &'static str,
     text: String,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct PinnedMethodInventory {
+    tag: String,
+    revision: String,
+    methods: BTreeSet<String>,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct DispositionLedger {
+    tag: String,
+    revision: String,
+    methods: BTreeSet<String>,
 }
 
 const FORBIDDEN_MARKERS: &[(&str, &str)] = &[
@@ -292,6 +312,139 @@ fn rust_gvm_components_resolve_to_one_revision() {
             "{component} must not use a moving branch dependency: {dependency}"
         );
     }
+}
+
+#[test]
+fn rust_gvm_typed_facade_dispositions_are_complete_and_pinned() {
+    // Issue #573 closes the downstream review for every public async helper in
+    // the pinned facade. The checked-in source snapshot keeps this test fully
+    // offline, while shared tag/revision constants couple reconciliation to the
+    // immutable dependency-pin guard above.
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let snapshot_source = fs::read_to_string(manifest_dir.join(RUST_GVM_TYPED_FACADE_SNAPSHOT))
+        .expect("read checked-in rust-gvm typed-facade snapshot");
+    let ledger_source = fs::read_to_string(manifest_dir.join(RUST_GVM_DISPOSITION_LEDGER))
+        .expect("read downstream disposition ledger");
+    let snapshot = parse_pinned_method_inventory(&snapshot_source).unwrap_or_else(|errors| {
+        panic!(
+            "invalid checked-in rust-gvm typed-facade snapshot:\n- {}",
+            errors.join("\n- ")
+        )
+    });
+    let ledger = parse_disposition_ledger(&ledger_source).unwrap_or_else(|errors| {
+        panic!(
+            "invalid downstream disposition ledger:\n- {}",
+            errors.join("\n- ")
+        )
+    });
+
+    let mut errors = pinned_metadata_errors("upstream snapshot", &snapshot.tag, &snapshot.revision);
+    errors.extend(pinned_metadata_errors(
+        "disposition ledger",
+        &ledger.tag,
+        &ledger.revision,
+    ));
+    if snapshot.methods.len() != RUST_GVM_TYPED_FACADE_METHOD_COUNT {
+        errors.push(format!(
+            "upstream snapshot has {} methods, expected {RUST_GVM_TYPED_FACADE_METHOD_COUNT}; regenerate it from rust-gvm {RUST_GVM_RELEASE_TAG} at {RUST_GVM_RELEASE_REVISION}",
+            snapshot.methods.len()
+        ));
+    }
+    errors.extend(reconcile_disposition_ledger(&snapshot, &ledger));
+
+    assert!(
+        errors.is_empty(),
+        "rust-gvm typed-facade disposition drift requires explicit ledger reconciliation:\n- {}",
+        errors.join("\n- ")
+    );
+}
+
+#[test]
+fn disposition_ledger_rejects_malformed_rows_and_blank_required_fields() {
+    // Malformed TSV and blank review evidence must fail closed instead of
+    // silently turning an incomplete row into an accepted classification.
+    let errors = parse_disposition_ledger(concat!(
+        "# rust-gvm-tag\tv0.7.0\n",
+        "# rust-gvm-revision\tacdabf5a039d78df82e86b69ee8a374df8575c7a\n",
+        "method\tdisposition\trationale\tevidence\n",
+        "get_version\texposed\tonly three columns\n",
+        "get_targets\texposed\t\tspec/rest-api/targets.yaml\n",
+        "get_tasks\texposed\tdirect task read\t\n",
+    ))
+    .expect_err("malformed and blank required fields must be rejected");
+
+    assert!(errors
+        .iter()
+        .any(|error| error.contains("expected 4 columns")));
+    assert!(errors.iter().any(|error| error.contains("blank rationale")));
+    assert!(errors.iter().any(|error| error.contains("blank evidence")));
+}
+
+#[test]
+fn disposition_ledger_rejects_duplicate_methods() {
+    // One upstream method must have one and only one downstream decision so a
+    // later row cannot shadow a reviewed classification.
+    let errors = parse_disposition_ledger(concat!(
+        "# rust-gvm-tag\tv0.7.0\n",
+        "# rust-gvm-revision\tacdabf5a039d78df82e86b69ee8a374df8575c7a\n",
+        "method\tdisposition\trationale\tevidence\n",
+        "get_version\texposed\tpublic version\tspec/rest-api/system.yaml\n",
+        "get_version\tinternal\tprobe only\tcrates/gvm-gateway-gvmd/src\n",
+    ))
+    .expect_err("duplicate ledger methods must be rejected");
+
+    assert!(errors.iter().any(|error| {
+        error.contains("duplicate method get_version") && error.contains("first declared on line 4")
+    }));
+}
+
+#[test]
+fn disposition_ledger_rejects_unknown_dispositions() {
+    // The six reviewed disposition values are a closed vocabulary; spelling
+    // drift must not create an accidental seventh classification.
+    let errors = parse_disposition_ledger(concat!(
+        "# rust-gvm-tag\tv0.7.0\n",
+        "# rust-gvm-revision\tacdabf5a039d78df82e86b69ee8a374df8575c7a\n",
+        "method\tdisposition\trationale\tevidence\n",
+        "get_version\tadopted\tpublic version\tspec/rest-api/system.yaml\n",
+    ))
+    .expect_err("unknown dispositions must be rejected");
+
+    assert!(errors.iter().any(|error| {
+        error.contains("unknown disposition adopted") && error.contains("allowed values")
+    }));
+}
+
+#[test]
+fn disposition_reconciliation_reports_added_removed_and_renamed_methods() {
+    // A changed upstream inventory must identify both new/unclassified helpers
+    // and stale ledger rows, which together make method renames actionable.
+    let snapshot = parse_pinned_method_inventory(concat!(
+        "# rust-gvm-tag\tv0.7.0\n",
+        "# rust-gvm-revision\tacdabf5a039d78df82e86b69ee8a374df8575c7a\n",
+        "module\tmethod\n",
+        "core\tget_version\n",
+        "core\tnew_upstream_method\n",
+    ))
+    .expect("valid test inventory");
+    let ledger = parse_disposition_ledger(concat!(
+        "# rust-gvm-tag\tv0.7.0\n",
+        "# rust-gvm-revision\tacdabf5a039d78df82e86b69ee8a374df8575c7a\n",
+        "method\tdisposition\trationale\tevidence\n",
+        "get_version\texposed\tpublic version\tspec/rest-api/system.yaml\n",
+        "removed_upstream_method\tomitted\tretired helper\tparent #381\n",
+    ))
+    .expect("valid test ledger");
+
+    let errors = reconcile_disposition_ledger(&snapshot, &ledger);
+    assert!(errors.iter().any(|error| {
+        error.contains("unclassified upstream methods (added or renamed)")
+            && error.contains("new_upstream_method")
+    }));
+    assert!(errors.iter().any(|error| {
+        error.contains("ledger methods absent from upstream snapshot (removed or renamed)")
+            && error.contains("removed_upstream_method")
+    }));
 }
 
 #[test]
@@ -987,6 +1140,220 @@ fn migrated_supporting_resource_families_stay_on_typed_execution() {
             "scan-config NVT reads must use canonical request {request}"
         );
     }
+}
+
+fn parse_pinned_method_inventory(contents: &str) -> Result<PinnedMethodInventory, Vec<String>> {
+    let lines = contents.lines().collect::<Vec<_>>();
+    let mut errors = Vec::new();
+    let tag = parse_metadata_value(&lines, 0, "rust-gvm-tag", "upstream snapshot", &mut errors);
+    let revision = parse_metadata_value(
+        &lines,
+        1,
+        "rust-gvm-revision",
+        "upstream snapshot",
+        &mut errors,
+    );
+    if lines.get(2) != Some(&"module\tmethod") {
+        errors.push(
+            "upstream snapshot line 3 must be the exact header module<TAB>method".to_string(),
+        );
+    }
+
+    let mut methods = BTreeSet::new();
+    let mut first_lines = BTreeMap::new();
+    for (index, line) in lines.iter().enumerate().skip(3) {
+        let line_number = index + 1;
+        let columns = line.split('\t').collect::<Vec<_>>();
+        if columns.len() != 2 {
+            errors.push(format!(
+                "upstream snapshot line {line_number} expected 2 columns, found {}",
+                columns.len()
+            ));
+            continue;
+        }
+        let module = columns[0];
+        let method = columns[1];
+        if !is_snake_case_identifier(module) {
+            errors.push(format!(
+                "upstream snapshot line {line_number} has invalid or blank module {module:?}"
+            ));
+        }
+        if !is_snake_case_identifier(method) {
+            errors.push(format!(
+                "upstream snapshot line {line_number} has invalid or blank method {method:?}"
+            ));
+            continue;
+        }
+        if let Some(first_line) = first_lines.insert(method.to_string(), line_number) {
+            errors.push(format!(
+                "upstream snapshot line {line_number} duplicates method {method} first declared on line {first_line}"
+            ));
+        } else {
+            methods.insert(method.to_string());
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(PinnedMethodInventory {
+            tag,
+            revision,
+            methods,
+        })
+    } else {
+        Err(errors)
+    }
+}
+
+fn parse_disposition_ledger(contents: &str) -> Result<DispositionLedger, Vec<String>> {
+    let lines = contents.lines().collect::<Vec<_>>();
+    let mut errors = Vec::new();
+    let tag = parse_metadata_value(&lines, 0, "rust-gvm-tag", "ledger", &mut errors);
+    let revision = parse_metadata_value(&lines, 1, "rust-gvm-revision", "ledger", &mut errors);
+    if lines.get(2) != Some(&"method\tdisposition\trationale\tevidence") {
+        errors.push(
+            "ledger line 3 must be the exact header method<TAB>disposition<TAB>rationale<TAB>evidence"
+                .to_string(),
+        );
+    }
+
+    let mut methods = BTreeSet::new();
+    let mut first_lines = BTreeMap::new();
+    for (index, line) in lines.iter().enumerate().skip(3) {
+        let line_number = index + 1;
+        let columns = line.split('\t').collect::<Vec<_>>();
+        if columns.len() != 4 {
+            errors.push(format!(
+                "ledger line {line_number} expected 4 columns, found {}",
+                columns.len()
+            ));
+            continue;
+        }
+        let method = columns[0];
+        let disposition = columns[1];
+        let rationale = columns[2];
+        let evidence = columns[3];
+        if !is_snake_case_identifier(method) {
+            errors.push(format!(
+                "ledger line {line_number} has invalid or blank method {method:?}"
+            ));
+            continue;
+        }
+        if !ALLOWED_DISPOSITIONS.contains(&disposition) {
+            errors.push(format!(
+                "ledger line {line_number} has unknown disposition {disposition}; allowed values: {}",
+                ALLOWED_DISPOSITIONS.join(", ")
+            ));
+        }
+        if rationale.trim().is_empty() {
+            errors.push(format!(
+                "ledger line {line_number} for {method} has blank rationale"
+            ));
+        }
+        if evidence.trim().is_empty() {
+            errors.push(format!(
+                "ledger line {line_number} for {method} has blank evidence"
+            ));
+        }
+        if let Some(first_line) = first_lines.insert(method.to_string(), line_number) {
+            errors.push(format!(
+                "ledger line {line_number} has duplicate method {method}, first declared on line {first_line}"
+            ));
+        } else {
+            methods.insert(method.to_string());
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(DispositionLedger {
+            tag,
+            revision,
+            methods,
+        })
+    } else {
+        Err(errors)
+    }
+}
+
+fn parse_metadata_value(
+    lines: &[&str],
+    index: usize,
+    key: &str,
+    source: &str,
+    errors: &mut Vec<String>,
+) -> String {
+    let line_number = index + 1;
+    let prefix = format!("# {key}\t");
+    let Some(line) = lines.get(index) else {
+        errors.push(format!(
+            "{source} is missing required metadata line {line_number}: {key}"
+        ));
+        return String::new();
+    };
+    let Some(value) = line.strip_prefix(&prefix) else {
+        errors.push(format!(
+            "{source} line {line_number} must start with {prefix:?}"
+        ));
+        return String::new();
+    };
+    if value.trim().is_empty() || value.contains('\t') {
+        errors.push(format!(
+            "{source} line {line_number} has invalid or blank {key} metadata"
+        ));
+        return String::new();
+    }
+    value.to_string()
+}
+
+fn is_snake_case_identifier(value: &str) -> bool {
+    !value.is_empty()
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
+}
+
+fn pinned_metadata_errors(label: &str, tag: &str, revision: &str) -> Vec<String> {
+    let mut errors = Vec::new();
+    if tag != RUST_GVM_RELEASE_TAG {
+        errors.push(format!(
+            "{label} tag is {tag:?}, expected {RUST_GVM_RELEASE_TAG:?}; regenerate the upstream snapshot and reconcile every ledger row with the dependency pin"
+        ));
+    }
+    if revision != RUST_GVM_RELEASE_REVISION {
+        errors.push(format!(
+            "{label} revision is {revision:?}, expected {RUST_GVM_RELEASE_REVISION:?}; regenerate the upstream snapshot and reconcile every ledger row with the dependency pin"
+        ));
+    }
+    errors
+}
+
+fn reconcile_disposition_ledger(
+    snapshot: &PinnedMethodInventory,
+    ledger: &DispositionLedger,
+) -> Vec<String> {
+    let mut errors = Vec::new();
+    let unclassified = snapshot
+        .methods
+        .difference(&ledger.methods)
+        .cloned()
+        .collect::<Vec<_>>();
+    if !unclassified.is_empty() {
+        errors.push(format!(
+            "unclassified upstream methods (added or renamed): {}",
+            unclassified.join(", ")
+        ));
+    }
+    let stale = ledger
+        .methods
+        .difference(&snapshot.methods)
+        .cloned()
+        .collect::<Vec<_>>();
+    if !stale.is_empty() {
+        errors.push(format!(
+            "ledger methods absent from upstream snapshot (removed or renamed): {}",
+            stale.join(", ")
+        ));
+    }
+    errors
 }
 
 fn section_between<'a>(contents: &'a str, start: &str, end: &str) -> &'a str {
