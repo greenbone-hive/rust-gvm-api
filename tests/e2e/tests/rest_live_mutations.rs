@@ -297,12 +297,14 @@ async fn discover_scan_config_fixture(
         .map(|family| family.name)
         .collect::<BTreeSet<_>>();
     let scan_configs = harness.list_scan_configs(token).await?;
+    // Fresh gvmd stacks expose feed-owned bases as read-only. The copy route
+    // accepts those bases and creates the writable disposable config that this
+    // test mutates, so base writability is not a valid discovery requirement.
     let candidates = scan_configs.into_iter().filter(|config| {
-        config.writable == Some(true)
-            && config
-                .usage_type
-                .as_deref()
-                .is_none_or(|value| value == "scan")
+        config
+            .usage_type
+            .as_deref()
+            .is_none_or(|value| value == "scan")
     });
 
     for base in candidates {
@@ -379,7 +381,7 @@ async fn discover_scan_config_fixture(
     }
 
     bail!(
-        "no writable scan config exposed a restorable feed-backed selection and a preference with a non-default alternative"
+        "no scan-config base exposed a restorable feed-backed selection and a safely mutable preference"
     )
 }
 
@@ -387,13 +389,40 @@ fn find_mutable_preference(
     preferences: Vec<ScanConfigPreference>,
 ) -> Option<(ScanConfigPreference, String)> {
     preferences.into_iter().find_map(|preference| {
-        let current = preference.value.as_deref()?;
-        let alternative = preference.alternatives.iter().find(|alternative| {
-            alternative.as_str() != current
-                && preference.default.as_deref() != Some(alternative.as_str())
-        })?;
-        Some((preference.clone(), alternative.clone()))
+        let mutation = derive_preference_mutation(&preference)?;
+        Some((preference, mutation))
     })
+}
+
+fn derive_preference_mutation(preference: &ScanConfigPreference) -> Option<String> {
+    let current = preference.value.as_deref()?;
+    if preference
+        .preference_type
+        .as_deref()
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("password"))
+    {
+        return None;
+    }
+
+    if let Some(alternative) = preference.alternatives.iter().find(|alternative| {
+        alternative.as_str() != current
+            && preference.default.as_deref() != Some(alternative.as_str())
+    }) {
+        return Some(alternative.clone());
+    }
+
+    let candidate = match current {
+        "0" => "1".to_string(),
+        "1" => "0".to_string(),
+        _ => current
+            .parse::<i64>()
+            .ok()
+            .and_then(|value| value.checked_add(1))
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "issue-575-e2e".to_string()),
+    };
+    (candidate != current && preference.default.as_deref() != Some(candidate.as_str()))
+        .then_some(candidate)
 }
 
 async fn exercise_preference_mutation(
@@ -739,6 +768,32 @@ fn stable_store_selection_honors_fixture_id_and_rejects_unaddressable_entries() 
         "stable"
     );
     assert!(select_stable_store(&stores[..2], None).is_err());
+}
+
+#[test]
+fn preference_mutation_prefers_alternatives_and_derives_safe_entry_values() {
+    let mut preference = ScanConfigPreference {
+        nvt: None,
+        name: "fixture".to_string(),
+        id: None,
+        preference_type: Some("entry".to_string()),
+        value: Some("5".to_string()),
+        alternatives: Vec::new(),
+        default: Some("5".to_string()),
+    };
+    assert_eq!(
+        derive_preference_mutation(&preference).as_deref(),
+        Some("6")
+    );
+
+    preference.alternatives = vec!["5".to_string(), "10".to_string()];
+    assert_eq!(
+        derive_preference_mutation(&preference).as_deref(),
+        Some("10")
+    );
+
+    preference.preference_type = Some("password".to_string());
+    assert!(derive_preference_mutation(&preference).is_none());
 }
 
 async fn ready_session() -> Result<(E2eHarness, SessionResponse)> {
