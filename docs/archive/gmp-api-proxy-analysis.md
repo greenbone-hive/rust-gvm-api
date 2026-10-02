@@ -1,10 +1,15 @@
 # GMP API Proxy Analysis
 
+> **Archived:** This early gateway analysis is preserved for design history.
+> The current architecture is defined by
+> [`gateway-architecture.md`](../gateway-architecture.md), and contributor
+> workflow is documented in [`development.md`](../development.md).
+
 Status: architecture analysis. REST is implemented; gRPC and MCP are
 forward-looking. The current REST contract is defined by
-[`spec/rest-api/openapi.yaml`](../spec/rest-api/openapi.yaml), and current
+[`spec/rest-api/openapi.yaml`](../../spec/rest-api/openapi.yaml), and current
 runtime ownership is defined by
-[`gateway-architecture.md`](gateway-architecture.md).
+[`gateway-architecture.md`](../gateway-architecture.md).
 
 ## 1. Scope
 
@@ -110,7 +115,8 @@ The shared core owns:
 - error normalization
 - audit events
 
-See [MCP Implementation Roadmap](mcp-implementation-roadmap.md) for the explicit MCP parity rule and implementation sequence.
+The former MCP phase plan is archived beside this document. Any implementation
+now requires a fresh plan against the current workspace.
 
 ## 6. Session and Connection Model
 

@@ -9,17 +9,22 @@ schedules, and tasks, as well as access to scan results and reports.
 ## Contents
 
 - [Installation and configuration](./usage.md)
+- [REST API reference](./api-reference.md)
 - [Workflow examples](./examples.md)
 - [Technology Preview API migration notes](./migration.md)
-- Example config files:
-  - [package-config.example.toml](./package-config.example.toml)
-  - [container-config.example.toml](./container-config.example.toml)
+- Example config files in the release archive:
+  - `package-config.example.toml`
+  - `container-config.example.toml`
 - Curated OpenAPI specification for this release (contract-tested against the
   runtime-generated `/api/v1/openapi.json` document):
-  - [openapi.yaml](./api/rest/openapi.yaml)
+  - `api/rest/openapi.yaml`
 
 ## Version alignment
 
 Use the documentation package that shipped with the same release version as the
 gateway you are running. Its OpenAPI `info.version` matches the gateway's
 `apiVersion`.
+
+For interactive documentation from the running service, open
+`/api/v1/docs`. For machine-readable schemas, use
+`/api/v1/openapi.json` or the release package's `api/rest/openapi.yaml`.

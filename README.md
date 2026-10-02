@@ -228,6 +228,9 @@ Useful follow-up commands:
 
 ## Documentation
 
+- [Documentation index](docs/README.md)
+- [Developer guide](docs/development.md)
+- [Human-readable REST API reference](docs/user/api-reference.md)
 - Runtime API documentation: `GET /api/v1/docs`
 - Runtime-generated OpenAPI: `GET /api/v1/openapi.json`
 - Release-shipped user docs source:
@@ -239,9 +242,7 @@ Useful follow-up commands:
 - [gRPC API OpenSpec](spec/grpc-api/openspec.md)
 - [Gateway Architecture](docs/gateway-architecture.md)
 - [GMP to REST Translation Model](docs/gmp-rest-translation.md)
-- [GMP API Proxy Analysis](docs/gmp-api-proxy-analysis.md)
-- [Proxy Access Control Analysis](docs/proxy-access-control-analysis.md)
-- [MCP Implementation Roadmap](docs/mcp-implementation-roadmap.md)
+- [Historical documentation archive](docs/archive/README.md)
 
 ## License
 

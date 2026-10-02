@@ -1,4 +1,4 @@
-# Installation And Configuration
+# Installation and configuration
 
 ## Release artifacts
 
@@ -41,6 +41,13 @@ it is running behind a TLS-terminating proxy.
 
 ## Configuration reference
 
+Configuration is loaded in this order: built-in defaults, the selected config
+file, environment variables, then the supported `--bind` CLI override. Use
+`--config <path>` to select a file; otherwise the packaged runtime looks for
+`/etc/gvm-gateway/gvm-gateway.toml` and silently uses defaults when that file is
+absent. Unknown TOML keys are ignored by the current Technology Preview parser,
+so check names carefully.
+
 ### Core listener and backend
 
 - `bind`
@@ -48,6 +55,9 @@ it is running behind a TLS-terminating proxy.
 - `gvmd_endpoint`
   Unix socket endpoint for gvmd. Current releases expect a Unix socket path such
   as `unix:///run/gvmd/gvmd.sock`.
+- `shutdown_drain_timeout_secs`
+  Maximum time to wait for in-flight requests during graceful shutdown. The
+  built-in default is 30 seconds.
 
 ### Transport security
 
@@ -105,6 +115,33 @@ paths must not be set.
 - `trusted_proxy_cidrs`
   Proxy source CIDRs whose forwarded client IPs may be trusted.
 
+### Environment variable reference
+
+Every file setting has an environment equivalent:
+
+| File setting | Environment variable |
+| --- | --- |
+| `bind` | `GVM_GATEWAY_BIND` |
+| `gvmd_endpoint` | `GVM_GATEWAY_GVMD_ENDPOINT` |
+| `shutdown_drain_timeout_secs` | `GVM_GATEWAY_SHUTDOWN_DRAIN_TIMEOUT_SECS` |
+| `session_idle_timeout_secs` | `GVM_GATEWAY_SESSION_IDLE_TIMEOUT_SECS` |
+| `session_max_global` | `GVM_GATEWAY_SESSION_MAX_GLOBAL` |
+| `session_max_per_user` | `GVM_GATEWAY_SESSION_MAX_PER_USER` |
+| `transport_security_mode` | `GVM_GATEWAY_TRANSPORT_SECURITY_MODE` |
+| `tls_certificate_path` | `GVM_GATEWAY_TLS_CERTIFICATE_PATH` |
+| `tls_private_key_path` | `GVM_GATEWAY_TLS_PRIVATE_KEY_PATH` |
+| `local_log_output` | `GVM_GATEWAY_LOCAL_LOG_OUTPUT` |
+| `otlp_endpoint` | `GVM_GATEWAY_OTLP_ENDPOINT` |
+| `telemetry_service_name` | `GVM_GATEWAY_TELEMETRY_SERVICE_NAME` |
+| `telemetry_service_namespace` | `GVM_GATEWAY_TELEMETRY_SERVICE_NAMESPACE` |
+| `telemetry_deployment_environment` | `GVM_GATEWAY_TELEMETRY_DEPLOYMENT_ENVIRONMENT` |
+| `telemetry_service_instance_id` | `GVM_GATEWAY_TELEMETRY_SERVICE_INSTANCE_ID` |
+| `cors_allowed_origins` | `GVM_GATEWAY_CORS_ALLOWED_ORIGINS` |
+| `rate_limit_window_secs` | `GVM_GATEWAY_RATE_LIMIT_WINDOW_SECS` |
+| `rate_limit_global_per_window` | `GVM_GATEWAY_RATE_LIMIT_GLOBAL_PER_WINDOW` |
+| `rate_limit_subject_per_window` | `GVM_GATEWAY_RATE_LIMIT_SUBJECT_PER_WINDOW` |
+| `trusted_proxy_cidrs` | `GVM_GATEWAY_TRUSTED_PROXY_CIDRS` |
+
 ## Authentication options
 
 The gateway supports two practical authentication patterns:
@@ -119,7 +156,8 @@ The gateway supports two practical authentication patterns:
 
 For scripts, automation, and multi-step workflows, session-based access is the
 normal choice because it avoids sending the username and password on every
-request.
+request. `GET` and `DELETE /api/v1/session` require the bearer token for the
+session being inspected or removed.
 
 ## Connection points
 
@@ -163,3 +201,6 @@ headers, media types, and schemas stay aligned.
 The REST representation is backed by typed rust-gvm requests and responses.
 GMP XML is an internal backend protocol and is never part of the public HTTP
 contract.
+
+See [REST API reference](./api-reference.md) for shared request/error semantics
+and the complete route-family map.

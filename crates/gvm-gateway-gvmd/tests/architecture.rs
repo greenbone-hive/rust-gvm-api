@@ -556,9 +556,9 @@ fn report_configuration_administration_stays_omitted() {
 
 #[test]
 fn nvt_secinfo_migration_dispositions_stay_bounded() {
-    // Issue #517 migrates existing reads only. Generic SecInfo/vulnerability
-    // endpoints remain omitted, while preference and selection mutations keep
-    // their existing implementation until the separately reviewed #523 work.
+    // Issue #517 migrated existing reads only. Generic SecInfo/vulnerability
+    // endpoints remain omitted. Issue #523 later moved the existing preference
+    // and selection mutations to canonical typed requests without adding routes.
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let production = fs::read_to_string(manifest_dir.join("src/gvmd_adapter/mod.rs"))
         .expect("read gvmd adapter imports");
@@ -578,20 +578,20 @@ fn nvt_secinfo_migration_dispositions_stay_bounded() {
     let scan_configs =
         fs::read_to_string(manifest_dir.join("src/gvmd_adapter/ports/scan_configs.rs"))
             .expect("read scan-config adapter");
-    for deferred_mutation in [
+    for canonical_mutation in [
         "ModifyScanConfigSetNvtSelectionRequest::new",
         "ModifyScanConfigSetNvtPreferenceRequest::new",
     ] {
         assert!(
-            scan_configs.contains(deferred_mutation),
-            "preference/selection mutation must remain unchanged pending #523: {deferred_mutation}"
+            scan_configs.contains(canonical_mutation),
+            "preference/selection mutation must stay on its canonical #523 request: {canonical_mutation}"
         );
     }
 
     let dispositions =
         fs::read_to_string(manifest_dir.join("../../docs/upstream-surface-dispositions.md"))
             .expect("read upstream surface dispositions");
-    assert!(dispositions.contains("Deferred to #523"));
+    assert!(dispositions.contains("Adopted through completed #523"));
     assert!(dispositions.contains("Generic SecInfo dispatch"));
 }
 

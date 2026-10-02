@@ -1,4 +1,4 @@
-.PHONY: all build check test test-all fmt clippy doc deny clean setup-hooks coverage
+.PHONY: all build check test test-all fmt clippy doc docs-check deny clean setup-hooks coverage
 
 # Default: full check cycle
 all: fmt clippy test doc
@@ -38,6 +38,10 @@ doc:
 # Open docs in browser
 doc-open:
 	RUSTDOCFLAGS="-Dwarnings" cargo doc --workspace --all-features --no-deps --open
+
+# Validate documentation links and the human-readable REST route inventory
+docs-check:
+	python3 scripts/check-docs.py
 
 # License/advisory check
 deny:

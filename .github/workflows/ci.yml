@@ -116,6 +116,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Validate documentation navigation and API reference
+        run: python3 scripts/check-docs.py
       - name: Build user docs package
         run: ./scripts/build-docs-package.sh --version "$(./scripts/workspace-version.sh)" --output-dir dist/docs
       - name: Verify user docs package structure
@@ -130,6 +132,7 @@ jobs:
           [[ -f "${archive}.sha256" ]] || { echo "Missing checksum for ${archive}" >&2; exit 1; }
           tar tzf "${archive}" | grep -q '/README.md$'
           tar tzf "${archive}" | grep -q '/usage.md$'
+          tar tzf "${archive}" | grep -q '/api-reference.md$'
           tar tzf "${archive}" | grep -q '/examples.md$'
           tar tzf "${archive}" | grep -q '/migration.md$'
           tar tzf "${archive}" | grep -q '/examples/scan-target.sh$'
