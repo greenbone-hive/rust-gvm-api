@@ -61,6 +61,7 @@ mkdir -p "${output_dir}"
 
 cp "${repo_root}/docs/user/index.md" "${package_root}/README.md"
 cp "${repo_root}/docs/user/usage.md" "${package_root}/usage.md"
+cp "${repo_root}/docs/user/api-reference.md" "${package_root}/api-reference.md"
 cp "${repo_root}/docs/user/examples.md" "${package_root}/examples.md"
 cp "${repo_root}/docs/user/migration.md" "${package_root}/migration.md"
 cp -R "${repo_root}/docs/user/examples/." "${package_root}/examples/"

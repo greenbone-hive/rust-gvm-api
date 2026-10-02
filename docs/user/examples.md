@@ -274,4 +274,5 @@ curl -fsS \
 
 ## Finding the formal contract
 
-Use `api/rest/openapi.yaml` for the full release-aligned API contract.
+Use the [REST API reference](./api-reference.md) for the human-readable route
+map and `api/rest/openapi.yaml` for the full release-aligned machine contract.

@@ -29,7 +29,8 @@ All production gvmd adapter operations use a semantic request implementing
 require zero direct `.call(...)` sites, zero manual `::from_response(...)`
 pairings, and no raw XML construction or parsing in production adapter modules.
 The covered resource families and the disposition of upstream commands are
-tracked in [typed GMP execution adoption](../../docs/typed-gmp-execution-adoption.md)
+recorded in the archived
+[typed GMP execution adoption](../../docs/archive/typed-gmp-execution-adoption.md)
 and [upstream surface dispositions](../../docs/upstream-surface-dispositions.md).
 
 

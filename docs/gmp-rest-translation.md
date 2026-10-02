@@ -2,7 +2,7 @@
 
 Status: explanatory architecture note
 
-Reviewed: 2026-10-01
+Reviewed: 2026-10-02
 
 This document explains the Greenbone Management Protocol (GMP) boundary and
 compares two ways of exposing it to HTTP clients:
@@ -21,7 +21,7 @@ The analysis is based on these repository snapshots:
 
 - [`greenbone/gsa` at `4ba9551`](https://github.com/greenbone/gsa/tree/4ba9551bcd82bc53e22684ab5bb0eacc73419729)
 - [`greenbone/gsad` at `b98497f`](https://github.com/greenbone/gsad/tree/b98497f2cad94888b594aa6af1c84719d3c36a03)
-- `greenbone-hive/rust-gvm-api` `main` at `bee2479`
+- `greenbone-hive/rust-gvm-api` `main` at `273a87e`
 - [`greenbone-hive/rust-gvm` v0.7.0 at the API-pinned `acdabf5`](https://github.com/greenbone-hive/rust-gvm/tree/acdabf5a039d78df82e86b69ee8a374df8575c7a)
 
 GSA and GSAD are valuable behavioral references, but they are not the
@@ -505,7 +505,7 @@ follow-up work.
 | Priority | Recommendation | Primary owner |
 | --- | --- | --- |
 | 1 | Make partial-update, clear, detach, and reset semantics explicit | `rust-gvm-api`, supported by `rust-gvm` update types |
-| 1 | Model actionable command-support states and map unsupported backends consistently | `rust-gvm`, then `rust-gvm-api` |
+| Continuous | Keep actionable command-support states and unsupported-backend mapping consistent | both repositories |
 | 2 | Complete update support for specialized task variants | both repositories |
 | 2 | Add delta/comparison report export to the existing export-job workflow | both repositories |
 | 2 | Stabilize the collection query and GMP-filter compatibility contract | both repositories |
@@ -618,26 +618,29 @@ analytics endpoint only when a concrete consumer needs a stable metric and
 shape; otherwise GSA's aggregate calls remain test and requirements evidence,
 not public-contract requirements.
 
-### 7.5 Make capability and server outcomes actionable
+### 7.5 Keep capability and server outcomes actionable
 
 Version numbers alone do not describe all observed behavior. Commands may be
 version-gated, advertised only through XML help discovery, compiled out, or
-present but unauthorized. `rust-gvm` should replace the ambiguous
-`supports_command() -> Option<bool>` result with actionable states such as
-supported, discovery required, insufficient version, not advertised, and
-unknown to the library. This work is tracked in
-[`rust-gvm` issue #600](https://github.com/greenbone-hive/rust-gvm/issues/600).
+present but unauthorized. `rust-gvm` v0.7.0 implements the non-exhaustive
+`CommandSupport` classifier delivered by completed
+[`rust-gvm` issue #600](https://github.com/greenbone-hive/rust-gvm/issues/600):
+supported, discovery required, unsupported version, not advertised, and unknown
+to the library. The older `supports_command() -> Option<bool>` method remains
+only as a deprecated compatibility shim.
 
-`rust-gvm-api` should explicitly perform and cache required discovery in the
-authenticated backend-session context, then map insufficient-version and
-not-advertised outcomes to the documented `501 Not Implemented` problem. An
-unknown library command indicates an adapter/programming defect and must not be
-reported as an ordinary backend capability absence.
+`rust-gvm-api` consumes typed execution errors and maps unsupported-version or
+unavailable backend capabilities to the documented `501 Not Implemented`
+problem. Help discovery and its cached result belong to the authenticated
+backend-session context. An unknown library command indicates an
+adapter/programming defect and must not be reported as an ordinary backend
+capability absence.
 
 Similarly, `rust-gvm` should preserve non-success GMP status and status text as
 structured server outcomes for every typed execution path. The gateway remains
-the owner of HTTP classification, but it should use one central mapping instead
-of endpoint-specific message matching. Tests should cover bad input,
+the owner of HTTP classification and uses the central typed-error conversion
+rather than endpoint-specific message matching. Tests should continue to cover
+bad input,
 authentication, authorization, missing resources, conflicts, unavailable
 backends, and timeouts. This does not require a public capability-discovery
 endpoint; callers can rely on the documented operation and its `501` behavior.
@@ -679,9 +682,12 @@ Maintain a disposition ledger for the GSA/GSAD operation catalog and the public
 typed `rust-gvm` surface. Each operation should be classified as exposed,
 mapped to another REST workflow, internal, upstream-blocked, deferred, or
 deliberately omitted. A new GSA operation or public typed request should require
-a disposition, not necessarily a new endpoint. The broader parity ledger is
-tracked in
-[`rust-gvm-api` issue #381](https://github.com/greenbone-hive/rust-gvm-api/issues/381).
+a disposition, not necessarily a new endpoint. Completed
+[`rust-gvm-api` issue #381](https://github.com/greenbone-hive/rust-gvm-api/issues/381)
+established the v0.7.0 baseline. The active readable summary is
+[`upstream-surface-dispositions.md`](upstream-surface-dispositions.md), and the
+exhaustive machine-readable source is
+[`upstream-surface-dispositions.tsv`](upstream-surface-dispositions.tsv).
 
 For every accepted mapping, derive tests at the layer that owns the behavior:
 
@@ -702,8 +708,8 @@ making their bridge the public contract.
 
 - [`gateway-architecture.md`](gateway-architecture.md) defines the authoritative
   repository layering and session ownership.
-- [`gmp-api-proxy-analysis.md`](gmp-api-proxy-analysis.md) explains why the
-  gateway exists and how REST, gRPC, and MCP fit as peer adapters.
+- The original peer-adapter rationale is preserved in the archived
+  [`gmp-api-proxy-analysis.md`](archive/gmp-api-proxy-analysis.md).
 - [`spec/rest-api/openspec.md`](../spec/rest-api/openspec.md) defines REST design
   constraints, including resource modeling and bounded action routes.
 - [`rust-gvm-gmp-boundary-issue-template.md`](rust-gvm-gmp-boundary-issue-template.md)

@@ -1,5 +1,11 @@
 # MCP Implementation Roadmap
 
+> **Archived:** This July 2026 phase plan predates the completed REST and gvmd
+> adapter refactors and contains stale issue and module sequencing. MCP is still
+> unimplemented. Use [`gateway-architecture.md`](../gateway-architecture.md)
+> for the peer-adapter boundary and create a current ADR/roadmap before starting
+> MCP implementation.
+
 Last updated: 2026-07-15 (rewritten against the shipped REST baseline; supersedes and
 folds in the earlier MCP surface analysis that assumed a catalog-first core).
 

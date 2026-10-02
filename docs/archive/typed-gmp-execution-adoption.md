@@ -1,5 +1,10 @@
 # Typed GMP Execution Adoption
 
+> **Archived:** The migration described here is complete. Current changes must
+> follow the typed boundary in [`development.md`](../development.md) and
+> [`gmp-rest-translation.md`](../gmp-rest-translation.md); executable
+> architecture tests enforce the boundary.
+
 Issue [#457](https://github.com/greenbone-hive/rust-gvm-api/issues/457) tracks the
 migration of the gvmd adapter from manually paired command builders and response
 parsers to rust-gvm's semantic requests and `GmpClient::execute` boundary.

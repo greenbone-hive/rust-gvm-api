@@ -1,5 +1,10 @@
 # Proxy Access Control Analysis
 
+> **Archived:** This is an unimplemented early multi-endpoint/RBAC exploration,
+> not a description of the current gateway. See
+> [`gateway-architecture.md`](../gateway-architecture.md) and the current
+> [REST specification](../../spec/rest-api/openspec.md).
+
 ## 1. Scope
 
 This document describes how `rust-gvm-api` should enforce access control when one gateway fronts one or more `gvmd` endpoints.
