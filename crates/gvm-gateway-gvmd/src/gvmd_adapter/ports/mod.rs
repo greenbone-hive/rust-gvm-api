@@ -11,6 +11,8 @@ mod feeds;
 mod identity;
 mod port_lists;
 mod reports;
+#[cfg(test)]
+mod reports_test;
 mod results;
 mod scan_configs;
 mod scanners;

@@ -26,17 +26,17 @@ use gvm_gateway_domain::{
     ModifyUserSettingInput, Note, NotePage, Nvt, NvtFamilyPage, NvtPage, NvtQuery, OperatingSystem,
     OperatingSystemPage, Override, OverridePage, Permission, PermissionPage, PortList,
     PortListPage, PortListPort, PortListQuery, ReadinessStatus, Report, ReportApplicationPage,
-    ReportClosedCvePage, ReportCvePage, ReportErrorPage, ReportExport, ReportExportRequest,
-    ReportFormat, ReportFormatPage, ReportHostPage, ReportOperatingSystemPage, ReportPage,
-    ReportPort, ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResourceRef, ResultPage,
-    ResultPort, ResultQuery, Role, RolePage, ScanConfig, ScanConfigNvtPage, ScanConfigNvtQuery,
-    ScanConfigPage, ScanConfigPort, ScanConfigPreference, ScanConfigPreferenceQuery,
-    ScanConfigQuery, ScanResult, Scanner, ScannerPage, ScannerPort, ScannerQuery, Schedule,
-    SchedulePage, SchedulePort, ScheduleQuery, SetScanConfigFamilySelectionInput,
-    SupportingResourceMeta, SupportingResourcePort, SupportingResourceQuery, SystemPort, Tag,
-    TagPage, Target, TargetPage, TargetPort, TargetQuery, Task, TaskAction, TaskPage, TaskPort,
-    TaskQuery, Timezone, TlsCertificateAsset, TlsCertificateAssetPage, TlsCertificatePage, User,
-    UserPage, UserSetting, UserSettingList, UserSettingQuery, VulnerabilityPage,
+    ReportClosedCvePage, ReportCvePage, ReportErrorPage, ReportFormat, ReportFormatPage,
+    ReportHostPage, ReportOperatingSystemPage, ReportPage, ReportPort, ReportPortPage, ReportQuery,
+    ReportVulnerabilityPage, ResourceRef, ResultPage, ResultPort, ResultQuery, Role, RolePage,
+    ScanConfig, ScanConfigNvtPage, ScanConfigNvtQuery, ScanConfigPage, ScanConfigPort,
+    ScanConfigPreference, ScanConfigPreferenceQuery, ScanConfigQuery, ScanResult, Scanner,
+    ScannerPage, ScannerPort, ScannerQuery, Schedule, SchedulePage, SchedulePort, ScheduleQuery,
+    SetScanConfigFamilySelectionInput, SupportingResourceMeta, SupportingResourcePort,
+    SupportingResourceQuery, SystemPort, Tag, TagPage, Target, TargetPage, TargetPort, TargetQuery,
+    Task, TaskAction, TaskPage, TaskPort, TaskQuery, Timezone, TlsCertificateAsset,
+    TlsCertificateAssetPage, TlsCertificatePage, User, UserPage, UserSetting, UserSettingList,
+    UserSettingQuery, VulnerabilityPage,
 };
 
 /// Mock system port for tests that need deterministic readiness/version responses.
@@ -811,17 +811,6 @@ impl ReportPort for MockReportPort {
         _: &GetReportOpts,
     ) -> Result<Report, GatewayError> {
         Err(GatewayError::NotFound(format!("report {id} not found")))
-    }
-
-    async fn export_report(
-        &self,
-        _: &str,
-        report_id: &str,
-        _: &ReportExportRequest,
-    ) -> Result<ReportExport, GatewayError> {
-        Err(GatewayError::NotFound(format!(
-            "report {report_id} not found"
-        )))
     }
 
     async fn delete_report(&self, _: &str, id: &str) -> Result<(), GatewayError> {

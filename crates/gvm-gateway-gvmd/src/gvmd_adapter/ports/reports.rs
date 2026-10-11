@@ -127,38 +127,122 @@ impl ReportPort for GvmdAdapter {
         Ok(report)
     }
 
-    async fn export_report(
+    async fn create_report_export(
         &self,
         session_token: &str,
         report_id: &str,
         request: &ReportExportRequest,
-    ) -> Result<ReportExport, GatewayError> {
+    ) -> Result<BackendReportExport, GatewayError> {
         let report_id = parse_entity_id(report_id)?;
         let report_format_id = parse_entity_id(&request.report_format_id)?;
-        let mut export_request = GetReportExportRequest::new(report_id, report_format_id);
+        let filter_id = request
+            .filter_id
+            .as_deref()
+            .map(parse_entity_id)
+            .transpose()?;
+        let filter_string = self
+            .filter_resolving_filter_id(
+                session_token,
+                None,
+                request.filter.as_deref(),
+                filter_id.as_ref(),
+                &[],
+            )
+            .await?;
+        let mut export_request = ExportScanReportRequest::new(report_id);
+        export_request.report_format_id = Some(report_format_id);
         export_request.report_config_id = request
             .report_config_id
             .as_deref()
             .map(parse_entity_id)
             .transpose()?;
-        export_request.filter_string = request.filter.clone();
-        export_request.filter_id = request
-            .filter_id
-            .as_deref()
-            .map(parse_entity_id)
-            .transpose()?;
-        export_request.details = Some(true);
+        export_request.filter_string = filter_string;
         export_request.ignore_pagination = Some(true);
 
-        let export = self
-            .execute_with_session(session_token, "reports.export", export_request)
+        let created = self
+            .execute_report_export_with_session(
+                session_token,
+                "reports.exports.create",
+                "export_scan_report",
+                move |client| Box::pin(client.export_scan_report(export_request)),
+            )
             .await?;
 
+        Ok(BackendReportExport {
+            id: created.id.to_string(),
+        })
+    }
+
+    async fn get_report_export(
+        &self,
+        session_token: &str,
+        export_id: &str,
+    ) -> Result<BackendReportExportState, GatewayError> {
+        let export_id = parse_entity_id(export_id)?;
+        let parsed = self
+            .execute_report_export_with_session(
+                session_token,
+                "reports.exports.poll",
+                "get_report_exports",
+                move |client| {
+                    Box::pin(client.get_report_exports(GetReportExportsRequest::new(export_id)))
+                },
+            )
+            .await?;
+        let export =
+            parsed.items.into_iter().next().ok_or_else(|| {
+                GatewayError::NotFound("backend report export not found".to_string())
+            })?;
+        map_report_export_state(&export.status)
+    }
+
+    async fn download_report_export(
+        &self,
+        session_token: &str,
+        export_id: &str,
+    ) -> Result<ReportExport, GatewayError> {
+        let export_id = parse_entity_id(export_id)?;
+        let parsed = self
+            .execute_report_export_with_session(
+                session_token,
+                "reports.exports.download",
+                "download_report_export",
+                move |client| {
+                    Box::pin(
+                        client.download_report_export(DownloadReportExportRequest::new(export_id)),
+                    )
+                },
+            )
+            .await?;
+        let export = parsed.report_export;
+        if map_report_export_state(&export.status)? != BackendReportExportState::Ready {
+            return Err(GatewayError::Conflict(
+                "backend report export is not ready for download".to_string(),
+            ));
+        }
         Ok(ReportExport {
             bytes: export.bytes,
             content_type: export.content_type,
             extension: export.extension,
         })
+    }
+
+    async fn cancel_report_export(
+        &self,
+        session_token: &str,
+        export_id: &str,
+    ) -> Result<(), GatewayError> {
+        let export_id = parse_entity_id(export_id)?;
+        self.execute_report_export_with_session(
+            session_token,
+            "reports.exports.cancel",
+            "cancel_report_export",
+            move |client| {
+                Box::pin(client.cancel_report_export(CancelReportExportRequest::new(export_id)))
+            },
+        )
+        .await?;
+        Ok(())
     }
 
     async fn delete_report(&self, session_token: &str, id: &str) -> Result<(), GatewayError> {
@@ -532,6 +616,22 @@ impl ReportPort for GvmdAdapter {
             data: items,
             pagination: paged_pagination(total, query.page, query.per_page),
         })
+    }
+}
+
+pub(super) fn map_report_export_state(
+    status: &str,
+) -> Result<BackendReportExportState, GatewayError> {
+    match status {
+        "pending" => Ok(BackendReportExportState::Pending),
+        "running" => Ok(BackendReportExportState::Running),
+        "cancel_requested" => Ok(BackendReportExportState::CancelRequested),
+        "done" => Ok(BackendReportExportState::Ready),
+        "failed" | "error" => Ok(BackendReportExportState::Failed),
+        "canceled" | "cancelled" => Ok(BackendReportExportState::Cancelled),
+        _ => Err(GatewayError::BackendUnavailable(
+            "backend returned an unsupported report export lifecycle state".to_string(),
+        )),
     }
 }
 

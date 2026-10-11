@@ -6,37 +6,39 @@
 use std::{
     collections::HashMap,
     fmt,
+    future::Future,
     path::{Path, PathBuf},
+    pin::Pin,
     sync::{Arc, Mutex},
 };
 
 use async_trait::async_trait;
-use gvm_client::{GmpClient, GvmError};
+use gvm_client::{CommandSupport, GmpClient, GvmError};
 use gvm_connection::UnixSocketConnection;
 use gvm_gateway_domain::{
-    Alert, AlertPage, AlertPort, AlertQuery, AssetQuery, AuthPort, CertBundAdvisory,
-    CertBundAdvisoryPage, Cpe, CpePage, CreateAlertInput, CreateCredentialInput, CreateFilterInput,
-    CreateGroupInput, CreateHostInput, CreateNoteInput, CreateOciImageTargetInput,
-    CreateOverrideInput, CreatePermissionInput, CreatePolicyInput, CreatePortListInput,
-    CreateRoleInput, CreateScanConfigInput, CreateScheduleInput, CreateTagInput, CreateTargetInput,
-    CreateTaskInput, CreateTaskTarget, CreateUserInput, CreateWebApplicationTargetInput,
-    Credential, CredentialPage, CredentialPort, CredentialQuery, CredentialStore, Cve, CvePage,
-    DfnCertAdvisory, DfnCertAdvisoryPage, FeedList, FeedPort, FeedQuery, Filter, FilterPage,
-    GatewayError, GenericAsset, GenericAssetPage, GenericConfig, GenericConfigPage,
-    GenericConfigQuery, GetReportOpts, Group, GroupPage, Host, HostPage, IdentityPort,
-    IdentityQuery, ImportReportInput, ModifyAlertInput, ModifyAssetInput, ModifyCredentialInput,
-    ModifyCredentialStoreInput, ModifyFilterInput, ModifyGroupInput, ModifyHostInput,
-    ModifyNoteInput, ModifyOciImageTargetInput, ModifyOperatingSystemInput, ModifyOverrideInput,
-    ModifyPermissionInput, ModifyPortListInput, ModifyRoleInput, ModifyScanConfigInput,
-    ModifyScheduleInput, ModifyTagInput, ModifyTargetInput, ModifyTaskInput, ModifyUserInput,
-    ModifyUserSettingInput, ModifyWebApplicationTargetInput, Note, NotePage, Nvt, NvtFamilyPage,
-    NvtPage, NvtQuery, OciImageTarget, OciImageTargetPage, OperatingSystem, OperatingSystemPage,
-    Override, OverridePage, Permission, PermissionPage, PortList, PortListPage, PortListPort,
-    PortListQuery, ReadinessStatus, Report, ReportApplicationPage, ReportClosedCvePage,
-    ReportCvePage, ReportErrorPage, ReportExport, ReportExportRequest, ReportFormat,
-    ReportFormatPage, ReportHostPage, ReportOperatingSystemPage, ReportPage, ReportPort,
-    ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResultPage, ResultPort, ResultQuery,
-    Role, RolePage, ScanConfig, ScanConfigNvtPage, ScanConfigNvtQuery, ScanConfigPage,
+    Alert, AlertPage, AlertPort, AlertQuery, AssetQuery, AuthPort, BackendReportExport,
+    BackendReportExportState, CertBundAdvisory, CertBundAdvisoryPage, Cpe, CpePage,
+    CreateAlertInput, CreateCredentialInput, CreateFilterInput, CreateGroupInput, CreateHostInput,
+    CreateNoteInput, CreateOciImageTargetInput, CreateOverrideInput, CreatePermissionInput,
+    CreatePolicyInput, CreatePortListInput, CreateRoleInput, CreateScanConfigInput,
+    CreateScheduleInput, CreateTagInput, CreateTargetInput, CreateTaskInput, CreateTaskTarget,
+    CreateUserInput, CreateWebApplicationTargetInput, Credential, CredentialPage, CredentialPort,
+    CredentialQuery, CredentialStore, Cve, CvePage, DfnCertAdvisory, DfnCertAdvisoryPage, FeedList,
+    FeedPort, FeedQuery, Filter, FilterPage, GatewayError, GenericAsset, GenericAssetPage,
+    GenericConfig, GenericConfigPage, GenericConfigQuery, GetReportOpts, Group, GroupPage, Host,
+    HostPage, IdentityPort, IdentityQuery, ImportReportInput, ModifyAlertInput, ModifyAssetInput,
+    ModifyCredentialInput, ModifyCredentialStoreInput, ModifyFilterInput, ModifyGroupInput,
+    ModifyHostInput, ModifyNoteInput, ModifyOciImageTargetInput, ModifyOperatingSystemInput,
+    ModifyOverrideInput, ModifyPermissionInput, ModifyPortListInput, ModifyRoleInput,
+    ModifyScanConfigInput, ModifyScheduleInput, ModifyTagInput, ModifyTargetInput, ModifyTaskInput,
+    ModifyUserInput, ModifyUserSettingInput, ModifyWebApplicationTargetInput, Note, NotePage, Nvt,
+    NvtFamilyPage, NvtPage, NvtQuery, OciImageTarget, OciImageTargetPage, OperatingSystem,
+    OperatingSystemPage, Override, OverridePage, Permission, PermissionPage, PortList,
+    PortListPage, PortListPort, PortListQuery, ReadinessStatus, Report, ReportApplicationPage,
+    ReportClosedCvePage, ReportCvePage, ReportErrorPage, ReportExport, ReportExportRequest,
+    ReportFormat, ReportFormatPage, ReportHostPage, ReportOperatingSystemPage, ReportPage,
+    ReportPort, ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResultPage, ResultPort,
+    ResultQuery, Role, RolePage, ScanConfig, ScanConfigNvtPage, ScanConfigNvtQuery, ScanConfigPage,
     ScanConfigPort, ScanConfigPreference, ScanConfigPreferenceNvt, ScanConfigPreferenceQuery,
     ScanConfigQuery, ScanResult, Scanner, ScannerPage, ScannerPort, ScannerQuery, Schedule,
     SchedulePage, SchedulePort, ScheduleQuery, SessionTokenDigest,
@@ -92,8 +94,9 @@ use gvm_gmp::{
         },
         report_formats::{GetReportFormatRequest, GetReportFormatsRequest},
         reports::{
-            DeleteReportRequest, GetReportApplicationsRequest, GetReportClosedCvesRequest,
-            GetReportCvesRequest, GetReportErrorsRequest, GetReportExportRequest,
+            CancelReportExportRequest, DeleteReportRequest, DownloadReportExportRequest,
+            ExportScanReportRequest, GetReportApplicationsRequest, GetReportClosedCvesRequest,
+            GetReportCvesRequest, GetReportErrorsRequest, GetReportExportsRequest,
             GetReportHostsRequest, GetReportOperatingSystemsRequest, GetReportPortsRequest,
             GetReportRequest, GetReportTlsCertificatesRequest, GetReportVulnsRequest,
             GetReportsRequest, ImportReportRequest,
@@ -169,19 +172,19 @@ mod mod_test;
 use crate::conversions::{
     alert_from_gmp, cert_bund_advisory_from_gmp, cpe_from_gmp, credential_from_gmp, cve_from_gmp,
     dfn_cert_advisory_from_gmp, feed_from_gmp, filter_from_gmp, generic_asset_from_gmp,
-    generic_config_from_gmp, group_from_gmp, host_from_gmp, map_gvm_error, note_from_gmp,
-    nvt_family_from_gmp, nvt_from_gmp, oci_image_target_from_gmp, operating_system_from_gmp,
-    override_from_gmp, parse_alert_condition, parse_alert_event, parse_alert_method,
-    parse_alive_test, parse_asset_type, parse_config_usage_type, parse_credential_type,
-    parse_entity_id, parse_permission_subject_type, parse_snmp_auth_algorithm,
-    parse_snmp_privacy_algorithm, parse_user_auth_type, permission_from_gmp, port_list_from_gmp,
-    report_application_from_gmp, report_closed_cve_from_gmp, report_cve_from_gmp,
-    report_error_from_gmp, report_format_from_gmp, report_from_gmp, report_host_from_gmp,
-    report_operating_system_from_gmp, report_port_from_gmp, result_from_gmp,
-    result_from_report_vulnerability, role_from_gmp, scan_config_from_gmp, scanner_from_gmp,
-    schedule_from_gmp, tag_from_gmp, target_from_gmp, task_from_gmp, timezone_from_gmp,
-    tls_certificate_asset_from_gmp, tls_certificate_from_report_tls_certificate, user_from_gmp,
-    user_setting_from_gmp, vulnerability_from_gmp, web_application_target_from_gmp,
+    generic_config_from_gmp, group_from_gmp, host_from_gmp, map_gvm_error,
+    map_report_export_gvm_error, note_from_gmp, nvt_family_from_gmp, nvt_from_gmp,
+    oci_image_target_from_gmp, operating_system_from_gmp, override_from_gmp, parse_alert_condition,
+    parse_alert_event, parse_alert_method, parse_alive_test, parse_asset_type,
+    parse_config_usage_type, parse_credential_type, parse_entity_id, parse_permission_subject_type,
+    parse_snmp_auth_algorithm, parse_snmp_privacy_algorithm, parse_user_auth_type,
+    permission_from_gmp, port_list_from_gmp, report_application_from_gmp,
+    report_closed_cve_from_gmp, report_cve_from_gmp, report_error_from_gmp, report_format_from_gmp,
+    report_from_gmp, report_host_from_gmp, report_operating_system_from_gmp, report_port_from_gmp,
+    result_from_gmp, result_from_report_vulnerability, role_from_gmp, scan_config_from_gmp,
+    scanner_from_gmp, schedule_from_gmp, tag_from_gmp, target_from_gmp, task_from_gmp,
+    timezone_from_gmp, tls_certificate_asset_from_gmp, tls_certificate_from_report_tls_certificate,
+    user_from_gmp, user_setting_from_gmp, vulnerability_from_gmp, web_application_target_from_gmp,
 };
 use filters::{
     composed_filter, gvmd_total, needs_client_side_pagination_fallback, paged_pagination,
@@ -330,6 +333,48 @@ impl GvmdAdapter {
     ) -> Result<R::Response, GatewayError> {
         self.execute_with_session_mapped(session_token, operation, request, map_gvm_error)
             .await
+    }
+
+    async fn execute_report_export_with_session<T, F>(
+        &self,
+        session_token: &str,
+        operation: &'static str,
+        command: &'static str,
+        execute: F,
+    ) -> Result<T, GatewayError>
+    where
+        F: for<'client> FnOnce(
+            &'client mut GmpClient<UnixSocketConnection>,
+        ) -> Pin<
+            Box<dyn Future<Output = Result<T, GvmError>> + Send + 'client>,
+        >,
+    {
+        let client = self.session_client(session_token)?;
+        let span = info_span!(
+            "gvmd.request",
+            otel_name = "gvmd.request",
+            session_id = %safe_session_id(session_token),
+            gvmd_operation = operation,
+            gvmd_endpoint = %self.socket_path.display(),
+            gvmd_status = field::Empty,
+        );
+
+        async move {
+            let mut client = client.lock().await?;
+            if client.command_support(command) == CommandSupport::RequiresDiscovery {
+                client
+                    .discover_commands()
+                    .await
+                    .map_err(map_report_export_gvm_error)?;
+            }
+            let response = execute(&mut client)
+                .await
+                .map_err(map_report_export_gvm_error)?;
+            tracing::Span::current().record("gvmd_status", field::display("ok"));
+            Ok(response)
+        }
+        .instrument(span)
+        .await
     }
 
     async fn execute_with_session_mapped<R, F>(
