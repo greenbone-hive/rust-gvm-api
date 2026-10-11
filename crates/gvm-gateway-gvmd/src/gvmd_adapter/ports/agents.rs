@@ -165,12 +165,10 @@ impl AgentPort for GvmdAdapter {
         id: &str,
         query: &AgentSupportBundleQuery,
     ) -> Result<AgentSupportBundle, GatewayError> {
+        let mut request = GetAgentSupportBundleRequest::new(parse_entity_id(id)?, query.days);
+        request.encryption = query.encryption;
         let parsed = self
-            .execute_with_session(
-                session_token,
-                "agents.support_bundle",
-                GetAgentSupportBundleRequest::new(parse_entity_id(id)?, query.days),
-            )
+            .execute_with_session(session_token, "agents.support_bundle", request)
             .await?;
         let bundle = agent_support_bundle_from_gmp(parsed);
         if bundle.artifact.bytes.len() > MAX_AGENT_SUPPORT_BUNDLE_BYTES {

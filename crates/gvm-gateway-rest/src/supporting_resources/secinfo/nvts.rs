@@ -40,6 +40,10 @@ pub(crate) struct NvtResponse {
     tags: Option<String>,
     #[serde(rename = "solutionType", skip_serializing_if = "Option::is_none")]
     solution_type: Option<String>,
+    /// Whether gvmd marks this as a discovery NVT. Omitted when the backend does not provide the
+    /// marker.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    discovery: Option<bool>,
 }
 
 impl From<gvm_gateway_domain::Nvt> for NvtResponse {
@@ -52,6 +56,7 @@ impl From<gvm_gateway_domain::Nvt> for NvtResponse {
             severity: nvt.severity,
             tags: nvt.tags,
             solution_type: nvt.solution_type,
+            discovery: nvt.discovery,
         }
     }
 }
@@ -141,3 +146,7 @@ pub(crate) fn get_nvt_docs(op: TransformOperation<'_>) -> TransformOperation<'_>
     let op = problem_response::<401>(op, "Authentication required or session expired");
     problem_response::<404>(op, "Resource not found")
 }
+
+#[cfg(test)]
+#[path = "nvts_test.rs"]
+mod nvts_test;

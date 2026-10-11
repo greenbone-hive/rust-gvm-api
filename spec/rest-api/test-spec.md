@@ -47,6 +47,7 @@
 | `task_from_structured_response` | Map `rust-gvm` task response models to REST Task schema |
 | `report_from_structured_response` | Map `rust-gvm` report response models to REST Report schema |
 | `result_from_structured_response` | Map `rust-gvm` result response models to REST Result schema |
+| `result_nvt_type_metadata_is_source_shaped` | Preserve optional result-NVT `type_metadata` as the unparsed `typeMetadata` string and omit it when absent |
 | `pagination_defaults` | Missing page/perPage → defaults (1, 25) |
 | `pagination_bounds` | perPage > 1000 → rejected or clamped to 1000 |
 | `filter_to_gmp_string` | Structured filter params → GMP filter expression |
@@ -174,6 +175,8 @@ in-process or through a loopback listener.
 | `verify_credential_store` | `POST /api/v1/credential-stores/{id}/actions/verify` | Existing configured store | 204 |
 | `create_store_backed_credential` | `POST /api/v1/credentials` | `cs_*` type with vault and host references | 201; no local secret values mixed into command |
 | `modify_store_backed_credential` | `PUT /api/v1/credentials/{id}` | Store reference update | 200; semantic store-backed command used |
+| `agent_support_bundle_encryption_tristate` | `GET /api/v1/agents/{id}/support-bundle` with omitted, false, and true `encryption` | Agent exists | Typed request preserves all three states |
+| `nvt_discovery_marker_is_optional` | `GET /api/v1/nvts` and `GET /api/v1/nvts/{id}` | Backend returns true, false, or no marker | Response preserves booleans and omits an absent marker |
 
 ### 3.5b Identity & Access Control
 

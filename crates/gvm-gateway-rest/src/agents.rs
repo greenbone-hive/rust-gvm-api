@@ -93,8 +93,12 @@ pub(crate) struct AgentGroupListQueryParams {
 
 #[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]
 pub(crate) struct AgentSupportBundleQueryParams {
+    /// Limit the support bundle to the most recent number of days.
     #[schemars(range(min = 1))]
     days: Option<u32>,
+    /// Request backend support-bundle encryption. Omission preserves the backend default and is
+    /// distinct from explicit false.
+    encryption: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
@@ -585,20 +589,29 @@ fn parse_agent_group_query(raw: &str) -> Result<AgentGroupQuery, GatewayError> {
 
 fn parse_agent_support_bundle_query(raw: &str) -> Result<AgentSupportBundleQuery, GatewayError> {
     let mut days = None;
+    let mut encryption = None;
     for (key, value) in decoded_query_pairs(raw) {
-        if key == "days" {
-            let parsed_days = value.parse::<u32>().map_err(|_| {
-                GatewayError::InvalidInput("days must be a positive integer".to_string())
-            })?;
-            if parsed_days == 0 {
-                return Err(GatewayError::InvalidInput(
-                    "days must be greater than or equal to 1".to_string(),
-                ));
+        match key.as_ref() {
+            "days" => {
+                let parsed_days = value.parse::<u32>().map_err(|_| {
+                    GatewayError::InvalidInput("days must be a positive integer".to_string())
+                })?;
+                if parsed_days == 0 {
+                    return Err(GatewayError::InvalidInput(
+                        "days must be greater than or equal to 1".to_string(),
+                    ));
+                }
+                days = Some(parsed_days);
             }
-            days = Some(parsed_days);
+            "encryption" => {
+                encryption = Some(value.parse::<bool>().map_err(|_| {
+                    GatewayError::InvalidInput("encryption must be true or false".to_string())
+                })?);
+            }
+            _ => {}
         }
     }
-    Ok(AgentSupportBundleQuery { days })
+    Ok(AgentSupportBundleQuery { days, encryption })
 }
 
 fn parse_agent_installer_instruction_query(

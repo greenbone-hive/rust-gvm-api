@@ -291,6 +291,7 @@ pub struct NvtCatalogEntry {
     pub tags: Option<String>,
     #[serde(rename = "solutionType")]
     pub solution_type: Option<String>,
+    pub discovery: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -688,4 +689,6 @@ pub struct NvtRef {
     pub cvss_base: Option<f64>,
     pub cves: Option<Vec<String>>,
     pub tags: Option<String>,
+    #[serde(rename = "typeMetadata")]
+    pub type_metadata: Option<String>,
 }

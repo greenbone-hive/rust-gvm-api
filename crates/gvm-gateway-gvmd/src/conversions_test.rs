@@ -5,11 +5,12 @@ use super::*;
 use gvm_gmp::responses::{
     GetAgentGroupsResponse, GetAgentInstallerInstructionResponse, GetAgentSupportBundleResponse,
     GetAgentsResponse, GetAlertsResponse, GetAssetsResponse, GetConfigsResponse,
-    GetCredentialsResponse, GetFeedsResponse, GetNotesResponse, GetOverridesResponse,
-    GetPortListsResponse, GetReportClosedCvesResponse, GetReportOperatingSystemsResponse,
-    GetReportTlsCertificatesResponse, GetReportVulnsResponse, GetReportsResponse,
-    GetResultsResponse, GetScanConfigsResponse, GetScannersResponse, GetSchedulesResponse,
-    GetSettingsResponse, GetTargetsResponse, GetTasksResponse, GetUsersResponse,
+    GetCredentialsResponse, GetFeedsResponse, GetNotesResponse, GetNvtsResponse,
+    GetOverridesResponse, GetPortListsResponse, GetReportClosedCvesResponse,
+    GetReportOperatingSystemsResponse, GetReportTlsCertificatesResponse, GetReportVulnsResponse,
+    GetReportsResponse, GetResultsResponse, GetScanConfigsResponse, GetScannersResponse,
+    GetSchedulesResponse, GetSettingsResponse, GetTargetsResponse, GetTasksResponse,
+    GetUsersResponse,
 };
 use gvm_protocol::Response as GmpResponse;
 
@@ -486,6 +487,7 @@ fn result_from_gmp_preserves_references_and_nvt_metadata() {
                     <cve>CVE-2026-0001</cve>
                     <refs><ref type="cve" id="CVE-2026-0002"/></refs>
                     <tags>summary=Detects HTTP server</tags>
+                    <type_metadata>{"future":[1,true]}</type_metadata>
                 </nvt>
                 <threat>Log</threat>
                 <severity>0.0</severity>
@@ -523,6 +525,29 @@ fn result_from_gmp_preserves_references_and_nvt_metadata() {
         vec!["CVE-2026-0001".to_string(), "CVE-2026-0002".to_string()]
     );
     assert_eq!(nvt.tags.as_deref(), Some("summary=Detects HTTP server"));
+    assert_eq!(nvt.type_metadata.as_deref(), Some("{\"future\":[1,true]}"));
+}
+
+#[test]
+fn nvt_from_gmp_preserves_optional_discovery_marker() {
+    // Catalog NVT responses distinguish discovery true, discovery false, and
+    // absence; downstream optional booleans must preserve all three states.
+    let parsed = GetNvtsResponse::from_response(&GmpResponse::from(
+        r#"<get_nvts_response status="200" status_text="OK">
+            <nvt oid="1.3.6.1"><name>Discovery</name><discovery>1</discovery></nvt>
+            <nvt oid="1.3.6.2"><name>Not discovery</name><discovery>0</discovery></nvt>
+            <nvt oid="1.3.6.3"><name>Unspecified</name></nvt>
+        </get_nvts_response>"#,
+    ))
+    .expect("NVT response should parse");
+
+    let discovery = parsed
+        .items
+        .into_iter()
+        .map(nvt_from_gmp)
+        .map(|nvt| nvt.discovery)
+        .collect::<Vec<_>>();
+    assert_eq!(discovery, vec![Some(true), Some(false), None]);
 }
 
 #[test]
