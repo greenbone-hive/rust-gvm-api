@@ -195,6 +195,8 @@ pub struct AgentInstallerInstructionQuery {
 pub struct AgentSupportBundleQuery {
     /// Optional day range requested from the backend.
     pub days: Option<u32>,
+    /// Optional backend encryption selector; omission is distinct from false.
+    pub encryption: Option<bool>,
 }
 
 /// Binary agent support bundle.

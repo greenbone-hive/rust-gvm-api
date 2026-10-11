@@ -111,6 +111,9 @@ components:
             type: string
         tags:
           type: string
+        typeMetadata:
+          type: string
+          description: Source-shaped NVT type metadata supplied by gvmd. The gateway preserves this value without parsing or narrowing its schema.
 
     ResultList:
       type: object

@@ -1881,6 +1881,9 @@ components:
           type: string
         solutionType:
           type: string
+        discovery:
+          type: boolean
+          description: Whether gvmd marks this as a discovery NVT. Omitted when the backend does not provide the marker.
 
     NvtList:
       type: object

@@ -2,7 +2,7 @@
 
 Status: explanatory architecture note
 
-Reviewed: 2026-10-02
+Reviewed: 2026-10-11
 
 This document explains the Greenbone Management Protocol (GMP) boundary and
 compares two ways of exposing it to HTTP clients:
@@ -22,7 +22,7 @@ The analysis is based on these repository snapshots:
 - [`greenbone/gsa` at `4ba9551`](https://github.com/greenbone/gsa/tree/4ba9551bcd82bc53e22684ab5bb0eacc73419729)
 - [`greenbone/gsad` at `b98497f`](https://github.com/greenbone/gsad/tree/b98497f2cad94888b594aa6af1c84719d3c36a03)
 - `greenbone-hive/rust-gvm-api` `main` at `273a87e`
-- [`greenbone-hive/rust-gvm` v0.7.0 at the API-pinned `acdabf5`](https://github.com/greenbone-hive/rust-gvm/tree/acdabf5a039d78df82e86b69ee8a374df8575c7a)
+- [`greenbone-hive/rust-gvm` integration candidate `79161bd`](https://github.com/greenbone-hive/rust-gvm/tree/79161bd7704e64bba5caface1d8204dfe30fca74), temporarily pinned by issue #588 pending a containing release tag
 
 GSA and GSAD are valuable behavioral references, but they are not the
 normative GMP specification. Their bridge is tailored to the needs of the GSA
@@ -562,15 +562,16 @@ typed request and enforce that fields are valid for that variant. The gateway
 can then map the REST discriminator and fields without constructing XML or
 reproducing GSAD's sentinel conventions.
 
-### 7.3 Add delta report export to the existing job resource
+### 7.3 Add delta report export to the existing job resource in a later layer
 
 GSA can render a report relative to another report by passing
 `delta_report_id` to `get_reports`. The reviewed GSAD snapshot also exposes the
 newer `export_delta_scan_report` command. The current
 `POST /api/v1/reports/{id}/exports` job request supports report formats,
-report configs, and filters, but it has no comparison-report input. The pinned
-`rust-gvm` `GetReportExportOpts` and `ExportScanReportOpts` omit that input and
-there is no typed `export_delta_scan_report` request.
+report configs, and filters, but it has no comparison-report input. The issue
+#588 integration candidate now provides typed, help-discovery-gated report
+export lifecycle and delta-export requests. Typed upstream availability alone
+does not authorize a public selector or a new route.
 
 Add an optional `deltaReportId` to the existing report-export request rather
 than adding an RPC-style route. The resulting resource remains a
@@ -579,12 +580,14 @@ reject identical report identifiers, enforce access to both reports, and use
 the existing job polling, cancellation, retention, and result-download
 semantics.
 
-In `rust-gvm`, first add typed support for the `get_reports` delta attribute and
-a distinct help-discovery-gated `ExportDeltaScanReportRequest`. Exact request
-and response fixtures should cover filters, report formats, report configs,
-unknown command discovery, and server failure. `rust-gvm-api` should select the
-appropriate typed request according to backend support; it must not assemble a
-delta command locally.
+The first #588 layer pins and dispositions that typed surface only. It maps
+`get_report_exports`, `download_report_export`, and `cancel_report_export` to
+the existing job polling, download, and cancellation semantics, while deferring
+their worker integration to the next stacked PR. `export_audit_report`,
+`export_delta_audit_report`, and `export_delta_scan_report` remain omitted from
+the public product surface until a separately reviewed request selector exists.
+Any later implementation must select the appropriate typed request according
+to backend support; it must not assemble a delta command locally.
 
 ### 7.4 Stabilize collection queries and the filter escape hatch
 
@@ -622,7 +625,7 @@ not public-contract requirements.
 
 Version numbers alone do not describe all observed behavior. Commands may be
 version-gated, advertised only through XML help discovery, compiled out, or
-present but unauthorized. `rust-gvm` v0.7.0 implements the non-exhaustive
+present but unauthorized. The `rust-gvm` baseline implements the non-exhaustive
 `CommandSupport` classifier delivered by completed
 [`rust-gvm` issue #600](https://github.com/greenbone-hive/rust-gvm/issues/600):
 supported, discovery required, unsupported version, not advertised, and unknown
@@ -684,7 +687,9 @@ mapped to another REST workflow, internal, upstream-blocked, deferred, or
 deliberately omitted. A new GSA operation or public typed request should require
 a disposition, not necessarily a new endpoint. Completed
 [`rust-gvm-api` issue #381](https://github.com/greenbone-hive/rust-gvm-api/issues/381)
-established the v0.7.0 baseline. The active readable summary is
+established the v0.7.0 baseline. Issue #588 temporarily extends that inventory
+to the exact `79161bd` candidate revision without claiming tagged-release
+acceptance. The active readable summary is
 [`upstream-surface-dispositions.md`](upstream-surface-dispositions.md), and the
 exhaustive machine-readable source is
 [`upstream-surface-dispositions.tsv`](upstream-surface-dispositions.tsv).

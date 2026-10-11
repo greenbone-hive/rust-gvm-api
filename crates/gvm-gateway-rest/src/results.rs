@@ -57,6 +57,10 @@ pub(crate) struct NvtRefResponse {
     cves: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tags: Option<String>,
+    /// Source-shaped NVT type metadata supplied by gvmd. The gateway preserves this value without
+    /// parsing or narrowing its schema.
+    #[serde(rename = "typeMetadata", skip_serializing_if = "Option::is_none")]
+    type_metadata: Option<String>,
 }
 
 impl From<gvm_gateway_domain::NvtRef> for NvtRefResponse {
@@ -68,6 +72,7 @@ impl From<gvm_gateway_domain::NvtRef> for NvtRefResponse {
             cvss_base: n.cvss_base,
             cves: n.cves,
             tags: n.tags,
+            type_metadata: n.type_metadata,
         }
     }
 }
