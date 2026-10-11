@@ -5,9 +5,9 @@
 
 use gvm_gateway_domain::{
     GatewayError, GetReportOpts, ImportReportInput, Report, ReportApplicationPage,
-    ReportClosedCvePage, ReportCvePage, ReportErrorPage, ReportExport, ReportExportRequest,
-    ReportHostPage, ReportOperatingSystemPage, ReportPage, ReportPortPage, ReportQuery,
-    ReportVulnerabilityPage, ResultPage, ResultQuery, TlsCertificatePage,
+    ReportClosedCvePage, ReportCvePage, ReportErrorPage, ReportHostPage, ReportOperatingSystemPage,
+    ReportPage, ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResultPage, ResultQuery,
+    TlsCertificatePage,
 };
 
 use crate::GatewayService;
@@ -61,34 +61,6 @@ impl GatewayService {
             "report",
             Some(id),
             |session| async move { self.reports.get_report(&session.token, id, &opts).await },
-        )
-        .await
-    }
-
-    /// Exports a rendered report for an authenticated session.
-    pub async fn export_report(
-        &self,
-        session_token: &str,
-        report_id: &str,
-        report_format_id: &str,
-    ) -> Result<ReportExport, GatewayError> {
-        self.execute_with_resource(
-            "reports.export",
-            session_token,
-            "export",
-            "report_export",
-            Some(report_id),
-            |session| async move {
-                let request = ReportExportRequest {
-                    report_format_id: report_format_id.to_string(),
-                    report_config_id: None,
-                    filter: None,
-                    filter_id: None,
-                };
-                self.reports
-                    .export_report(&session.token, report_id, &request)
-                    .await
-            },
         )
         .await
     }

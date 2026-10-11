@@ -580,10 +580,11 @@ reject identical report identifiers, enforce access to both reports, and use
 the existing job polling, cancellation, retention, and result-download
 semantics.
 
-The first #588 layer pins and dispositions that typed surface only. It maps
-`get_report_exports`, `download_report_export`, and `cancel_report_export` to
-the existing job polling, download, and cancellation semantics, while deferring
-their worker integration to the next stacked PR. `export_audit_report`,
+The second stacked #588 layer integrates `export_scan_report`,
+`get_report_exports`, `download_report_export`, and `cancel_report_export` into
+the existing job creation, polling, download, and cancellation semantics.
+The exact candidate revision remains temporary until containing tagged-release
+acceptance. `export_audit_report`,
 `export_delta_audit_report`, and `export_delta_scan_report` remain omitted from
 the public product surface until a separately reviewed request selector exists.
 Any later implementation must select the appropriate typed request according
