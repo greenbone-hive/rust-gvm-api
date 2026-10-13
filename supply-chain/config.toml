@@ -117,6 +117,10 @@ criteria = "safe-to-deploy"
 version = "0.2.1"
 criteria = "safe-to-deploy"
 
+[[exemptions.chacha20]]
+version = "0.10.2"
+criteria = "safe-to-deploy"
+
 [[exemptions.chrono]]
 version = "0.4.45"
 criteria = "safe-to-deploy"
@@ -385,6 +389,10 @@ criteria = "safe-to-deploy"
 version = "0.2.186"
 criteria = "safe-to-deploy"
 
+[[exemptions.libm]]
+version = "0.2.16"
+criteria = "safe-to-run"
+
 [[exemptions.linux-raw-sys]]
 version = "0.12.1"
 criteria = "safe-to-run"
@@ -428,6 +436,10 @@ criteria = "safe-to-run"
 [[exemptions.mio]]
 version = "1.2.1"
 criteria = "safe-to-deploy"
+
+[[exemptions.noyalib]]
+version = "0.0.57"
+criteria = "safe-to-run"
 
 [[exemptions.nu-ansi-term]]
 version = "0.50.3"
@@ -542,7 +554,7 @@ version = "0.11.11"
 criteria = "safe-to-deploy"
 
 [[exemptions.quinn-proto]]
-version = "0.11.15"
+version = "0.11.18"
 criteria = "safe-to-deploy"
 
 [[exemptions.quinn-udp]]
@@ -565,12 +577,24 @@ criteria = "safe-to-deploy"
 version = "0.9.4"
 criteria = "safe-to-deploy"
 
+[[exemptions.rand]]
+version = "0.10.3"
+criteria = "safe-to-deploy"
+
 [[exemptions.rand_chacha]]
 version = "0.9.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.rand_core]]
 version = "0.9.5"
+criteria = "safe-to-deploy"
+
+[[exemptions.rand_core]]
+version = "0.10.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.rand_pcg]]
+version = "0.10.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.rcgen]]
@@ -701,6 +725,10 @@ criteria = "safe-to-deploy"
 version = "0.30.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.serde_ignored]]
+version = "0.1.14"
+criteria = "safe-to-run"
+
 [[exemptions.serde_json]]
 version = "1.0.151"
 criteria = "safe-to-deploy"
@@ -716,10 +744,6 @@ criteria = "safe-to-deploy"
 [[exemptions.serde_urlencoded]]
 version = "0.7.1"
 criteria = "safe-to-deploy"
-
-[[exemptions.serde_yaml]]
-version = "0.9.34+deprecated"
-criteria = "safe-to-run"
 
 [[exemptions.sha1_smol]]
 version = "1.0.1"
@@ -904,10 +928,6 @@ criteria = "safe-to-deploy"
 [[exemptions.unicode-ident]]
 version = "1.0.24"
 criteria = "safe-to-deploy"
-
-[[exemptions.unsafe-libyaml]]
-version = "0.2.11"
-criteria = "safe-to-run"
 
 [[exemptions.untrusted]]
 version = "0.9.0"
