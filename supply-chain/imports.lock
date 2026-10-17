@@ -538,3 +538,9 @@ who = "Thoth"
 criteria = "safe-to-deploy"
 delta = "0.22.1 -> 0.23.1"
 notes = "Reviewed the full 0.22.1 -> 0.23.1 delta, including AVX2 and NEON unsafe kernels. Pointer loads and stores are guarded by explicit length bounds; safe runtime dispatch checks CPU support; unchecked AVX2 constructors document their caller precondition; no new ambient capabilities were introduced. Upstream all-features, alloc-only, and std-only test matrices passed, including exhaustive scalar and SIMD cases."
+
+[[audits.rust-gvm.audits.rustls]]
+who = "Thoth"
+criteria = "safe-to-deploy"
+delta = "0.23.45 -> 0.23.46"
+notes = "Reviewed the complete security-release delta: redacts TLS master secrets and resumption PSKs from Debug output (RUSTSEC-2026-0346), prevents buffered application data escaping after ECH rejection (RUSTSEC-2026-0347), uses strict bounded Brotli certificate decompression (RUSTSEC-2026-0348), and stores key-exchange hints only after handshake authentication (RUSTSEC-2026-0349). It also hardens record limits, key updates, ECH/PSK invariants, and cache arithmetic. No unsafe code or ambient capabilities were added."
