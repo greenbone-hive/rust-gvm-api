@@ -1,5 +1,6 @@
-# rust-gvm-reference	integration-candidate-revision
-# rust-gvm-revision	79161bd7704e64bba5caface1d8204dfe30fca74
+# rust-gvm-reference	release-tag
+# rust-gvm-tag	v0.8.0
+# rust-gvm-revision	f20a01f7297060f02b6f577bba7261cacb585fc3
 module	method
 agents	clone_agent_group
 agents	create_agent_group

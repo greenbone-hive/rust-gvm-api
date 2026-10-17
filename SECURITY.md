@@ -63,7 +63,7 @@ inventory, and reviewed unsafe-policy exceptions are documented in
 
 - `cargo clippy` with `-D warnings` in CI
 - `#[deny(unsafe_code)]` — no unsafe blocks in any crate, reinforced by the independent workspace-inventory/Geiger gate
-- MSRV tested (currently Rust 1.88.0)
+- MSRV tested (currently Rust 1.89.0)
 - SBOM (CycloneDX) generated for releases and continuously quality-gated by Security
 
 ## Changelog

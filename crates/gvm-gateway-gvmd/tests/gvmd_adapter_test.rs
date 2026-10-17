@@ -1885,7 +1885,7 @@ async fn gvmd_adapter_agent_download_helpers_map_typed_payloads() {
 
 #[tokio::test]
 async fn gvmd_adapter_support_bundle_preserves_encryption_tristate() {
-    // The candidate typed request owns GMP encoding; the gateway must pass
+    // The upstream typed request owns GMP encoding; the gateway must pass
     // omission, explicit false, and explicit true through without collapsing
     // them before command construction.
     let (adapter, server, token) = create_mock_adapter_v22_8().await;

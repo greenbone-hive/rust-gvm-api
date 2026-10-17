@@ -22,7 +22,7 @@ The analysis is based on these repository snapshots:
 - [`greenbone/gsa` at `4ba9551`](https://github.com/greenbone/gsa/tree/4ba9551bcd82bc53e22684ab5bb0eacc73419729)
 - [`greenbone/gsad` at `b98497f`](https://github.com/greenbone/gsad/tree/b98497f2cad94888b594aa6af1c84719d3c36a03)
 - `greenbone-hive/rust-gvm-api` `main` at `273a87e`
-- [`greenbone-hive/rust-gvm` integration candidate `79161bd`](https://github.com/greenbone-hive/rust-gvm/tree/79161bd7704e64bba5caface1d8204dfe30fca74), temporarily pinned by issue #588 pending a containing release tag
+- [`greenbone-hive/rust-gvm` v0.8.0 release](https://github.com/greenbone-hive/rust-gvm/tree/f20a01f7297060f02b6f577bba7261cacb585fc3), accepted by issue #588
 
 GSA and GSAD are valuable behavioral references, but they are not the
 normative GMP specification. Their bridge is tailored to the needs of the GSA
@@ -569,7 +569,7 @@ GSA can render a report relative to another report by passing
 newer `export_delta_scan_report` command. The current
 `POST /api/v1/reports/{id}/exports` job request supports report formats,
 report configs, and filters, but it has no comparison-report input. The issue
-#588 integration candidate now provides typed, help-discovery-gated report
+#588 release baseline now provides typed, help-discovery-gated report
 export lifecycle and delta-export requests. Typed upstream availability alone
 does not authorize a public selector or a new route.
 
@@ -687,9 +687,9 @@ mapped to another REST workflow, internal, upstream-blocked, deferred, or
 deliberately omitted. A new GSA operation or public typed request should require
 a disposition, not necessarily a new endpoint. Completed
 [`rust-gvm-api` issue #381](https://github.com/greenbone-hive/rust-gvm-api/issues/381)
-established the v0.7.0 baseline. Issue #588 temporarily extends that inventory
-to the exact `79161bd` candidate revision without claiming tagged-release
-acceptance. The active readable summary is
+established the v0.7.0 baseline. Issue #588 accepts the v0.8.0 release
+inventory at exact revision `f20a01f7297060f02b6f577bba7261cacb585fc3`.
+The active readable summary is
 [`upstream-surface-dispositions.md`](upstream-surface-dispositions.md), and the
 exhaustive machine-readable source is
 [`upstream-surface-dispositions.tsv`](upstream-surface-dispositions.tsv).
