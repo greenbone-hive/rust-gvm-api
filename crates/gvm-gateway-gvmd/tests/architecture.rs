@@ -487,10 +487,9 @@ fn typed_facade_metadata_rejects_any_other_release_revision() {
 }
 
 #[test]
-fn report_export_release_methods_keep_the_reviewed_layer_boundary() {
-    // The release provides six export helpers, but this layer only classifies
-    // them against the existing job contract. Keep lifecycle integration for
-    // the next stacked PR and keep audit/delta variants non-public.
+fn report_export_release_methods_keep_the_reviewed_product_boundary() {
+    // This layer integrates only the release's scan-export lifecycle into the
+    // existing job contract while audit/delta variants remain non-public.
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let ledger = fs::read_to_string(manifest_dir.join(RUST_GVM_DISPOSITION_LEDGER))
         .expect("read downstream disposition ledger");
@@ -498,6 +497,7 @@ fn report_export_release_methods_keep_the_reviewed_layer_boundary() {
     for method in [
         "cancel_report_export",
         "download_report_export",
+        "export_scan_report",
         "get_report_exports",
     ] {
         let row = ledger
@@ -506,8 +506,9 @@ fn report_export_release_methods_keep_the_reviewed_layer_boundary() {
             .unwrap_or_else(|| panic!("missing release disposition for {method}"));
         assert!(
             row.starts_with(&format!("{method}\tmapped\t"))
-                && row.contains("next stacked PR"),
-            "{method} must map to the existing job contract while typed lifecycle integration remains deferred: {row}"
+                && row.contains("crates/gvm-gateway-app/src/jobs.rs")
+                && !row.contains("deferred"),
+            "{method} must map to the implemented existing job contract: {row}"
         );
     }
 
@@ -532,13 +533,21 @@ fn report_export_release_methods_keep_the_reviewed_layer_boundary() {
         "CancelReportExportRequest",
         "DownloadReportExportRequest",
         "GetReportExportsRequest",
+        "ExportScanReportRequest",
+    ] {
+        assert!(
+            production.contains(request),
+            "the typed report-export lifecycle must use {request}"
+        );
+    }
+    for request in [
         "ExportAuditReportRequest",
         "ExportDeltaAuditReportRequest",
         "ExportDeltaScanReportRequest",
     ] {
         assert!(
             !production.contains(request),
-            "this layer must not implement the report-export lifecycle or add an audit/delta route through {request}"
+            "this layer must not add an audit/delta route through {request}"
         );
     }
 }
@@ -867,16 +876,33 @@ fn initial_adapter_slice_stays_on_typed_execution() {
 
     let reports = fs::read_to_string(adapter_dir.join("ports/reports.rs"))
         .expect("read report adapter module");
-    let report_export =
-        section_between(&reports, "async fn export_report", "async fn delete_report");
-    assert_typed_section(
-        report_export,
-        "GetReportExportRequest::new",
-        "report export",
+    let report_export = section_between(
+        &reports,
+        "async fn create_report_export",
+        "async fn delete_report",
     );
+    for request in [
+        "ExportScanReportRequest::new",
+        "GetReportExportsRequest::new",
+        "DownloadReportExportRequest::new",
+        "CancelReportExportRequest::new",
+    ] {
+        assert_typed_section(report_export, request, "report export lifecycle");
+    }
+    for method in [
+        ".export_scan_report(",
+        ".get_report_exports(",
+        ".download_report_export(",
+        ".cancel_report_export(",
+    ] {
+        assert!(
+            report_export.contains(method),
+            "report export lifecycle must call rust-gvm's typed {method} facade"
+        );
+    }
     assert!(
-        !report_export.contains("GmpGetReportExportRequest"),
-        "report export must retain the canonical upstream request spelling"
+        !report_export.contains("GetReportExportRequest::new"),
+        "report export jobs must not fall back to the synchronous one-shot request"
     );
 }
 
@@ -933,7 +959,11 @@ fn migrated_task_and_report_families_stay_on_typed_execution() {
         "report listing must use the canonical complete request value"
     );
 
-    let get_report = section_between(&reports, "async fn get_report", "async fn export_report");
+    let get_report = section_between(
+        &reports,
+        "async fn get_report",
+        "async fn create_report_export",
+    );
     assert_typed_section(get_report, "GetReportRequest::new", "report detail");
     assert!(
         get_report.contains("request.details = Some(false)"),
@@ -1485,7 +1515,9 @@ fn assert_typed_section(section: &str, semantic_request: &str, description: &str
         "{description} must construct {semantic_request}"
     );
     assert!(
-        section.contains(".execute(") || section.contains("execute_with_session"),
+        section.contains(".execute(")
+            || section.contains("execute_with_session")
+            || section.contains("execute_report_export_with_session"),
         "{description} must use typed execution"
     );
     assert!(

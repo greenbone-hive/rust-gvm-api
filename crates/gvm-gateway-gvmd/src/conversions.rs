@@ -1053,6 +1053,17 @@ pub(crate) fn map_gvm_error(error: gvm_client::GvmError) -> GatewayError {
     }
 }
 
+pub(crate) fn map_report_export_gvm_error(error: gvm_client::GvmError) -> GatewayError {
+    match error {
+        gvm_client::GvmError::UnsupportedCommand { .. }
+        | gvm_client::GvmError::CommandDiscoveryRequired { .. }
+        | gvm_client::GvmError::CommandNotAdvertised { .. } => GatewayError::NotImplemented(
+            "backend does not support asynchronous report export".to_string(),
+        ),
+        other => map_gvm_error(other),
+    }
+}
+
 fn identity_meta_from_gmp(meta: gvm_gmp::responses::common::EntityMeta) -> IdentityResourceMeta {
     IdentityResourceMeta {
         id: meta.id.to_string(),

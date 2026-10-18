@@ -9,29 +9,30 @@ use gvm_gateway_domain::{
     Agent, AgentGroup, AgentGroupPage, AgentGroupQuery, AgentInstallerInstruction,
     AgentInstallerInstructionQuery, AgentPage, AgentPort, AgentQuery, AgentSupportBundle,
     AgentSupportBundleQuery, Alert, AlertPage, AlertPort, AlertQuery, AssetQuery, AuthPort,
-    CertBundAdvisory, CertBundAdvisoryPage, Cpe, CpePage, CreateAgentGroupInput, CreateAlertInput,
-    CreateCredentialInput, CreateFilterInput, CreateGroupInput, CreateHostInput, CreateNoteInput,
-    CreateOciImageTargetInput, CreateOverrideInput, CreatePermissionInput, CreatePolicyInput,
-    CreatePortListInput, CreateRoleInput, CreateScanConfigInput, CreateScheduleInput,
-    CreateTagInput, CreateTargetInput, CreateTaskInput, CreateUserInput,
-    CreateWebApplicationTargetInput, Credential, CredentialPage, CredentialPort, CredentialQuery,
-    CredentialStore, Cve, CvePage, DfnCertAdvisory, DfnCertAdvisoryPage, FeedList, FeedPort,
-    FeedQuery, Filter, FilterPage, GatewayError, GenericAsset, GenericAssetPage, GenericConfig,
-    GenericConfigPage, GenericConfigQuery, GetReportOpts, Group, GroupPage, Host, HostPage,
-    IdentityPort, IdentityQuery, ImportReportInput, ModifyAgentControlScanConfigInput,
-    ModifyAgentGroupInput, ModifyAgentInput, ModifyAlertInput, ModifyAssetInput,
-    ModifyCredentialInput, ModifyCredentialStoreInput, ModifyFilterInput, ModifyGroupInput,
-    ModifyHostInput, ModifyNoteInput, ModifyOciImageTargetInput, ModifyOperatingSystemInput,
-    ModifyOverrideInput, ModifyPermissionInput, ModifyPortListInput, ModifyRoleInput,
-    ModifyScanConfigInput, ModifyScheduleInput, ModifyTagInput, ModifyTargetInput, ModifyTaskInput,
-    ModifyUserInput, ModifyUserSettingInput, ModifyWebApplicationTargetInput, Note, NotePage, Nvt,
-    NvtFamilyPage, NvtPage, NvtQuery, OciImageTarget, OciImageTargetPage, OperatingSystem,
-    OperatingSystemPage, Override, OverridePage, Permission, PermissionPage, PortList,
-    PortListPage, PortListPort, PortListQuery, ReadinessStatus, Report, ReportApplicationPage,
-    ReportClosedCvePage, ReportCvePage, ReportErrorPage, ReportExport, ReportExportRequest,
-    ReportFormat, ReportFormatPage, ReportHostPage, ReportOperatingSystemPage, ReportPage,
-    ReportPort, ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResultPage, ResultPort,
-    ResultQuery, Role, RolePage, ScanConfig, ScanConfigNvtPage, ScanConfigNvtQuery, ScanConfigPage,
+    BackendReportExport, BackendReportExportState, CertBundAdvisory, CertBundAdvisoryPage, Cpe,
+    CpePage, CreateAgentGroupInput, CreateAlertInput, CreateCredentialInput, CreateFilterInput,
+    CreateGroupInput, CreateHostInput, CreateNoteInput, CreateOciImageTargetInput,
+    CreateOverrideInput, CreatePermissionInput, CreatePolicyInput, CreatePortListInput,
+    CreateRoleInput, CreateScanConfigInput, CreateScheduleInput, CreateTagInput, CreateTargetInput,
+    CreateTaskInput, CreateUserInput, CreateWebApplicationTargetInput, Credential, CredentialPage,
+    CredentialPort, CredentialQuery, CredentialStore, Cve, CvePage, DfnCertAdvisory,
+    DfnCertAdvisoryPage, FeedList, FeedPort, FeedQuery, Filter, FilterPage, GatewayError,
+    GenericAsset, GenericAssetPage, GenericConfig, GenericConfigPage, GenericConfigQuery,
+    GetReportOpts, Group, GroupPage, Host, HostPage, IdentityPort, IdentityQuery,
+    ImportReportInput, ModifyAgentControlScanConfigInput, ModifyAgentGroupInput, ModifyAgentInput,
+    ModifyAlertInput, ModifyAssetInput, ModifyCredentialInput, ModifyCredentialStoreInput,
+    ModifyFilterInput, ModifyGroupInput, ModifyHostInput, ModifyNoteInput,
+    ModifyOciImageTargetInput, ModifyOperatingSystemInput, ModifyOverrideInput,
+    ModifyPermissionInput, ModifyPortListInput, ModifyRoleInput, ModifyScanConfigInput,
+    ModifyScheduleInput, ModifyTagInput, ModifyTargetInput, ModifyTaskInput, ModifyUserInput,
+    ModifyUserSettingInput, ModifyWebApplicationTargetInput, Note, NotePage, Nvt, NvtFamilyPage,
+    NvtPage, NvtQuery, OciImageTarget, OciImageTargetPage, OperatingSystem, OperatingSystemPage,
+    Override, OverridePage, Permission, PermissionPage, PortList, PortListPage, PortListPort,
+    PortListQuery, ReadinessStatus, Report, ReportApplicationPage, ReportClosedCvePage,
+    ReportCvePage, ReportErrorPage, ReportExport, ReportExportRequest, ReportFormat,
+    ReportFormatPage, ReportHostPage, ReportOperatingSystemPage, ReportPage, ReportPort,
+    ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResultPage, ResultPort, ResultQuery,
+    Role, RolePage, ScanConfig, ScanConfigNvtPage, ScanConfigNvtQuery, ScanConfigPage,
     ScanConfigPort, ScanConfigPreference, ScanConfigPreferenceQuery, ScanConfigQuery, ScanResult,
     Scanner, ScannerPage, ScannerPort, ScannerQuery, Schedule, SchedulePage, SchedulePort,
     ScheduleQuery, SetScanConfigFamilySelectionInput, SpecializedTargetQuery,
@@ -658,12 +659,34 @@ impl ReportPort for StaticGvmdAdapter {
         ))
     }
 
-    async fn export_report(
+    async fn create_report_export(
         &self,
         _: &str,
         _: &str,
         _: &ReportExportRequest,
-    ) -> Result<ReportExport, GatewayError> {
+    ) -> Result<BackendReportExport, GatewayError> {
+        Err(GatewayError::BackendUnavailable(
+            "static adapter does not support reports".to_string(),
+        ))
+    }
+
+    async fn get_report_export(
+        &self,
+        _: &str,
+        _: &str,
+    ) -> Result<BackendReportExportState, GatewayError> {
+        Err(GatewayError::BackendUnavailable(
+            "static adapter does not support reports".to_string(),
+        ))
+    }
+
+    async fn download_report_export(&self, _: &str, _: &str) -> Result<ReportExport, GatewayError> {
+        Err(GatewayError::BackendUnavailable(
+            "static adapter does not support reports".to_string(),
+        ))
+    }
+
+    async fn cancel_report_export(&self, _: &str, _: &str) -> Result<(), GatewayError> {
         Err(GatewayError::BackendUnavailable(
             "static adapter does not support reports".to_string(),
         ))

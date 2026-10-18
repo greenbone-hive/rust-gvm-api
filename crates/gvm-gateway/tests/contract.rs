@@ -16,11 +16,10 @@ use gvm_gateway_domain::{
     CredentialQuery, CredentialStore, GatewayError, GetReportOpts, ImportReportInput,
     ModifyAlertInput, ModifyCredentialInput, ModifyCredentialStoreInput, ModifyTargetInput,
     ModifyTaskInput, Pagination, Report, ReportApplicationPage, ReportClosedCvePage, ReportCvePage,
-    ReportErrorPage, ReportExport, ReportExportRequest, ReportHostPage, ReportOperatingSystemPage,
-    ReportPage, ReportPort, ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResourceRef,
-    ResultPage, ResultQuery, ScanResult, SessionLimits, SessionManager, Target, TargetPage,
-    TargetPort, TargetQuery, Task, TaskAction, TaskObservers, TaskPage, TaskPort, TaskQuery,
-    TlsCertificatePage,
+    ReportErrorPage, ReportHostPage, ReportOperatingSystemPage, ReportPage, ReportPort,
+    ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResourceRef, ResultPage, ResultQuery,
+    ScanResult, SessionLimits, SessionManager, Target, TargetPage, TargetPort, TargetQuery, Task,
+    TaskAction, TaskObservers, TaskPage, TaskPort, TaskQuery, TlsCertificatePage,
 };
 use gvm_gateway_gvmd::StaticGvmdAdapter;
 use gvm_gateway_rest::{
@@ -1357,17 +1356,6 @@ impl ReportPort for JsonExportReportPort {
         Ok(report_response(id))
     }
 
-    async fn export_report(
-        &self,
-        _: &str,
-        _: &str,
-        _: &ReportExportRequest,
-    ) -> Result<ReportExport, GatewayError> {
-        Err(GatewayError::NotImplemented(
-            "gvmd report-format export is not used by this test port".to_string(),
-        ))
-    }
-
     async fn delete_report(&self, _: &str, id: &str) -> Result<(), GatewayError> {
         self.deleted_ids
             .lock()
@@ -1627,15 +1615,6 @@ impl ReportPort for MissingReportPort {
         id: &str,
         _: &GetReportOpts,
     ) -> Result<Report, GatewayError> {
-        Err(GatewayError::NotFound(format!("report {id} not found")))
-    }
-
-    async fn export_report(
-        &self,
-        _: &str,
-        id: &str,
-        _: &ReportExportRequest,
-    ) -> Result<ReportExport, GatewayError> {
         Err(GatewayError::NotFound(format!("report {id} not found")))
     }
 

@@ -10,14 +10,15 @@ use std::{
 
 use async_trait::async_trait;
 use gvm_gateway_domain::{
-    AssetQuery, CreateReportExportRequest, CreateTargetInput, GatewayError, GenericConfigQuery,
-    GetReportOpts, GvmdReportFormatExportRequest, ImportReportInput, JobStatus,
-    JsonReportExportRequest, ModifyAssetInput, ModifyTargetInput, Pagination, ReadinessStatus,
-    Report, ReportApplicationPage, ReportClosedCvePage, ReportCvePage, ReportErrorPage,
-    ReportExport, ReportExportJob, ReportExportRequest, ReportHostPage, ReportOperatingSystemPage,
-    ReportPage, ReportPort, ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResourceRef,
-    ResultPage, ResultQuery, ScanResult, SessionLimits, SessionManager, SessionTokenDigest,
-    SystemPort, TargetQuery, Timezone, TlsCertificatePage,
+    AssetQuery, BackendReportExport, BackendReportExportState, CreateReportExportRequest,
+    CreateTargetInput, GatewayError, GenericConfigQuery, GetReportOpts,
+    GvmdReportFormatExportRequest, ImportReportInput, JobStatus, JsonReportExportRequest,
+    ModifyAssetInput, ModifyTargetInput, Pagination, ReadinessStatus, Report,
+    ReportApplicationPage, ReportClosedCvePage, ReportCvePage, ReportErrorPage, ReportExport,
+    ReportExportJob, ReportExportRequest, ReportHostPage, ReportOperatingSystemPage, ReportPage,
+    ReportPort, ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResourceRef, ResultPage,
+    ResultQuery, ScanResult, SessionLimits, SessionManager, SessionTokenDigest, SystemPort,
+    TargetQuery, Timezone, TlsCertificatePage,
 };
 use tokio::sync::Notify;
 
@@ -391,16 +392,6 @@ async fn service_get_report_requires_valid_session() {
     assert!(matches!(result, Err(GatewayError::SessionInvalidated(_))));
 }
 
-/// Report export rejects unknown session tokens before hitting the port.
-#[tokio::test]
-async fn service_export_report_requires_valid_session() {
-    let service = create_test_service();
-    let result = service
-        .export_report("invalid-token", "some-report-id", "some-report-format-id")
-        .await;
-    assert!(matches!(result, Err(GatewayError::SessionInvalidated(_))));
-}
-
 /// Creating an asynchronous report export job rejects unknown sessions before queuing work.
 #[tokio::test]
 async fn service_create_report_export_job_requires_valid_session() {
@@ -625,13 +616,12 @@ async fn service_report_export_job_holds_session_during_background_work() {
         .is_some());
 }
 
-/// Deleting a session cancels non-terminal jobs that were started from that
-/// session instead of leaving them to continue with an invalid backend login.
+/// Explicit job cancellation aborts gateway-only JSON work even when a report
+/// page read never resolves.
 #[tokio::test]
-async fn service_delete_session_cancels_running_report_export_job() {
-    let release = Arc::new(Notify::new());
+async fn service_cancel_job_aborts_blocked_json_export() {
     let service = create_test_service_with_report_port(Arc::new(BlockingReportPort {
-        release: Arc::clone(&release),
+        release: Arc::new(Notify::new()),
     }));
     let session = service.session_manager().create("admin").unwrap();
 
@@ -648,11 +638,47 @@ async fn service_delete_session_cancels_running_report_export_job() {
         .expect("job should be accepted");
     wait_for_job_status(&service, &session.token, &job.id, JobStatus::Running).await;
 
-    service
-        .delete_session(&session.token)
+    service.cancel_job(&session.token, &job.id).await.unwrap();
+
+    assert_eq!(
+        service
+            .get_job(&session.token, &job.id)
+            .await
+            .unwrap()
+            .status,
+        JobStatus::Cancelled
+    );
+}
+
+/// Deleting a session aborts a blocked gateway-only JSON export, waits for its
+/// worker to finish, and does not require the stalled report call to cooperate.
+#[tokio::test]
+async fn service_delete_session_aborts_blocked_json_export() {
+    let service = create_test_service_with_report_port(Arc::new(BlockingReportPort {
+        release: Arc::new(Notify::new()),
+    }));
+    let session = service.session_manager().create("admin").unwrap();
+
+    let job = service
+        .create_report_export_job(
+            &session.token,
+            "123e4567-e89b-12d3-a456-426614174000",
+            CreateReportExportRequest::Json(JsonReportExportRequest {
+                filter: None,
+                filter_id: None,
+            }),
+        )
         .await
-        .expect("session deletion should succeed");
-    release.notify_waiters();
+        .expect("job should be accepted");
+    wait_for_job_status(&service, &session.token, &job.id, JobStatus::Running).await;
+
+    tokio::time::timeout(
+        Duration::from_millis(250),
+        service.delete_session(&session.token),
+    )
+    .await
+    .expect("blocked JSON work must not hang session teardown")
+    .expect("session deletion should succeed");
 
     let replacement_session = service.session_manager().create("admin").unwrap();
     let cancelled = service
@@ -660,49 +686,6 @@ async fn service_delete_session_cancels_running_report_export_job() {
         .await
         .expect("same user should still see retained cancelled job");
     assert_eq!(cancelled.status, JobStatus::Cancelled);
-}
-
-/// A late abort-handle attachment must not resurrect cancellability after the
-/// job has already reached a terminal state.
-#[tokio::test]
-async fn service_cancelled_report_export_job_rejects_late_abort_handle() {
-    let release = Arc::new(Notify::new());
-    let service = create_test_service_with_report_port(Arc::new(BlockingReportPort {
-        release: Arc::clone(&release),
-    }));
-    let session = service.session_manager().create("admin").unwrap();
-
-    let job = service
-        .create_report_export_job(
-            &session.token,
-            "123e4567-e89b-12d3-a456-426614174000",
-            CreateReportExportRequest::Json(JsonReportExportRequest {
-                filter: None,
-                filter_id: None,
-            }),
-        )
-        .await
-        .expect("job should be accepted");
-    wait_for_job_status(&service, &session.token, &job.id, JobStatus::Running).await;
-
-    service
-        .cancel_job(&session.token, &job.id)
-        .await
-        .expect("job cancellation should succeed");
-
-    let late_worker = tokio::spawn(async {
-        std::future::pending::<()>().await;
-    });
-    service
-        .attach_abort_handle_for_tests(&job.id, late_worker.abort_handle())
-        .expect("late abort-handle attachment should be handled");
-    let join_error = late_worker
-        .await
-        .expect_err("late worker should be aborted immediately");
-
-    release.notify_waiters();
-    assert!(join_error.is_cancelled());
-    assert!(!service.job_has_abort_handle_for_tests(&job.id));
 }
 
 fn create_test_service_with_report_port(report_port: Arc<dyn ReportPort>) -> GatewayService {
@@ -771,20 +754,6 @@ impl ReportPort for BlockingReportPort {
         _: &GetReportOpts,
     ) -> Result<Report, GatewayError> {
         Ok(test_report(id))
-    }
-
-    async fn export_report(
-        &self,
-        _: &str,
-        _: &str,
-        _: &ReportExportRequest,
-    ) -> Result<ReportExport, GatewayError> {
-        self.release.notified().await;
-        Ok(ReportExport {
-            bytes: b"export".to_vec(),
-            content_type: Some("text/plain".to_string()),
-            extension: Some("txt".to_string()),
-        })
     }
 
     async fn delete_report(&self, _: &str, _: &str) -> Result<(), GatewayError> {
@@ -920,19 +889,6 @@ impl ReportPort for ExistingReportPort {
         _: &GetReportOpts,
     ) -> Result<Report, GatewayError> {
         Ok(test_report(id))
-    }
-
-    async fn export_report(
-        &self,
-        _: &str,
-        _: &str,
-        _: &ReportExportRequest,
-    ) -> Result<ReportExport, GatewayError> {
-        Ok(ReportExport {
-            bytes: b"export".to_vec(),
-            content_type: Some("text/plain".to_string()),
-            extension: Some("txt".to_string()),
-        })
     }
 
     async fn delete_report(&self, _: &str, _: &str) -> Result<(), GatewayError> {
@@ -1071,16 +1027,30 @@ impl ReportPort for CapturingReportPort {
         Ok(test_report(id))
     }
 
-    async fn export_report(
+    async fn create_report_export(
         &self,
         _: &str,
         _: &str,
         request: &ReportExportRequest,
-    ) -> Result<ReportExport, GatewayError> {
+    ) -> Result<BackendReportExport, GatewayError> {
         *self
             .captured
             .lock()
             .expect("captured export request mutex should not be poisoned") = Some(request.clone());
+        Ok(BackendReportExport {
+            id: "123e4567-e89b-12d3-a456-426614174444".to_string(),
+        })
+    }
+
+    async fn get_report_export(
+        &self,
+        _: &str,
+        _: &str,
+    ) -> Result<BackendReportExportState, GatewayError> {
+        Ok(BackendReportExportState::Ready)
+    }
+
+    async fn download_report_export(&self, _: &str, _: &str) -> Result<ReportExport, GatewayError> {
         Ok(ReportExport {
             bytes: b"export".to_vec(),
             content_type: Some("text/plain".to_string()),
@@ -1217,15 +1187,6 @@ impl ReportPort for MissingReportPort {
         id: &str,
         _: &GetReportOpts,
     ) -> Result<Report, GatewayError> {
-        Err(GatewayError::NotFound(format!("report {id} not found")))
-    }
-
-    async fn export_report(
-        &self,
-        _: &str,
-        id: &str,
-        _: &ReportExportRequest,
-    ) -> Result<ReportExport, GatewayError> {
         Err(GatewayError::NotFound(format!("report {id} not found")))
     }
 
@@ -1590,36 +1551,6 @@ async fn audit_logs_target_mutation_without_raw_session_token() {
     assert!(output.contains("session_id=\"session:"));
     assert!(!output.contains(&session_token));
     assert!(!output.contains("super-secret-password"));
-}
-
-/// Report export audit logs use a dedicated action separate from ordinary reads.
-#[tokio::test]
-async fn audit_logs_report_export_with_export_action() {
-    let _trace_lock = lock_tracing().await;
-    let capture = capture_tracing();
-    let session_token = capture
-        .run(async {
-            let service = create_test_service();
-            let session = service.create_session("admin", "secret").await.unwrap();
-
-            let _ = service
-                .export_report(
-                    &session.token,
-                    "550e8400-e29b-41d4-a716-446655440000",
-                    "123e4567-e89b-12d3-a456-426614174000",
-                )
-                .await;
-
-            session.token
-        })
-        .await;
-
-    let output = capture.output();
-    assert!(output.contains("audit_event=\"command.execution\""));
-    assert!(output.contains("resource=\"report_export\""));
-    assert!(output.contains("action=\"export\""));
-    assert!(!output.contains("action=\"read\""));
-    assert!(!output.contains(&session_token));
 }
 
 /// Report import preserves opaque bytes and omission-sensitive options across
