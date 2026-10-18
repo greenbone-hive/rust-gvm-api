@@ -1869,13 +1869,57 @@ async fn gvmd_adapter_agent_download_helpers_map_typed_payloads() {
         .get_agent_support_bundle(
             &token,
             "550e8400-e29b-41d4-a716-446655440000",
-            &AgentSupportBundleQuery { days: Some(7) },
+            &AgentSupportBundleQuery {
+                days: Some(7),
+                encryption: None,
+            },
         )
         .await
         .expect("support bundle should succeed");
     assert_eq!(bundle.artifact.filename, "mock-agent-support-bundle.tar.gz");
     assert_eq!(bundle.artifact.content_type, "application/octet-stream");
     assert_eq!(&bundle.artifact.bytes[..], b"hello-mock");
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_support_bundle_preserves_encryption_tristate() {
+    // The upstream typed request owns GMP encoding; the gateway must pass
+    // omission, explicit false, and explicit true through without collapsing
+    // them before command construction.
+    let (adapter, server, token) = create_mock_adapter_v22_8().await;
+    let agent_id = "550e8400-e29b-41d4-a716-446655440000";
+
+    for (encryption, expected_attribute) in [
+        (None, None),
+        (Some(false), Some("encryption=\"0\"")),
+        (Some(true), Some("encryption=\"1\"")),
+    ] {
+        server.clear_history();
+        adapter
+            .get_agent_support_bundle(
+                &token,
+                agent_id,
+                &AgentSupportBundleQuery {
+                    days: None,
+                    encryption,
+                },
+            )
+            .await
+            .expect("support bundle should succeed");
+
+        let history = server.command_history();
+        let command = history
+            .iter()
+            .find(|record| record.command_name() == "get_agent_support_bundle")
+            .expect("support-bundle command should be recorded");
+        let xml = String::from_utf8(command.raw_xml().to_vec()).expect("XML command");
+        match expected_attribute {
+            Some(attribute) => assert!(xml.contains(attribute), "xml={xml}"),
+            None => assert!(!xml.contains("encryption="), "xml={xml}"),
+        }
+    }
 
     server.shutdown().await;
 }

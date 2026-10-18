@@ -13,7 +13,7 @@ members = [
 [workspace.package]
 version = "0.5.0"
 edition = "2021"
-rust-version = "1.88.0"
+rust-version = "1.89.0"
 license = "AGPL-3.0-or-later"
 repository = "https://github.com/greenbone-hive/rust-gvm-api"
 authors = ["clawosiris"]
@@ -23,11 +23,14 @@ async-trait = "0.1.89"
 base64 = "0.23.0"
 axum = "0.8.9"
 clap = { version = "4.6.1", features = ["derive"] }
-gvm-client = { git = "https://github.com/greenbone-hive/rust-gvm", tag = "v0.7.0" }
-gvm-connection = { git = "https://github.com/greenbone-hive/rust-gvm", tag = "v0.7.0" }
-gvm-gmp = { git = "https://github.com/greenbone-hive/rust-gvm", tag = "v0.7.0", features = ["serde"] }
-gvm-mock-server = { git = "https://github.com/greenbone-hive/rust-gvm", tag = "v0.7.0" }
-gvm-protocol = { git = "https://github.com/greenbone-hive/rust-gvm", tag = "v0.7.0" }
+# Issue #588 accepts the immutable rust-gvm v0.8.0 release baseline. Keep all
+# five workspace components on this one tag; Cargo.lock records the exact tag
+# target revision that the architecture guard verifies.
+gvm-client = { git = "https://github.com/greenbone-hive/rust-gvm", tag = "v0.8.0" }
+gvm-connection = { git = "https://github.com/greenbone-hive/rust-gvm", tag = "v0.8.0" }
+gvm-gmp = { git = "https://github.com/greenbone-hive/rust-gvm", tag = "v0.8.0", features = ["serde"] }
+gvm-mock-server = { git = "https://github.com/greenbone-hive/rust-gvm", tag = "v0.8.0" }
+gvm-protocol = { git = "https://github.com/greenbone-hive/rust-gvm", tag = "v0.8.0" }
 http = "1.4.1"
 opentelemetry = { version = "0.33.0", features = ["trace"] }
 opentelemetry-otlp = { version = "0.33.0", features = ["grpc-tonic", "trace"] }

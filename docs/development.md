@@ -73,7 +73,7 @@ monolithic catch-all module.
 
 ## Local setup
 
-The workspace uses Rust 1.88.0 as its minimum supported version. The checked-in
+The workspace uses Rust 1.89.0 as its minimum supported version. The checked-in
 toolchain file selects the normal development toolchain.
 
 ```bash

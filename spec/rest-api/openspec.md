@@ -227,6 +227,10 @@ places report contents in logs, traces, metrics labels, or problem details.
 | `GET` | `/api/v1/results` | List results (paginated, filterable) |
 | `GET` | `/api/v1/results/{id}` | Get individual result |
 
+Result NVT references may include optional source-shaped `typeMetadata` text.
+The gateway preserves it without parsing so future gvmd metadata shapes do not
+become a lossy or prematurely fixed REST schema.
+
 #### Scan Configs
 
 | Method | Path | Description |
@@ -346,6 +350,12 @@ Protected routes accept either an existing Bearer session token or request-scope
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/v1/feeds` | List feed status |
+
+Existing agent support-bundle downloads accept optional `days` and
+`encryption` query parameters. `encryption` preserves omission independently
+from explicit `false` and explicit `true` through the typed backend request.
+Existing NVT catalog resources expose the optional backend `discovery` marker;
+it is omitted when absent.
 
 #### System
 

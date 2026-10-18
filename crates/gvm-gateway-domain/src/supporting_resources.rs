@@ -345,6 +345,9 @@ pub struct Nvt {
     /// Optional solution type.
     #[serde(rename = "solutionType", skip_serializing_if = "Option::is_none")]
     pub solution_type: Option<String>,
+    /// Whether gvmd marks this as a discovery NVT.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub discovery: Option<bool>,
 }
 
 /// Paginated NVT list response.

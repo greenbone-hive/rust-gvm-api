@@ -14,12 +14,15 @@ const RUST_GVM_COMPONENTS: &[&str] = &[
     "gvm-mock-server",
     "gvm-protocol",
 ];
-// The published v0.7.0 release contains the complete reviewed canonical-request
-// baseline and must remain immutable across all five workspace dependencies.
-const RUST_GVM_RELEASE_TAG: &str = "v0.7.0";
-const RUST_GVM_RELEASE_REVISION: &str = "acdabf5a039d78df82e86b69ee8a374df8575c7a";
-const RUST_GVM_TYPED_FACADE_METHOD_COUNT: usize = 261;
-const RUST_GVM_TYPED_FACADE_SNAPSHOT: &str = "tests/fixtures/rust-gvm-v0.7.0-typed-facade.tsv";
+// Issue #588 accepts the published rust-gvm v0.8.0 release. The tag, its exact
+// resolved revision, the full release-derived facade inventory, and the ledger
+// must remain immutable and atomic across all five workspace dependencies.
+const RUST_GVM_PIN_REFERENCE: &str = "release-tag";
+const RUST_GVM_PIN_TAG: &str = "v0.8.0";
+const RUST_GVM_PIN_VERSION: &str = "0.8.0";
+const RUST_GVM_PIN_REVISION: &str = "f20a01f7297060f02b6f577bba7261cacb585fc3";
+const RUST_GVM_TYPED_FACADE_METHOD_COUNT: usize = 267;
+const RUST_GVM_TYPED_FACADE_SNAPSHOT: &str = "tests/fixtures/rust-gvm-v0.8.0-typed-facade.tsv";
 const RUST_GVM_DISPOSITION_LEDGER: &str = "../../docs/upstream-surface-dispositions.tsv";
 const ALLOWED_DISPOSITIONS: &[&str] = &[
     "exposed", "mapped", "internal", "blocked", "deferred", "omitted",
@@ -120,6 +123,7 @@ struct Finding {
 
 #[derive(Debug, Eq, PartialEq)]
 struct PinnedMethodInventory {
+    reference: String,
     tag: String,
     revision: String,
     methods: BTreeSet<String>,
@@ -127,6 +131,7 @@ struct PinnedMethodInventory {
 
 #[derive(Debug, Eq, PartialEq)]
 struct DispositionLedger {
+    reference: String,
     tag: String,
     revision: String,
     methods: BTreeSet<String>,
@@ -249,7 +254,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let lockfile = fs::read_to_string(manifest_dir.join("../../Cargo.lock"))
         .expect("read workspace Cargo.lock");
-    let mut revisions = BTreeMap::new();
+    let mut releases = BTreeMap::new();
 
     for package in lockfile.split("[[package]]") {
         let name = package.lines().find_map(|line| {
@@ -260,6 +265,14 @@ fn rust_gvm_components_resolve_to_one_revision() {
         let Some(name) = name.filter(|name| RUST_GVM_COMPONENTS.contains(name)) else {
             continue;
         };
+        let version = package
+            .lines()
+            .find_map(|line| {
+                line.trim()
+                    .strip_prefix("version = \"")
+                    .and_then(|value| value.strip_suffix('\"'))
+            })
+            .unwrap_or_else(|| panic!("{name} must record a release version"));
         let source = package
             .lines()
             .find_map(|line| {
@@ -268,33 +281,30 @@ fn rust_gvm_components_resolve_to_one_revision() {
                     .and_then(|value| value.strip_suffix('"'))
             })
             .unwrap_or_else(|| panic!("{name} must have a git source"));
-        let revision = source
-            .rsplit_once('#')
-            .map(|(_, revision)| revision)
-            .unwrap_or_else(|| panic!("{name} git source must record a revision"));
         assert!(
-            revisions.insert(name, revision).is_none(),
+            releases.insert(name, (version, source)).is_none(),
             "{name} must resolve exactly once"
         );
     }
 
     assert_eq!(
-        revisions.len(),
+        releases.len(),
         RUST_GVM_COMPONENTS.len(),
         "all five rust-gvm components must be present in Cargo.lock"
     );
-    let expected = revisions
-        .values()
-        .next()
-        .expect("at least one rust-gvm revision");
-    assert!(
-        revisions.values().all(|revision| revision == expected),
-        "rust-gvm components resolved to different revisions: {revisions:?}"
+    let expected_source = format!(
+        "git+https://github.com/greenbone-hive/rust-gvm?tag={RUST_GVM_PIN_TAG}#{RUST_GVM_PIN_REVISION}"
     );
-    assert_eq!(
-        *expected, RUST_GVM_RELEASE_REVISION,
-        "rust-gvm components must remain on the exact published v0.7.0 revision"
-    );
+    for (component, (version, source)) in &releases {
+        assert_eq!(
+            *version, RUST_GVM_PIN_VERSION,
+            "{component} must resolve to rust-gvm v{RUST_GVM_PIN_VERSION}"
+        );
+        assert_eq!(
+            *source, expected_source,
+            "{component} must resolve through rust-gvm tag {RUST_GVM_PIN_TAG} to the exact accepted release revision"
+        );
+    }
 
     let workspace_manifest =
         fs::read_to_string(manifest_dir.join("../../Cargo.toml")).expect("read workspace manifest");
@@ -304,22 +314,24 @@ fn rust_gvm_components_resolve_to_one_revision() {
             .find(|line| line.trim_start().starts_with(&format!("{component} =")))
             .unwrap_or_else(|| panic!("{component} must be declared in workspace dependencies"));
         assert!(
-            dependency.contains(&format!("tag = \"{RUST_GVM_RELEASE_TAG}\"")),
-            "{component} must pin the immutable v0.7.0 release tag in Cargo.toml: {dependency}"
+            dependency.contains(&format!("tag = \"{RUST_GVM_PIN_TAG}\"")),
+            "{component} must pin the immutable issue #588 release tag {RUST_GVM_PIN_TAG} in Cargo.toml: {dependency}"
         );
         assert!(
-            !dependency.contains("branch ="),
-            "{component} must not use a moving branch dependency: {dependency}"
+            !dependency.contains("branch =") && !dependency.contains("rev ="),
+            "{component} release dependency must use only tag {RUST_GVM_PIN_TAG}: {dependency}"
         );
     }
 }
 
 #[test]
 fn rust_gvm_typed_facade_dispositions_are_complete_and_pinned() {
-    // Issue #573 closes the downstream review for every public async helper in
-    // the pinned facade. The checked-in source snapshot keeps this test fully
-    // offline, while shared tag/revision constants couple reconciliation to the
-    // immutable dependency-pin guard above.
+    // Issue #588 extends the downstream review to every public async helper in
+    // the accepted release facade. The checked-in inventory is regenerated
+    // from that exact release, so reconciliation derives the method count from
+    // its full inventory instead of trusting a separately maintained count.
+    // Shared tag/revision constants couple it to the immutable dependency-lock
+    // guard above while preserving an offline test.
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let snapshot_source = fs::read_to_string(manifest_dir.join(RUST_GVM_TYPED_FACADE_SNAPSHOT))
         .expect("read checked-in rust-gvm typed-facade snapshot");
@@ -338,15 +350,21 @@ fn rust_gvm_typed_facade_dispositions_are_complete_and_pinned() {
         )
     });
 
-    let mut errors = pinned_metadata_errors("upstream snapshot", &snapshot.tag, &snapshot.revision);
+    let mut errors = pinned_metadata_errors(
+        "upstream snapshot",
+        &snapshot.reference,
+        &snapshot.tag,
+        &snapshot.revision,
+    );
     errors.extend(pinned_metadata_errors(
         "disposition ledger",
+        &ledger.reference,
         &ledger.tag,
         &ledger.revision,
     ));
     if snapshot.methods.len() != RUST_GVM_TYPED_FACADE_METHOD_COUNT {
         errors.push(format!(
-            "upstream snapshot has {} methods, expected {RUST_GVM_TYPED_FACADE_METHOD_COUNT}; regenerate it from rust-gvm {RUST_GVM_RELEASE_TAG} at {RUST_GVM_RELEASE_REVISION}",
+            "upstream snapshot has {} methods, expected {RUST_GVM_TYPED_FACADE_METHOD_COUNT}; regenerate it from rust-gvm release {RUST_GVM_PIN_TAG} at {RUST_GVM_PIN_REVISION}",
             snapshot.methods.len()
         ));
     }
@@ -364,8 +382,9 @@ fn disposition_ledger_rejects_malformed_rows_and_blank_required_fields() {
     // Malformed TSV and blank review evidence must fail closed instead of
     // silently turning an incomplete row into an accepted classification.
     let errors = parse_disposition_ledger(concat!(
-        "# rust-gvm-tag\tv0.7.0\n",
-        "# rust-gvm-revision\tacdabf5a039d78df82e86b69ee8a374df8575c7a\n",
+        "# rust-gvm-reference\trelease-tag\n",
+        "# rust-gvm-tag\tv0.8.0\n",
+        "# rust-gvm-revision\tf20a01f7297060f02b6f577bba7261cacb585fc3\n",
         "method\tdisposition\trationale\tevidence\n",
         "get_version\texposed\tonly three columns\n",
         "get_targets\texposed\t\tspec/rest-api/targets.yaml\n",
@@ -385,8 +404,9 @@ fn disposition_ledger_rejects_duplicate_methods() {
     // One upstream method must have one and only one downstream decision so a
     // later row cannot shadow a reviewed classification.
     let errors = parse_disposition_ledger(concat!(
-        "# rust-gvm-tag\tv0.7.0\n",
-        "# rust-gvm-revision\tacdabf5a039d78df82e86b69ee8a374df8575c7a\n",
+        "# rust-gvm-reference\trelease-tag\n",
+        "# rust-gvm-tag\tv0.8.0\n",
+        "# rust-gvm-revision\tf20a01f7297060f02b6f577bba7261cacb585fc3\n",
         "method\tdisposition\trationale\tevidence\n",
         "get_version\texposed\tpublic version\tspec/rest-api/system.yaml\n",
         "get_version\tinternal\tprobe only\tcrates/gvm-gateway-gvmd/src\n",
@@ -394,7 +414,7 @@ fn disposition_ledger_rejects_duplicate_methods() {
     .expect_err("duplicate ledger methods must be rejected");
 
     assert!(errors.iter().any(|error| {
-        error.contains("duplicate method get_version") && error.contains("first declared on line 4")
+        error.contains("duplicate method get_version") && error.contains("first declared on line 5")
     }));
 }
 
@@ -403,8 +423,9 @@ fn disposition_ledger_rejects_unknown_dispositions() {
     // The six reviewed disposition values are a closed vocabulary; spelling
     // drift must not create an accidental seventh classification.
     let errors = parse_disposition_ledger(concat!(
-        "# rust-gvm-tag\tv0.7.0\n",
-        "# rust-gvm-revision\tacdabf5a039d78df82e86b69ee8a374df8575c7a\n",
+        "# rust-gvm-reference\trelease-tag\n",
+        "# rust-gvm-tag\tv0.8.0\n",
+        "# rust-gvm-revision\tf20a01f7297060f02b6f577bba7261cacb585fc3\n",
         "method\tdisposition\trationale\tevidence\n",
         "get_version\tadopted\tpublic version\tspec/rest-api/system.yaml\n",
     ))
@@ -420,16 +441,18 @@ fn disposition_reconciliation_reports_added_removed_and_renamed_methods() {
     // A changed upstream inventory must identify both new/unclassified helpers
     // and stale ledger rows, which together make method renames actionable.
     let snapshot = parse_pinned_method_inventory(concat!(
-        "# rust-gvm-tag\tv0.7.0\n",
-        "# rust-gvm-revision\tacdabf5a039d78df82e86b69ee8a374df8575c7a\n",
+        "# rust-gvm-reference\trelease-tag\n",
+        "# rust-gvm-tag\tv0.8.0\n",
+        "# rust-gvm-revision\tf20a01f7297060f02b6f577bba7261cacb585fc3\n",
         "module\tmethod\n",
         "core\tget_version\n",
         "core\tnew_upstream_method\n",
     ))
     .expect("valid test inventory");
     let ledger = parse_disposition_ledger(concat!(
-        "# rust-gvm-tag\tv0.7.0\n",
-        "# rust-gvm-revision\tacdabf5a039d78df82e86b69ee8a374df8575c7a\n",
+        "# rust-gvm-reference\trelease-tag\n",
+        "# rust-gvm-tag\tv0.8.0\n",
+        "# rust-gvm-revision\tf20a01f7297060f02b6f577bba7261cacb585fc3\n",
         "method\tdisposition\trationale\tevidence\n",
         "get_version\texposed\tpublic version\tspec/rest-api/system.yaml\n",
         "removed_upstream_method\tomitted\tretired helper\tparent #381\n",
@@ -445,6 +468,79 @@ fn disposition_reconciliation_reports_added_removed_and_renamed_methods() {
         error.contains("ledger methods absent from upstream snapshot (removed or renamed)")
             && error.contains("removed_upstream_method")
     }));
+}
+
+#[test]
+fn typed_facade_metadata_rejects_any_other_release_revision() {
+    // A fixture or ledger copied from another release must fail closed even
+    // when its reference label and method inventory otherwise look valid.
+    let errors = pinned_metadata_errors(
+        "test fixture",
+        RUST_GVM_PIN_REFERENCE,
+        RUST_GVM_PIN_TAG,
+        "0000000000000000000000000000000000000000",
+    );
+
+    assert!(errors
+        .iter()
+        .any(|error| { error.contains("revision is") && error.contains(RUST_GVM_PIN_REVISION) }));
+}
+
+#[test]
+fn report_export_release_methods_keep_the_reviewed_layer_boundary() {
+    // The release provides six export helpers, but this layer only classifies
+    // them against the existing job contract. Keep lifecycle integration for
+    // the next stacked PR and keep audit/delta variants non-public.
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let ledger = fs::read_to_string(manifest_dir.join(RUST_GVM_DISPOSITION_LEDGER))
+        .expect("read downstream disposition ledger");
+
+    for method in [
+        "cancel_report_export",
+        "download_report_export",
+        "get_report_exports",
+    ] {
+        let row = ledger
+            .lines()
+            .find(|line| line.starts_with(&format!("{method}\t")))
+            .unwrap_or_else(|| panic!("missing release disposition for {method}"));
+        assert!(
+            row.starts_with(&format!("{method}\tmapped\t"))
+                && row.contains("next stacked PR"),
+            "{method} must map to the existing job contract while typed lifecycle integration remains deferred: {row}"
+        );
+    }
+
+    for method in [
+        "export_audit_report",
+        "export_delta_audit_report",
+        "export_delta_scan_report",
+    ] {
+        let row = ledger
+            .lines()
+            .find(|line| line.starts_with(&format!("{method}\t")))
+            .unwrap_or_else(|| panic!("missing release disposition for {method}"));
+        assert!(
+            row.starts_with(&format!("{method}\tomitted\t")),
+            "{method} must remain omitted without a distinct public contract: {row}"
+        );
+    }
+
+    let production = fs::read_to_string(manifest_dir.join("src/gvmd_adapter/mod.rs"))
+        .expect("read gvmd adapter imports");
+    for request in [
+        "CancelReportExportRequest",
+        "DownloadReportExportRequest",
+        "GetReportExportsRequest",
+        "ExportAuditReportRequest",
+        "ExportDeltaAuditReportRequest",
+        "ExportDeltaScanReportRequest",
+    ] {
+        assert!(
+            !production.contains(request),
+            "this layer must not implement the report-export lifecycle or add an audit/delta route through {request}"
+        );
+    }
 }
 
 #[test]
@@ -593,6 +689,8 @@ fn nvt_secinfo_migration_dispositions_stay_bounded() {
             .expect("read upstream surface dispositions");
     assert!(dispositions.contains("Adopted through completed #523"));
     assert!(dispositions.contains("Generic SecInfo dispatch"));
+    assert!(dispositions.contains("tech_info.description_md"));
+    assert!(dispositions.contains("web_application_vt"));
 }
 
 #[test]
@@ -1145,23 +1243,30 @@ fn migrated_supporting_resource_families_stay_on_typed_execution() {
 fn parse_pinned_method_inventory(contents: &str) -> Result<PinnedMethodInventory, Vec<String>> {
     let lines = contents.lines().collect::<Vec<_>>();
     let mut errors = Vec::new();
-    let tag = parse_metadata_value(&lines, 0, "rust-gvm-tag", "upstream snapshot", &mut errors);
+    let reference = parse_metadata_value(
+        &lines,
+        0,
+        "rust-gvm-reference",
+        "upstream snapshot",
+        &mut errors,
+    );
     let revision = parse_metadata_value(
         &lines,
-        1,
+        2,
         "rust-gvm-revision",
         "upstream snapshot",
         &mut errors,
     );
-    if lines.get(2) != Some(&"module\tmethod") {
+    let tag = parse_metadata_value(&lines, 1, "rust-gvm-tag", "upstream snapshot", &mut errors);
+    if lines.get(3) != Some(&"module\tmethod") {
         errors.push(
-            "upstream snapshot line 3 must be the exact header module<TAB>method".to_string(),
+            "upstream snapshot line 4 must be the exact header module<TAB>method".to_string(),
         );
     }
 
     let mut methods = BTreeSet::new();
     let mut first_lines = BTreeMap::new();
-    for (index, line) in lines.iter().enumerate().skip(3) {
+    for (index, line) in lines.iter().enumerate().skip(4) {
         let line_number = index + 1;
         let columns = line.split('\t').collect::<Vec<_>>();
         if columns.len() != 2 {
@@ -1195,6 +1300,7 @@ fn parse_pinned_method_inventory(contents: &str) -> Result<PinnedMethodInventory
 
     if errors.is_empty() {
         Ok(PinnedMethodInventory {
+            reference,
             tag,
             revision,
             methods,
@@ -1207,18 +1313,19 @@ fn parse_pinned_method_inventory(contents: &str) -> Result<PinnedMethodInventory
 fn parse_disposition_ledger(contents: &str) -> Result<DispositionLedger, Vec<String>> {
     let lines = contents.lines().collect::<Vec<_>>();
     let mut errors = Vec::new();
-    let tag = parse_metadata_value(&lines, 0, "rust-gvm-tag", "ledger", &mut errors);
-    let revision = parse_metadata_value(&lines, 1, "rust-gvm-revision", "ledger", &mut errors);
-    if lines.get(2) != Some(&"method\tdisposition\trationale\tevidence") {
+    let reference = parse_metadata_value(&lines, 0, "rust-gvm-reference", "ledger", &mut errors);
+    let tag = parse_metadata_value(&lines, 1, "rust-gvm-tag", "ledger", &mut errors);
+    let revision = parse_metadata_value(&lines, 2, "rust-gvm-revision", "ledger", &mut errors);
+    if lines.get(3) != Some(&"method\tdisposition\trationale\tevidence") {
         errors.push(
-            "ledger line 3 must be the exact header method<TAB>disposition<TAB>rationale<TAB>evidence"
+            "ledger line 4 must be the exact header method<TAB>disposition<TAB>rationale<TAB>evidence"
                 .to_string(),
         );
     }
 
     let mut methods = BTreeSet::new();
     let mut first_lines = BTreeMap::new();
-    for (index, line) in lines.iter().enumerate().skip(3) {
+    for (index, line) in lines.iter().enumerate().skip(4) {
         let line_number = index + 1;
         let columns = line.split('\t').collect::<Vec<_>>();
         if columns.len() != 4 {
@@ -1265,6 +1372,7 @@ fn parse_disposition_ledger(contents: &str) -> Result<DispositionLedger, Vec<Str
 
     if errors.is_empty() {
         Ok(DispositionLedger {
+            reference,
             tag,
             revision,
             methods,
@@ -1311,16 +1419,21 @@ fn is_snake_case_identifier(value: &str) -> bool {
             .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
 }
 
-fn pinned_metadata_errors(label: &str, tag: &str, revision: &str) -> Vec<String> {
+fn pinned_metadata_errors(label: &str, reference: &str, tag: &str, revision: &str) -> Vec<String> {
     let mut errors = Vec::new();
-    if tag != RUST_GVM_RELEASE_TAG {
+    if reference != RUST_GVM_PIN_REFERENCE {
         errors.push(format!(
-            "{label} tag is {tag:?}, expected {RUST_GVM_RELEASE_TAG:?}; regenerate the upstream snapshot and reconcile every ledger row with the dependency pin"
+            "{label} reference is {reference:?}, expected {RUST_GVM_PIN_REFERENCE:?}; regenerate the upstream snapshot and reconcile every ledger row with the dependency pin"
         ));
     }
-    if revision != RUST_GVM_RELEASE_REVISION {
+    if tag != RUST_GVM_PIN_TAG {
         errors.push(format!(
-            "{label} revision is {revision:?}, expected {RUST_GVM_RELEASE_REVISION:?}; regenerate the upstream snapshot and reconcile every ledger row with the dependency pin"
+            "{label} tag is {tag:?}, expected {RUST_GVM_PIN_TAG:?}; regenerate the upstream snapshot and reconcile every ledger row with the dependency pin"
+        ));
+    }
+    if revision != RUST_GVM_PIN_REVISION {
+        errors.push(format!(
+            "{label} revision is {revision:?}, expected {RUST_GVM_PIN_REVISION:?}; regenerate the upstream snapshot and reconcile every ledger row with the dependency pin"
         ));
     }
     errors

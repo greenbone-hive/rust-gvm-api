@@ -33,7 +33,8 @@ as an equally authoritative description of the running service.
 - [Ticket surface decision](ticket-surface-scope.md) — accepted decision that
   tickets are not part of the gateway API.
 - [Upstream surface dispositions](upstream-surface-dispositions.md) — readable
-  summary of the completed rust-gvm v0.7 method disposition.
+  summary of the reviewed rust-gvm method disposition, including the accepted
+  issue #588 rust-gvm v0.8.0 release baseline.
 - [Machine-readable disposition ledger](upstream-surface-dispositions.tsv) —
   exhaustive, test-checked method-level record.
 

@@ -47,6 +47,32 @@ fn support_bundle_query_rejects_zero_days() {
 }
 
 #[test]
+fn support_bundle_query_preserves_encryption_tristate() {
+    // The backend distinguishes an omitted encryption selector from explicit
+    // false and true, so REST parsing must not apply a boolean default.
+    let omitted = parse_agent_support_bundle_query("").expect("empty query should parse");
+    let disabled =
+        parse_agent_support_bundle_query("encryption=false").expect("false should parse");
+    let enabled = parse_agent_support_bundle_query("encryption=true").expect("true should parse");
+
+    assert_eq!(omitted.encryption, None);
+    assert_eq!(disabled.encryption, Some(false));
+    assert_eq!(enabled.encryption, Some(true));
+}
+
+#[test]
+fn support_bundle_query_rejects_invalid_encryption() {
+    // Invalid boolean text must fail at the public boundary instead of being
+    // silently treated as omission or a backend default.
+    let error = parse_agent_support_bundle_query("encryption=1")
+        .expect_err("non-boolean encryption must fail");
+
+    assert!(
+        matches!(error, GatewayError::InvalidInput(message) if message.contains("encryption must be true or false"))
+    );
+}
+
+#[test]
 fn installer_instruction_query_defaults_language_and_requires_absolute_uri() {
     // Installer instructions must default language consistently, but they also
     // require an absolute origin URL because gvmd uses it to render the output.

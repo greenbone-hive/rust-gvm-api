@@ -1,5 +1,6 @@
-# rust-gvm-tag	v0.7.0
-# rust-gvm-revision	acdabf5a039d78df82e86b69ee8a374df8575c7a
+# rust-gvm-reference	release-tag
+# rust-gvm-tag	v0.8.0
+# rust-gvm-revision	f20a01f7297060f02b6f577bba7261cacb585fc3
 module	method
 agents	clone_agent_group
 agents	create_agent_group
@@ -76,6 +77,7 @@ identity	modify_group
 identity	modify_permission
 identity	modify_role
 identity	modify_user
+reports	cancel_report_export
 reports	clone_report_config
 reports	clone_report_format
 reports	clone_tls_certificate
@@ -86,6 +88,10 @@ reports	delete_report
 reports	delete_report_config
 reports	delete_report_format
 reports	delete_tls_certificate
+reports	download_report_export
+reports	export_audit_report
+reports	export_delta_audit_report
+reports	export_delta_scan_report
 reports	export_scan_report
 reports	get_audit_report
 reports	get_audit_report_hosts
@@ -98,6 +104,7 @@ reports	get_report_configs
 reports	get_report_cves
 reports	get_report_errors
 reports	get_report_export
+reports	get_report_exports
 reports	get_report_format
 reports	get_report_formats
 reports	get_report_hosts

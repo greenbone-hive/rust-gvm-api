@@ -472,6 +472,7 @@ pub(crate) fn result_from_gmp(result: gvm_gmp::responses::ScanResult) -> ScanRes
             cvss_base,
             cves: n.cves,
             tags: n.tags,
+            type_metadata: n.type_metadata,
         }
     });
 
@@ -511,6 +512,7 @@ pub(crate) fn result_from_report_vulnerability(
             cvss_base: None,
             cves: vulnerability.cves,
             tags: None,
+            type_metadata: None,
         }),
         hosts_count: vulnerability.hosts_count,
         occurrences: vulnerability.occurrences,
@@ -558,6 +560,7 @@ pub(crate) fn report_closed_cve_from_gmp(
             cvss_base: None,
             cves: closed_cve.cve.clone().into_iter().collect(),
             tags: None,
+            type_metadata: None,
         }),
         cve: closed_cve.cve,
     })
@@ -913,6 +916,7 @@ pub(crate) fn nvt_from_gmp(nvt: gvm_gmp::responses::Nvt) -> Nvt {
         severity,
         tags: nvt.tags,
         solution_type: nvt.solution_type,
+        discovery: nvt.discovery,
     }
 }
 
@@ -1105,6 +1109,7 @@ fn nvt_ref_from_gmp(nvt: gvm_gmp::responses::common::NvtReference) -> NvtRef {
         cvss_base: None,
         cves: vec![],
         tags: None,
+        type_metadata: None,
     }
 }
 

@@ -95,7 +95,7 @@ That session/connection model is shared architecture for REST today and planned 
 
 ### Prerequisites
 
-- Rust 1.88.0+ (see `rust-toolchain.toml`)
+- Rust 1.89.0+ (see `rust-toolchain.toml`)
 - A running GVM/gvmd instance (for integration testing)
 - [rust-gvm](https://github.com/greenbone-hive/rust-gvm) (pulled as a git dependency)
 

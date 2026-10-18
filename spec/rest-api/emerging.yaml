@@ -88,6 +88,11 @@ paths:
         required: false
         schema: { type: integer, minimum: 1 }
         description: Limit the support bundle to the most recent number of days.
+      - name: encryption
+        in: query
+        required: false
+        schema: { type: boolean }
+        description: Request backend support-bundle encryption. Omission preserves the backend default and is distinct from explicit false.
     get:
       operationId: getAgentSupportBundle
       tags: [Agents]
