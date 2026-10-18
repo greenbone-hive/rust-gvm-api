@@ -9,10 +9,7 @@ use std::{
 use gvm_gateway_domain::*;
 use gvm_gateway_gvmd::GvmdAdapter;
 use gvm_mock_server::{
-    response_gen::{
-        generate_binary_report_export, generate_xml_report_export, REPORT_EXPORT_BINARY_FORMAT_ID,
-        REPORT_EXPORT_XML_FORMAT_ID,
-    },
+    response_gen::{REPORT_EXPORT_BINARY_FORMAT_ID, REPORT_EXPORT_XML_FORMAT_ID},
     Fault, FaultKind, GmpVersion as MockVersion, MockGmpServer, Resource, ServerMode,
 };
 use tokio::sync::{Mutex as AsyncMutex, MutexGuard as AsyncMutexGuard};
@@ -68,8 +65,17 @@ async fn gvmd_adapter_probe_version_reports_mock_version() {
         .version(MockVersion::V22_7)
         .unix_socket_auto()
         .build()
-        .await
-        .unwrap();
+        .await;
+    let server = match server {
+        Ok(server) => server,
+        Err(error)
+            if error.kind() == io::ErrorKind::PermissionDenied
+                || error.kind() == io::ErrorKind::Unsupported =>
+        {
+            return;
+        }
+        Err(error) => panic!("mock server should start: {error}"),
+    };
 
     let adapter = GvmdAdapter::unix_socket(server.socket_path().unwrap());
     let version = adapter.probe_version().await.unwrap();
@@ -3975,19 +3981,29 @@ async fn gvmd_adapter_list_targets_unauthorized() {
 }
 
 #[tokio::test]
-async fn gvmd_adapter_export_report_binary_payload() {
+async fn gvmd_adapter_report_export_uses_typed_create_poll_download_and_cancel_flow() {
+    // The stateful mock proves all four lifecycle commands pass through rust-gvm's
+    // typed discovery-gated facade without gateway-owned XML.
     let report_id = uuid::Uuid::from_u128(0x11111111_1111_1111_1111_111111111111);
-    let response = generate_binary_report_export(report_id, REPORT_EXPORT_BINARY_FORMAT_ID);
     let server = MockGmpServer::builder()
-        .mode(ServerMode::Fixture)
+        .mode(ServerMode::Stateful)
         .version(MockVersion::V22_8)
-        // Export response parsing is independent of the stateful lifecycle
-        // mock; pin the exact binary fixture this regression intends to map.
-        .override_response("get_reports", &response)
+        .seed(move |store| {
+            store.create(Resource::with_id("report", "Lifecycle report", report_id));
+        })
         .unix_socket_auto()
         .build()
-        .await
-        .unwrap();
+        .await;
+    let server = match server {
+        Ok(server) => server,
+        Err(error)
+            if error.kind() == io::ErrorKind::PermissionDenied
+                || error.kind() == io::ErrorKind::Unsupported =>
+        {
+            return;
+        }
+        Err(error) => panic!("mock server should start: {error}"),
+    };
 
     let adapter = GvmdAdapter::unix_socket(server.socket_path().unwrap());
     let token = "test-session-token";
@@ -3996,8 +4012,9 @@ async fn gvmd_adapter_export_report_binary_payload() {
         .await
         .unwrap();
 
-    let export = adapter
-        .export_report(
+    server.clear_history();
+    let created = adapter
+        .create_report_export(
             token,
             &report_id.to_string(),
             &ReportExportRequest {
@@ -4008,31 +4025,97 @@ async fn gvmd_adapter_export_report_binary_payload() {
             },
         )
         .await
-        .expect("binary export");
+        .expect("typed export creation");
 
-    assert_eq!(export.bytes, b"Hello PDF");
-    assert_eq!(export.content_type.as_deref(), Some("application/pdf"));
-    assert_eq!(export.extension.as_deref(), Some("pdf"));
+    assert_eq!(
+        adapter.get_report_export(token, &created.id).await.unwrap(),
+        BackendReportExportState::Pending
+    );
+    assert_eq!(
+        adapter.get_report_export(token, &created.id).await.unwrap(),
+        BackendReportExportState::Running
+    );
+    assert_eq!(
+        adapter.get_report_export(token, &created.id).await.unwrap(),
+        BackendReportExportState::Ready
+    );
+    let export = adapter
+        .download_report_export(token, &created.id)
+        .await
+        .expect("ready export download");
+    assert!(!export.bytes.is_empty());
+    assert_eq!(
+        export.content_type.as_deref(),
+        Some("application/octet-stream")
+    );
+    assert_eq!(export.extension.as_deref(), Some("bin"));
 
-    // The canonical export constructor omits these booleans. The gateway must
-    // continue requesting a complete, unpaginated artifact even without any
-    // optional selector.
-    let xml = recorded_xml(&server, "get_reports");
-    assert!(xml.contains("details=\"1\""), "xml={xml}");
-    assert!(xml.contains("ignore_pagination=\"1\""), "xml={xml}");
-    assert!(!xml.contains("config_id="), "xml={xml}");
-    assert!(!xml.contains("filter="), "xml={xml}");
-    assert!(!xml.contains("filt_id="), "xml={xml}");
+    let cancel_request = ReportExportRequest {
+        report_format_id: REPORT_EXPORT_BINARY_FORMAT_ID.to_string(),
+        report_config_id: None,
+        filter: Some("severity>7".to_string()),
+        filter_id: None,
+    };
+    let cancellable = adapter
+        .create_report_export(token, &report_id.to_string(), &cancel_request)
+        .await
+        .expect("second export creation");
+    assert_eq!(
+        adapter
+            .get_report_export(token, &cancellable.id)
+            .await
+            .unwrap(),
+        BackendReportExportState::Pending
+    );
+    adapter
+        .cancel_report_export(token, &cancellable.id)
+        .await
+        .expect("typed export cancellation");
+    assert_eq!(
+        adapter
+            .get_report_export(token, &cancellable.id)
+            .await
+            .unwrap(),
+        BackendReportExportState::CancelRequested
+    );
+    assert_eq!(
+        adapter
+            .get_report_export(token, &cancellable.id)
+            .await
+            .unwrap(),
+        BackendReportExportState::Cancelled
+    );
+
+    let commands = server
+        .command_history()
+        .into_iter()
+        .map(|record| record.command_name().to_string())
+        .collect::<Vec<_>>();
+    for expected in [
+        "help",
+        "export_scan_report",
+        "get_report_exports",
+        "download_report_export",
+        "cancel_report_export",
+    ] {
+        assert!(
+            commands.iter().any(|command| command == expected),
+            "commands={commands:?}"
+        );
+    }
 
     server.shutdown().await;
 }
 
 #[tokio::test]
-async fn gvmd_adapter_export_report_emits_config_and_filter_options() {
+async fn gvmd_adapter_report_export_resolves_saved_filters_into_typed_create_request() {
+    // export_scan_report accepts one inline filter, so filterId is resolved by
+    // a typed filter read and composed before the typed create request.
     let report_id = uuid::Uuid::from_u128(0x33333333_3333_3333_3333_333333333333);
     let report_config_id =
         uuid::Uuid::from_u128(0x44444444_4444_4444_4444_444444444444).to_string();
-    let filter_id = uuid::Uuid::from_u128(0x55555555_5555_5555_5555_555555555555).to_string();
+    let filter_uuid = uuid::Uuid::from_u128(0x55555555_5555_5555_5555_555555555555);
+    let filter_id = filter_uuid.to_string();
     let server = MockGmpServer::builder()
         .mode(ServerMode::Stateful)
         .version(MockVersion::V22_8)
@@ -4043,10 +4126,22 @@ async fn gvmd_adapter_export_report_emits_config_and_filter_options() {
                 "Filtered export report",
                 report_id,
             ));
+            let mut filter = Resource::with_id("filter", "Saved export filter", filter_uuid);
+            filter.set_attr("term", "threat=Alarm");
+            store.create(filter);
         })
         .build()
-        .await
-        .unwrap();
+        .await;
+    let server = match server {
+        Ok(server) => server,
+        Err(error)
+            if error.kind() == io::ErrorKind::PermissionDenied
+                || error.kind() == io::ErrorKind::Unsupported =>
+        {
+            return;
+        }
+        Err(error) => panic!("mock server should start: {error}"),
+    };
 
     let adapter = GvmdAdapter::unix_socket(server.socket_path().unwrap());
     let token = "test-session-token";
@@ -4056,11 +4151,8 @@ async fn gvmd_adapter_export_report_emits_config_and_filter_options() {
         .unwrap();
     server.clear_history();
 
-    // The mock backend may reject unknown report configs, but command
-    // history still verifies that the adapter delegates all supported
-    // export options to rust-gvm's typed command builder.
     let _ = adapter
-        .export_report(
+        .create_report_export(
             token,
             &report_id.to_string(),
             &ReportExportRequest {
@@ -4075,15 +4167,15 @@ async fn gvmd_adapter_export_report_emits_config_and_filter_options() {
     let history = server.command_history();
     let command = history
         .iter()
-        .find(|record| record.command_name() == "get_reports")
-        .expect("get_reports command should be recorded");
+        .find(|record| record.command_name() == "export_scan_report")
+        .expect("export_scan_report command should be recorded");
     let xml = String::from_utf8(command.raw_xml().to_vec()).expect("xml command");
     assert!(xml.contains(&format!("format_id=\"{REPORT_EXPORT_BINARY_FORMAT_ID}\"")));
     assert!(xml.contains(&format!("config_id=\"{report_config_id}\"")));
-    assert!(xml.contains("filter=\"severity&gt;5\""));
-    assert!(xml.contains(&format!("filt_id=\"{filter_id}\"")));
+    assert!(xml.contains("severity&gt;5"));
+    assert!(xml.contains("threat=Alarm"));
+    assert!(!xml.contains("filt_id="));
     assert!(xml.contains(&format!("report_id=\"{report_id}\"")));
-    assert!(xml.contains("details=\"1\""));
     assert!(xml.contains("ignore_pagination=\"1\""));
     for omitted in [
         "lean=",
@@ -4101,19 +4193,30 @@ async fn gvmd_adapter_export_report_emits_config_and_filter_options() {
 }
 
 #[tokio::test]
-async fn gvmd_adapter_export_report_xml_payload() {
+async fn gvmd_adapter_report_export_maps_negative_help_discovery_to_not_implemented() {
+    // Unsupported discovery is a stable capability error and does not attempt
+    // the omitted backend command.
     let report_id = uuid::Uuid::from_u128(0x22222222_2222_2222_2222_222222222222);
-    let response = generate_xml_report_export(report_id, REPORT_EXPORT_XML_FORMAT_ID);
     let server = MockGmpServer::builder()
         .mode(ServerMode::Fixture)
         .version(MockVersion::V22_8)
-        // Keep this focused on nested XML export response mapping rather than
-        // coupling it to the stateful report-lifecycle implementation.
-        .override_response("get_reports", &response)
+        .override_response(
+            "help",
+            r#"<help_response status="200" status_text="OK"><schema format="XML"><command><name>get_tasks</name></command></schema></help_response>"#,
+        )
         .unix_socket_auto()
         .build()
-        .await
-        .unwrap();
+        .await;
+    let server = match server {
+        Ok(server) => server,
+        Err(error)
+            if error.kind() == io::ErrorKind::PermissionDenied
+                || error.kind() == io::ErrorKind::Unsupported =>
+        {
+            return;
+        }
+        Err(error) => panic!("mock server should start: {error}"),
+    };
 
     let adapter = GvmdAdapter::unix_socket(server.socket_path().unwrap());
     let token = "test-session-token";
@@ -4122,8 +4225,8 @@ async fn gvmd_adapter_export_report_xml_payload() {
         .await
         .unwrap();
 
-    let export = adapter
-        .export_report(
+    let error = adapter
+        .create_report_export(
             token,
             &report_id.to_string(),
             &ReportExportRequest {
@@ -4134,13 +4237,17 @@ async fn gvmd_adapter_export_report_xml_payload() {
             },
         )
         .await
-        .expect("xml export");
+        .expect_err("negative discovery must reject lifecycle creation");
 
-    let xml = String::from_utf8(export.bytes).expect("utf8 xml");
-    assert_eq!(export.content_type.as_deref(), Some("text/xml"));
-    assert_eq!(export.extension.as_deref(), Some("xml"));
-    assert!(xml.contains("<report id="));
-    assert!(xml.contains(r#"<result id="result-1"/>"#));
+    assert!(matches!(
+        error,
+        GatewayError::NotImplemented(detail)
+            if detail == "backend does not support asynchronous report export"
+    ));
+    assert!(server
+        .command_history()
+        .iter()
+        .all(|record| record.command_name() != "export_scan_report"));
 
     server.shutdown().await;
 }

@@ -8,20 +8,20 @@ use async_trait::async_trait;
 use crate::{
     Agent, AgentGroup, AgentGroupPage, AgentGroupQuery, AgentInstallerInstruction,
     AgentInstallerInstructionQuery, AgentPage, AgentQuery, AgentSupportBundle,
-    AgentSupportBundleQuery, Alert, AlertPage, AlertQuery, AssetQuery, CertBundAdvisory,
-    CertBundAdvisoryPage, Cpe, CpePage, CreateAgentGroupInput, CreateAlertInput,
-    CreateCredentialInput, CreateFilterInput, CreateGroupInput, CreateHostInput, CreateNoteInput,
-    CreateOciImageTargetInput, CreateOverrideInput, CreatePermissionInput, CreatePolicyInput,
-    CreatePortListInput, CreateRoleInput, CreateScanConfigInput, CreateScheduleInput,
-    CreateTagInput, CreateTargetInput, CreateTaskInput, CreateUserInput,
-    CreateWebApplicationTargetInput, Credential, CredentialPage, CredentialQuery, CredentialStore,
-    Cve, CvePage, DfnCertAdvisory, DfnCertAdvisoryPage, FeedList, FeedQuery, Filter, FilterPage,
-    GatewayError, GenericAsset, GenericAssetPage, GenericConfig, GenericConfigPage,
-    GenericConfigQuery, GetReportOpts, Group, GroupPage, Host, HostPage, IdentityQuery,
-    ImportReportInput, ModifyAgentControlScanConfigInput, ModifyAgentGroupInput, ModifyAgentInput,
-    ModifyAlertInput, ModifyAssetInput, ModifyCredentialInput, ModifyCredentialStoreInput,
-    ModifyFilterInput, ModifyGroupInput, ModifyHostInput, ModifyNoteInput,
-    ModifyOciImageTargetInput, ModifyOperatingSystemInput, ModifyOverrideInput,
+    AgentSupportBundleQuery, Alert, AlertPage, AlertQuery, AssetQuery, BackendReportExport,
+    BackendReportExportState, CertBundAdvisory, CertBundAdvisoryPage, Cpe, CpePage,
+    CreateAgentGroupInput, CreateAlertInput, CreateCredentialInput, CreateFilterInput,
+    CreateGroupInput, CreateHostInput, CreateNoteInput, CreateOciImageTargetInput,
+    CreateOverrideInput, CreatePermissionInput, CreatePolicyInput, CreatePortListInput,
+    CreateRoleInput, CreateScanConfigInput, CreateScheduleInput, CreateTagInput, CreateTargetInput,
+    CreateTaskInput, CreateUserInput, CreateWebApplicationTargetInput, Credential, CredentialPage,
+    CredentialQuery, CredentialStore, Cve, CvePage, DfnCertAdvisory, DfnCertAdvisoryPage, FeedList,
+    FeedQuery, Filter, FilterPage, GatewayError, GenericAsset, GenericAssetPage, GenericConfig,
+    GenericConfigPage, GenericConfigQuery, GetReportOpts, Group, GroupPage, Host, HostPage,
+    IdentityQuery, ImportReportInput, ModifyAgentControlScanConfigInput, ModifyAgentGroupInput,
+    ModifyAgentInput, ModifyAlertInput, ModifyAssetInput, ModifyCredentialInput,
+    ModifyCredentialStoreInput, ModifyFilterInput, ModifyGroupInput, ModifyHostInput,
+    ModifyNoteInput, ModifyOciImageTargetInput, ModifyOperatingSystemInput, ModifyOverrideInput,
     ModifyPermissionInput, ModifyPortListInput, ModifyRoleInput, ModifyScanConfigInput,
     ModifyScheduleInput, ModifyTagInput, ModifyTargetInput, ModifyTaskInput, ModifyUserInput,
     ModifyUserSettingInput, ModifyWebApplicationTargetInput, Note, NotePage, Nvt, NvtFamilyPage,
@@ -452,13 +452,56 @@ pub trait ReportPort: Send + Sync + 'static {
         opts: &GetReportOpts,
     ) -> Result<Report, GatewayError>;
 
-    /// Export a report in the selected backend report format.
-    async fn export_report(
+    /// Start an asynchronous backend export and return its opaque identifier.
+    async fn create_report_export(
         &self,
-        session_token: &str,
-        report_id: &str,
-        request: &ReportExportRequest,
-    ) -> Result<ReportExport, GatewayError>;
+        _session_token: &str,
+        _report_id: &str,
+        _request: &ReportExportRequest,
+    ) -> Result<BackendReportExport, GatewayError> {
+        Err(GatewayError::NotImplemented(
+            "asynchronous report export is not supported by this backend".to_string(),
+        ))
+    }
+
+    /// Poll the lifecycle state of one asynchronous backend report export.
+    async fn get_report_export(
+        &self,
+        _session_token: &str,
+        _export_id: &str,
+    ) -> Result<BackendReportExportState, GatewayError> {
+        Err(GatewayError::NotImplemented(
+            "asynchronous report export is not supported by this backend".to_string(),
+        ))
+    }
+
+    /// Download one ready backend report export.
+    ///
+    /// Downloads are repeatable while gvmd retains the terminal export; this
+    /// operation does not delete or otherwise consume backend state.
+    async fn download_report_export(
+        &self,
+        _session_token: &str,
+        _export_id: &str,
+    ) -> Result<ReportExport, GatewayError> {
+        Err(GatewayError::NotImplemented(
+            "asynchronous report export is not supported by this backend".to_string(),
+        ))
+    }
+
+    /// Request cancellation of one active backend report export.
+    ///
+    /// Callers must reconcile the current state first and leave ready, failed,
+    /// or cancelled exports to gvmd's terminal-state retention policy.
+    async fn cancel_report_export(
+        &self,
+        _session_token: &str,
+        _export_id: &str,
+    ) -> Result<(), GatewayError> {
+        Err(GatewayError::NotImplemented(
+            "asynchronous report export is not supported by this backend".to_string(),
+        ))
+    }
 
     /// Permanently delete a report by identifier.
     async fn delete_report(&self, session_token: &str, id: &str) -> Result<(), GatewayError>;

@@ -5,17 +5,18 @@
 
 use std::{
     collections::HashMap,
+    future::Future,
     sync::{Arc, Mutex},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use gvm_gateway_domain::{
-    CreateReportExportRequest, GatewayError, GetReportOpts, JobArtifact, JobCancelOutcome,
-    JobProblem, JobProgress, JobResult, JobStatus, ReportExportFormat, ReportExportJob,
-    ReportExportRequest, ReportJsonExport, ResourceRef, ResultQuery, Session, SessionHold,
-    SessionTokenDigest,
+    BackendReportExportState, CreateReportExportRequest, GatewayError, GetReportOpts, JobArtifact,
+    JobCancelOutcome, JobProblem, JobProgress, JobResult, JobStatus, ReportExportFormat,
+    ReportExportJob, ReportExportRequest, ReportJsonExport, ResourceRef, ResultQuery, Session,
+    SessionHold, SessionTokenDigest,
 };
-use tokio::task::{AbortHandle, JoinHandle};
+use tokio::{sync::Notify, task::JoinHandle, time::Instant};
 use uuid::Uuid;
 
 use crate::GatewayService;
@@ -25,6 +26,9 @@ const JSON_EXPORT_PAGE_SIZE: u32 = 1000;
 const DEFAULT_MAX_JOBS_TOTAL: usize = 1000;
 const DEFAULT_TERMINAL_JOB_RETENTION_SECS: u64 = 15 * 60;
 const DEFAULT_JOB_REAPER_INTERVAL_SECS: u64 = 60;
+const DEFAULT_REPORT_EXPORT_POLL_INTERVAL: Duration = Duration::from_secs(1);
+const DEFAULT_REPORT_EXPORT_TIMEOUT: Duration = Duration::from_secs(15 * 60);
+const MAX_REPORT_EXPORT_RECONCILIATION_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub(crate) struct JobRegistry {
     state: Mutex<JobRegistryState>,
@@ -39,16 +43,32 @@ struct JobRegistryState {
 struct JobPolicy {
     max_jobs_total: usize,
     terminal_retention_secs: u64,
+    report_export_poll_interval: Duration,
+    report_export_timeout: Duration,
 }
 
-#[derive(Clone)]
 struct JobRecord {
     owner_user: String,
     session_token_digest: SessionTokenDigest,
     job: ReportExportJob,
     artifact: Option<JobArtifact>,
-    abort_handle: Option<AbortHandle>,
+    backend_export_id: Option<String>,
+    cancellation_requested: bool,
+    worker_finished: bool,
+    state_changed: Arc<Notify>,
+    worker_handle: Option<JoinHandle<()>>,
     purge_after_epoch_secs: Option<u64>,
+}
+
+struct JobWorkerCompletion {
+    service: GatewayService,
+    job_id: String,
+}
+
+impl Drop for JobWorkerCompletion {
+    fn drop(&mut self) {
+        self.service.mark_job_worker_finished(&self.job_id);
+    }
 }
 
 impl Default for JobRegistry {
@@ -67,6 +87,8 @@ impl Default for JobPolicy {
         Self {
             max_jobs_total: DEFAULT_MAX_JOBS_TOTAL,
             terminal_retention_secs: DEFAULT_TERMINAL_JOB_RETENTION_SECS,
+            report_export_poll_interval: DEFAULT_REPORT_EXPORT_POLL_INTERVAL,
+            report_export_timeout: DEFAULT_REPORT_EXPORT_TIMEOUT,
         }
     }
 }
@@ -183,14 +205,25 @@ impl GatewayService {
         let job = report_export_job(&job_id, &report_id, &request);
         let session_hold = self.sessions.hold(&session.token)?;
         let session_token_digest = SessionTokenDigest::from_token(&session.token);
-        self.insert_job(session.user, session_token_digest, job.clone())?;
+        let state_changed = Arc::new(Notify::new());
+        self.insert_job(
+            session.user,
+            session_token_digest,
+            job.clone(),
+            Arc::clone(&state_changed),
+        )?;
 
         let worker = self.clone();
         let worker_job_id = job_id.clone();
         let worker_report_id = report_id.clone();
         let worker_request = request.clone();
         let session_token = session.token;
+        let completion = JobWorkerCompletion {
+            service: worker.clone(),
+            job_id: worker_job_id.clone(),
+        };
         let handle = tokio::spawn(async move {
+            let _completion = completion;
             worker
                 .run_report_export_job(
                     worker_job_id,
@@ -198,10 +231,11 @@ impl GatewayService {
                     session_hold,
                     worker_report_id,
                     worker_request,
+                    state_changed,
                 )
                 .await;
         });
-        self.set_job_abort_handle(&job_id, handle.abort_handle())?;
+        self.set_job_worker_handle(&job_id, handle)?;
 
         Ok(job)
     }
@@ -213,8 +247,12 @@ impl GatewayService {
         _session_hold: SessionHold,
         report_id: String,
         request: CreateReportExportRequest,
+        state_changed: Arc<Notify>,
     ) {
         if self.mark_job_running(&job_id).is_err() {
+            if self.job_cancellation_requested(&job_id).unwrap_or(false) {
+                let _ = self.mark_job_cancelled(&job_id);
+            }
             return;
         }
 
@@ -226,19 +264,14 @@ impl GatewayService {
                     filter: request.filter,
                     filter_id: request.filter_id,
                 };
-                self.reports
-                    .export_report(&session_token, &report_id, &request)
-                    .await
-                    .map(|export| {
-                        let extension = export.extension.unwrap_or_else(|| "bin".to_string());
-                        JobArtifact {
-                            bytes: export.bytes,
-                            content_type: export
-                                .content_type
-                                .unwrap_or_else(|| "application/octet-stream".to_string()),
-                            filename: format!("report-{report_id}.{extension}"),
-                        }
-                    })
+                self.run_backend_report_export(
+                    &job_id,
+                    &session_token,
+                    &report_id,
+                    &request,
+                    &state_changed,
+                )
+                .await
             }
             CreateReportExportRequest::Json(request) => {
                 self.export_report_json(
@@ -256,7 +289,194 @@ impl GatewayService {
                 let _ = self.mark_job_succeeded(&job_id, artifact);
             }
             Err(error) => {
-                let _ = self.mark_job_failed(&job_id, error);
+                if !self.job_cancellation_requested(&job_id).unwrap_or(true) {
+                    let _ = self.mark_job_failed(&job_id, error);
+                } else {
+                    let _ = self.mark_job_cancelled(&job_id);
+                }
+            }
+        }
+    }
+
+    async fn run_backend_report_export(
+        &self,
+        job_id: &str,
+        session_token: &str,
+        report_id: &str,
+        request: &ReportExportRequest,
+        state_changed: &Notify,
+    ) -> Result<JobArtifact, GatewayError> {
+        let (poll_interval, timeout) = self.report_export_policy()?;
+        let deadline = Instant::now() + timeout;
+        let created = await_report_export_operation(
+            deadline,
+            self.reports
+                .create_report_export(session_token, report_id, request),
+        )
+        .await?;
+        let export_id = created.id;
+        let result = async {
+            if self.register_backend_export_id(job_id, &export_id)? {
+                return Err(GatewayError::Conflict(
+                    "report export job was cancelled".to_string(),
+                ));
+            }
+
+            loop {
+                let cancellation_notified = state_changed.notified();
+                if self.job_cancellation_requested(job_id)? {
+                    return Err(report_export_cancelled_error());
+                }
+
+                let state = tokio::select! {
+                    result = await_report_export_operation(
+                        deadline,
+                        self.reports.get_report_export(session_token, &export_id),
+                    ) => result?,
+                    () = cancellation_notified => continue,
+                };
+                match state {
+                    BackendReportExportState::Ready => break,
+                    BackendReportExportState::Failed => {
+                        return Err(GatewayError::BackendUnavailable(
+                            "backend report export failed".to_string(),
+                        ));
+                    }
+                    BackendReportExportState::Cancelled => {
+                        return Err(GatewayError::Conflict(
+                            "backend report export was cancelled".to_string(),
+                        ));
+                    }
+                    BackendReportExportState::Pending
+                    | BackendReportExportState::Running
+                    | BackendReportExportState::CancelRequested => {
+                        let cancellation_notified = state_changed.notified();
+                        if self.job_cancellation_requested(job_id)? {
+                            continue;
+                        }
+                        let wake_at = deadline.min(Instant::now() + poll_interval);
+                        tokio::select! {
+                            () = tokio::time::sleep_until(wake_at) => {}
+                            () = cancellation_notified => {}
+                        }
+                    }
+                }
+            }
+
+            let cancellation_notified = state_changed.notified();
+            if self.job_cancellation_requested(job_id)? {
+                return Err(report_export_cancelled_error());
+            }
+
+            let export = tokio::select! {
+                result = await_report_export_operation(
+                    deadline,
+                    self.reports.download_report_export(session_token, &export_id),
+                ) => result?,
+                () = cancellation_notified => return Err(report_export_cancelled_error()),
+            };
+            let extension = export.extension.unwrap_or_else(|| "bin".to_string());
+            Ok(JobArtifact {
+                bytes: export.bytes,
+                content_type: export
+                    .content_type
+                    .unwrap_or_else(|| "application/octet-stream".to_string()),
+                filename: format!("report-{report_id}.{extension}"),
+            })
+        }
+        .await;
+
+        if let Err(primary) = &result {
+            self.reconcile_backend_export_best_effort(
+                session_token,
+                &export_id,
+                timeout.min(MAX_REPORT_EXPORT_RECONCILIATION_TIMEOUT),
+                primary,
+            )
+            .await;
+        }
+        result
+    }
+
+    async fn reconcile_backend_export_best_effort(
+        &self,
+        session_token: &str,
+        export_id: &str,
+        timeout: Duration,
+        primary: &GatewayError,
+    ) {
+        let poll_interval = self
+            .report_export_policy()
+            .map(|(poll_interval, _)| poll_interval)
+            .unwrap_or(DEFAULT_REPORT_EXPORT_POLL_INTERVAL);
+        let deadline = Instant::now() + timeout;
+        let state = match await_report_export_operation(
+            deadline,
+            self.reports.get_report_export(session_token, export_id),
+        )
+        .await
+        {
+            Ok(state) => state,
+            Err(GatewayError::NotFound(_)) => return,
+            Err(reconciliation_error) => {
+                tracing::warn!(
+                    primary_error_code = primary.code().as_str(),
+                    reconciliation_error_code = reconciliation_error.code().as_str(),
+                    "report export backend reconciliation polling failed"
+                );
+                return;
+            }
+        };
+
+        match state {
+            BackendReportExportState::Ready
+            | BackendReportExportState::Failed
+            | BackendReportExportState::Cancelled => return,
+            BackendReportExportState::Pending | BackendReportExportState::Running => {
+                if let Err(reconciliation_error) = await_report_export_operation(
+                    deadline,
+                    self.reports.cancel_report_export(session_token, export_id),
+                )
+                .await
+                {
+                    tracing::warn!(
+                        primary_error_code = primary.code().as_str(),
+                        reconciliation_error_code = reconciliation_error.code().as_str(),
+                        "active report export backend cancellation failed"
+                    );
+                }
+            }
+            BackendReportExportState::CancelRequested => {}
+        }
+
+        loop {
+            let state = match await_report_export_operation(
+                deadline,
+                self.reports.get_report_export(session_token, export_id),
+            )
+            .await
+            {
+                Ok(state) => state,
+                Err(GatewayError::NotFound(_)) => return,
+                Err(reconciliation_error) => {
+                    tracing::warn!(
+                        primary_error_code = primary.code().as_str(),
+                        reconciliation_error_code = reconciliation_error.code().as_str(),
+                        "report export backend reconciliation polling failed"
+                    );
+                    return;
+                }
+            };
+            match state {
+                BackendReportExportState::Ready
+                | BackendReportExportState::Failed
+                | BackendReportExportState::Cancelled => return,
+                BackendReportExportState::Pending
+                | BackendReportExportState::Running
+                | BackendReportExportState::CancelRequested => {
+                    let wake_at = deadline.min(Instant::now() + poll_interval);
+                    tokio::time::sleep_until(wake_at).await;
+                }
             }
         }
     }
@@ -329,6 +549,7 @@ impl GatewayService {
         owner_user: String,
         session_token_digest: SessionTokenDigest,
         job: ReportExportJob,
+        state_changed: Arc<Notify>,
     ) -> Result<(), GatewayError> {
         let mut state = self
             .jobs
@@ -350,17 +571,21 @@ impl GatewayService {
                 session_token_digest,
                 job,
                 artifact: None,
-                abort_handle: None,
+                backend_export_id: None,
+                cancellation_requested: false,
+                worker_finished: false,
+                state_changed,
+                worker_handle: None,
                 purge_after_epoch_secs: None,
             },
         );
         Ok(())
     }
 
-    fn set_job_abort_handle(
+    fn set_job_worker_handle(
         &self,
         job_id: &str,
-        abort_handle: AbortHandle,
+        worker_handle: JoinHandle<()>,
     ) -> Result<(), GatewayError> {
         let mut state = self
             .jobs
@@ -371,11 +596,7 @@ impl GatewayService {
             .jobs
             .get_mut(job_id)
             .ok_or_else(|| GatewayError::NotFound(format!("job {job_id} not found")))?;
-        if record.job.status.is_terminal() {
-            abort_handle.abort();
-            return Ok(());
-        }
-        record.abort_handle = Some(abort_handle);
+        record.worker_handle = Some(worker_handle);
         Ok(())
     }
 
@@ -389,7 +610,7 @@ impl GatewayService {
             .jobs
             .get_mut(job_id)
             .ok_or_else(|| GatewayError::NotFound(format!("job {job_id} not found")))?;
-        if record.job.status == JobStatus::Cancelled {
+        if record.cancellation_requested || record.job.status.is_terminal() {
             return Err(GatewayError::Conflict(format!(
                 "job {job_id} was cancelled"
             )));
@@ -415,7 +636,14 @@ impl GatewayService {
             .jobs
             .get_mut(job_id)
             .ok_or_else(|| GatewayError::NotFound(format!("job {job_id} not found")))?;
-        if record.job.status == JobStatus::Cancelled {
+        if record.job.status.is_terminal() {
+            return Ok(());
+        }
+        if record.cancellation_requested {
+            cancel_job_record_in_place(record, now, retention_secs);
+            let state_changed = Arc::clone(&record.state_changed);
+            drop(state);
+            state_changed.notify_waiters();
             return Ok(());
         }
         let result_location = format!("/api/v1/jobs/{job_id}/result");
@@ -434,8 +662,10 @@ impl GatewayService {
             location: Some(result_location),
         });
         record.artifact = Some(artifact);
-        record.abort_handle = None;
         record.purge_after_epoch_secs = Some(now + retention_secs);
+        let state_changed = Arc::clone(&record.state_changed);
+        drop(state);
+        state_changed.notify_waiters();
         Ok(())
     }
 
@@ -451,7 +681,14 @@ impl GatewayService {
             .jobs
             .get_mut(job_id)
             .ok_or_else(|| GatewayError::NotFound(format!("job {job_id} not found")))?;
-        if record.job.status == JobStatus::Cancelled {
+        if record.job.status.is_terminal() {
+            return Ok(());
+        }
+        if record.cancellation_requested {
+            cancel_job_record_in_place(record, now, retention_secs);
+            let state_changed = Arc::clone(&record.state_changed);
+            drop(state);
+            state_changed.notify_waiters();
             return Ok(());
         }
         record.job.status = JobStatus::Failed;
@@ -461,9 +698,33 @@ impl GatewayService {
             percent: Some(100),
             message: Some("failed".to_string()),
         });
-        record.job.error = Some(JobProblem::from_gateway_error(&error));
-        record.abort_handle = None;
+        record.job.error = Some(report_export_job_problem(&error));
         record.purge_after_epoch_secs = Some(now + retention_secs);
+        let state_changed = Arc::clone(&record.state_changed);
+        drop(state);
+        state_changed.notify_waiters();
+        Ok(())
+    }
+
+    fn mark_job_cancelled(&self, job_id: &str) -> Result<(), GatewayError> {
+        let mut state = self
+            .jobs
+            .state
+            .lock()
+            .map_err(|_| GatewayError::Internal("job registry lock poisoned".to_string()))?;
+        let now = now_epoch_secs();
+        let retention_secs = state.policy.terminal_retention_secs;
+        let record = state
+            .jobs
+            .get_mut(job_id)
+            .ok_or_else(|| GatewayError::NotFound(format!("job {job_id} not found")))?;
+        if record.job.status.is_terminal() {
+            return Ok(());
+        }
+        cancel_job_record_in_place(record, now, retention_secs);
+        let state_changed = Arc::clone(&record.state_changed);
+        drop(state);
+        state_changed.notify_waiters();
         Ok(())
     }
 
@@ -497,7 +758,6 @@ impl GatewayService {
             .lock()
             .map_err(|_| GatewayError::Internal("job registry lock poisoned".to_string()))?;
         purge_expired_jobs(&mut state, now_epoch_secs());
-        let now = now_epoch_secs();
         let retention_secs = state.policy.terminal_retention_secs;
         let record = state
             .jobs
@@ -509,51 +769,73 @@ impl GatewayService {
             return Ok(JobCancelOutcome::AlreadyTerminal);
         }
 
-        record.job.status = JobStatus::Cancelled;
-        record.job.completed_at = Some(format_epoch_secs(now));
-        record.job.expires_at = Some(format_epoch_secs(now + retention_secs));
-        record.job.progress = Some(JobProgress {
-            percent: Some(100),
-            message: Some("cancelled".to_string()),
-        });
-        if let Some(handle) = record.abort_handle.take() {
-            handle.abort();
+        record.cancellation_requested = true;
+        if record.job.format == ReportExportFormat::Json {
+            if let Some(worker_handle) = &record.worker_handle {
+                worker_handle.abort();
+            }
+            let now = now_epoch_secs();
+            cancel_job_record_in_place(record, now, retention_secs);
+        } else {
+            record.job.status = JobStatus::Cancelling;
+            record.job.progress = Some(JobProgress {
+                percent: None,
+                message: Some("cancelling".to_string()),
+            });
         }
-        record.purge_after_epoch_secs = Some(now + retention_secs);
+        let state_changed = Arc::clone(&record.state_changed);
+        drop(state);
+        state_changed.notify_waiters();
 
         Ok(JobCancelOutcome::CancellationRequested)
     }
 
-    pub(crate) fn cancel_jobs_for_session(
+    pub(crate) async fn cancel_jobs_for_session(
         &self,
         session_token_digest: &SessionTokenDigest,
     ) -> Result<usize, GatewayError> {
-        let mut state = self
-            .jobs
-            .state
-            .lock()
-            .map_err(|_| GatewayError::Internal("job registry lock poisoned".to_string()))?;
-        purge_expired_jobs(&mut state, now_epoch_secs());
-        let now = now_epoch_secs();
-        let retention_secs = state.policy.terminal_retention_secs;
-        let mut abort_handles = Vec::new();
-        let mut cancelled = 0;
+        let (workers, cancelled) = {
+            let mut state =
+                self.jobs.state.lock().map_err(|_| {
+                    GatewayError::Internal("job registry lock poisoned".to_string())
+                })?;
+            purge_expired_jobs(&mut state, now_epoch_secs());
+            let mut workers = Vec::new();
+            let mut cancelled = 0;
+            let now = now_epoch_secs();
+            let retention_secs = state.policy.terminal_retention_secs;
 
-        for record in state.jobs.values_mut() {
-            if record.session_token_digest != *session_token_digest
-                || record.job.status.is_terminal()
-            {
-                continue;
+            for (job_id, record) in &mut state.jobs {
+                if record.session_token_digest != *session_token_digest {
+                    continue;
+                }
+                if !record.job.status.is_terminal() {
+                    record.cancellation_requested = true;
+                    if record.job.format == ReportExportFormat::Json {
+                        if let Some(worker_handle) = &record.worker_handle {
+                            worker_handle.abort();
+                        }
+                        cancel_job_record_in_place(record, now, retention_secs);
+                    } else {
+                        record.job.status = JobStatus::Cancelling;
+                        record.job.progress = Some(JobProgress {
+                            percent: None,
+                            message: Some("cancelling".to_string()),
+                        });
+                    }
+                    cancelled += 1;
+                }
+                if !record.worker_finished {
+                    workers.push((job_id.clone(), Arc::clone(&record.state_changed)));
+                }
             }
-            if let Some(handle) = cancel_job_record_in_place(record, now, retention_secs) {
-                abort_handles.push(handle);
-            }
-            cancelled += 1;
+            (workers, cancelled)
+        };
+        for (_, state_changed) in &workers {
+            state_changed.notify_waiters();
         }
-
-        drop(state);
-        for handle in abort_handles {
-            handle.abort();
+        for (job_id, state_changed) in workers {
+            self.wait_for_job_worker(&job_id, &state_changed).await?;
         }
 
         Ok(cancelled)
@@ -591,10 +873,8 @@ impl GatewayService {
         terminal_retention_secs: u64,
     ) {
         let mut state = self.jobs.state.lock().unwrap();
-        state.policy = JobPolicy {
-            max_jobs_total,
-            terminal_retention_secs,
-        };
+        state.policy.max_jobs_total = max_jobs_total;
+        state.policy.terminal_retention_secs = terminal_retention_secs;
     }
 
     #[cfg(test)]
@@ -602,33 +882,108 @@ impl GatewayService {
         self.jobs.state.lock().unwrap().jobs.len()
     }
 
-    #[cfg(test)]
-    pub(crate) fn attach_abort_handle_for_tests(
+    async fn wait_for_job_worker(
         &self,
         job_id: &str,
-        abort_handle: AbortHandle,
+        state_changed: &Notify,
     ) -> Result<(), GatewayError> {
-        self.set_job_abort_handle(job_id, abort_handle)
+        loop {
+            let notified = state_changed.notified();
+            let finished = {
+                let state = self.jobs.state.lock().map_err(|_| {
+                    GatewayError::Internal("job registry lock poisoned".to_string())
+                })?;
+                state
+                    .jobs
+                    .get(job_id)
+                    .is_none_or(|record| record.worker_finished)
+            };
+            if finished {
+                return Ok(());
+            }
+            notified.await;
+        }
+    }
+
+    fn register_backend_export_id(
+        &self,
+        job_id: &str,
+        export_id: &str,
+    ) -> Result<bool, GatewayError> {
+        let mut state = self
+            .jobs
+            .state
+            .lock()
+            .map_err(|_| GatewayError::Internal("job registry lock poisoned".to_string()))?;
+        let record = state
+            .jobs
+            .get_mut(job_id)
+            .ok_or_else(|| GatewayError::NotFound(format!("job {job_id} not found")))?;
+        record.backend_export_id = Some(export_id.to_string());
+        Ok(record.cancellation_requested)
+    }
+
+    fn mark_job_worker_finished(&self, job_id: &str) {
+        let state_changed = self.jobs.state.lock().ok().and_then(|mut state| {
+            let record = state.jobs.get_mut(job_id)?;
+            record.worker_finished = true;
+            Some(Arc::clone(&record.state_changed))
+        });
+        if let Some(state_changed) = state_changed {
+            state_changed.notify_waiters();
+        }
+    }
+
+    fn job_cancellation_requested(&self, job_id: &str) -> Result<bool, GatewayError> {
+        let state = self
+            .jobs
+            .state
+            .lock()
+            .map_err(|_| GatewayError::Internal("job registry lock poisoned".to_string()))?;
+        let record = state
+            .jobs
+            .get(job_id)
+            .ok_or_else(|| GatewayError::NotFound(format!("job {job_id} not found")))?;
+        Ok(record.cancellation_requested)
+    }
+
+    fn report_export_policy(&self) -> Result<(Duration, Duration), GatewayError> {
+        let state = self
+            .jobs
+            .state
+            .lock()
+            .map_err(|_| GatewayError::Internal("job registry lock poisoned".to_string()))?;
+        Ok((
+            state.policy.report_export_poll_interval,
+            state.policy.report_export_timeout,
+        ))
     }
 
     #[cfg(test)]
-    pub(crate) fn job_has_abort_handle_for_tests(&self, job_id: &str) -> bool {
+    pub(crate) fn set_report_export_policy_for_tests(
+        &self,
+        poll_interval: Duration,
+        timeout: Duration,
+    ) {
+        let mut state = self.jobs.state.lock().unwrap();
+        state.policy.report_export_poll_interval = poll_interval;
+        state.policy.report_export_timeout = timeout;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn backend_export_id_for_tests(&self, job_id: &str) -> Option<String> {
         self.jobs
             .state
             .lock()
             .unwrap()
             .jobs
             .get(job_id)
-            .and_then(|record| record.abort_handle.as_ref())
-            .is_some()
+            .and_then(|record| record.backend_export_id.clone())
     }
 }
 
-fn cancel_job_record_in_place(
-    record: &mut JobRecord,
-    now: u64,
-    retention_secs: u64,
-) -> Option<AbortHandle> {
+fn cancel_job_record_in_place(record: &mut JobRecord, now: u64, retention_secs: u64) {
+    record.cancellation_requested = true;
     record.job.status = JobStatus::Cancelled;
     record.job.completed_at = Some(format_epoch_secs(now));
     record.job.expires_at = Some(format_epoch_secs(now + retention_secs));
@@ -638,7 +993,6 @@ fn cancel_job_record_in_place(
     });
     record.artifact = None;
     record.purge_after_epoch_secs = Some(now + retention_secs);
-    record.abort_handle.take()
 }
 
 /// Background task that periodically removes expired asynchronous jobs.
@@ -753,12 +1107,13 @@ fn format_epoch_secs(epoch_secs: u64) -> String {
 
 fn purge_expired_jobs(state: &mut JobRegistryState, now_epoch_secs: u64) -> usize {
     let before = state.jobs.len();
-    state
-        .jobs
-        .retain(|_, record| match record.purge_after_epoch_secs {
-            Some(purge_after) => purge_after > now_epoch_secs,
-            None => true,
-        });
+    state.jobs.retain(|_, record| {
+        !record.worker_finished
+            || match record.purge_after_epoch_secs {
+                Some(purge_after) => purge_after > now_epoch_secs,
+                None => true,
+            }
+    });
     before - state.jobs.len()
 }
 
@@ -774,6 +1129,75 @@ fn ensure_job_owner(
     }
 }
 
+async fn await_report_export_operation<T>(
+    deadline: Instant,
+    operation: impl Future<Output = Result<T, GatewayError>>,
+) -> Result<T, GatewayError> {
+    if Instant::now() >= deadline {
+        return Err(report_export_timeout_error());
+    }
+
+    tokio::time::timeout_at(deadline, operation)
+        .await
+        .map_err(|_| report_export_timeout_error())?
+}
+
+fn report_export_timeout_error() -> GatewayError {
+    GatewayError::GatewayTimeout(
+        "backend report export did not complete before the gateway timeout".to_string(),
+    )
+}
+
+fn report_export_cancelled_error() -> GatewayError {
+    GatewayError::Conflict("report export job was cancelled".to_string())
+}
+
+fn report_export_job_problem(error: &GatewayError) -> JobProblem {
+    let public_error = match error {
+        GatewayError::BackendUnavailable(_) => {
+            GatewayError::BackendUnavailable("The backend service is unavailable.".to_string())
+        }
+        GatewayError::NotImplemented(_) => GatewayError::NotImplemented(
+            "The backend does not support asynchronous report export.".to_string(),
+        ),
+        GatewayError::NotFound(_) => {
+            GatewayError::NotFound("The report export resource was not found.".to_string())
+        }
+        GatewayError::InvalidInput(_) => GatewayError::InvalidInput(
+            "The backend rejected the report export request.".to_string(),
+        ),
+        GatewayError::Unauthorized(_) => GatewayError::Unauthorized(
+            "Authentication is required to export the report.".to_string(),
+        ),
+        GatewayError::SessionExpired(_) => {
+            GatewayError::SessionExpired("The report export session expired.".to_string())
+        }
+        GatewayError::SessionInvalidated(_) => GatewayError::SessionInvalidated(
+            "The report export session is no longer valid.".to_string(),
+        ),
+        GatewayError::Forbidden(_) => {
+            GatewayError::Forbidden("The report export operation is not permitted.".to_string())
+        }
+        GatewayError::Conflict(_) => {
+            GatewayError::Conflict("The report export could not be completed.".to_string())
+        }
+        GatewayError::TooManyRequests(_) => GatewayError::TooManyRequests(
+            "The report export backend is currently busy.".to_string(),
+        ),
+        GatewayError::Internal(_) => GatewayError::Internal(
+            "An internal server error occurred while exporting the report.".to_string(),
+        ),
+        GatewayError::GatewayTimeout(_) => GatewayError::GatewayTimeout(
+            "The report export did not complete before the gateway timeout.".to_string(),
+        ),
+    };
+    JobProblem::from_gateway_error(&public_error)
+}
+
 pub(crate) fn new_job_registry() -> Arc<JobRegistry> {
     Arc::new(JobRegistry::default())
 }
+
+#[cfg(test)]
+#[path = "jobs_test.rs"]
+mod jobs_test;
