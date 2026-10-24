@@ -1,4 +1,20 @@
 
 # cargo-vet audits file
 
-[audits]
+[[audits.rustls-webpki]]
+who = "rust-gvm-api security review"
+criteria = "safe-to-deploy"
+delta = "0.103.15 -> 0.103.16"
+notes = "Reviewed exact 0.103.15 -> 0.103.16 source delta: eight bundled distrusted SPKIs are checked for every certificate-chain path, returning CertDistrusted; error ranking and focused tests cover the new rejection behavior."
+
+[[audits.tokio]]
+who = "rust-gvm-api security review"
+criteria = "safe-to-deploy"
+delta = "1.53.1 -> 1.53.3"
+notes = "Reviewed exact 1.53.1 -> 1.53.3 source delta and 1.53.2/1.53.3 release notes: bounded runtime, I/O, synchronization, and timer correctness fixes. AsyncFd registration now exposes its I/O-safety contract as unsafe and deprecates unsound safe constructors; no new dependency is introduced."
+
+[[audits.webpki-root-certs]]
+who = "rust-gvm-api security review"
+criteria = "safe-to-deploy"
+delta = "1.0.8 -> 1.0.10"
+notes = "Reviewed exact 1.0.8 -> 1.0.10 source delta: deterministic generated Mozilla CA data refresh from 118 to 120 root entries; crate remains no_std and forbids unsafe code, with no runtime logic change."
