@@ -320,6 +320,31 @@ pub struct ReportExport {
     pub extension: Option<String>,
 }
 
+/// Identifier returned when gvmd queues an asynchronous report export.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BackendReportExport {
+    /// Opaque backend export identifier, retained only in gateway job state.
+    pub id: String,
+}
+
+/// Typed lifecycle state for an asynchronous backend report export.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BackendReportExportState {
+    /// The export is queued but has not started rendering.
+    Pending,
+    /// The export is actively rendering.
+    Running,
+    /// The backend has accepted a cancellation request.
+    CancelRequested,
+    /// The export completed and remains available for repeatable downloads
+    /// according to gvmd's retention policy.
+    Ready,
+    /// The export failed in the backend.
+    Failed,
+    /// The export was cancelled in the backend.
+    Cancelled,
+}
+
 /// Options for exporting a report through a backend report format.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReportExportRequest {

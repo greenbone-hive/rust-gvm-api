@@ -141,7 +141,7 @@ impl GatewayService {
 
             let removed = removed.expect("checked is_some");
             let session_digest = SessionTokenDigest::from_token(token);
-            match self.cancel_jobs_for_session(&session_digest) {
+            match self.cancel_jobs_for_session(&session_digest).await {
                 Ok(0) => {}
                 Ok(count) => {
                     tracing::info!(count, "session.delete: cancelled session-bound jobs");
@@ -156,6 +156,7 @@ impl GatewayService {
                         None,
                         Some(&err),
                     );
+                    return Err(err);
                 }
             }
             if let Err(err) = self.auth.disconnect_session(&session_digest).await {
