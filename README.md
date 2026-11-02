@@ -21,7 +21,7 @@
 > publish workflow builds Debian, Arch Linux, OCI, user-documentation, and SBOM
 > release artifacts.
 
-Gateway API surfaces for [Greenbone Vulnerability Management (GVM)](https://greenbone.github.io/docs/latest/), built on top of [rust-gvm](https://github.com/greenbone-hive/rust-gvm). REST is implemented on `main`; gRPC and MCP remain planned peer adapters over the same shared core.
+REST gateway API for [Greenbone Vulnerability Management (GVM)](https://greenbone.github.io/docs/latest/), built on top of [rust-gvm](https://github.com/greenbone-hive/rust-gvm). REST is the implemented public gateway surface on `main`; MCP remains a planned peer adapter over the same shared core.
 
 ## Overview
 
@@ -42,13 +42,11 @@ This project provides a modern gateway on top of the Greenbone Management Protoc
 ```
 Clients
   ├─ REST
-  ├─ gRPC (planned)
   └─ MCP  (planned)
          │
          ▼
 Incoming adapters
   ├─ gvm-gateway-rest
-  ├─ gvm-gateway-grpc (planned)
   └─ gvm-gateway-mcp  (planned)
          │
          ▼
@@ -67,7 +65,7 @@ Outgoing adapter
 rust-gvm -> gvmd
 ```
 
-See [Gateway Architecture](docs/gateway-architecture.md) for the authoritative architecture description derived from issues `#26` and `#27`.
+See [Gateway Architecture](docs/gateway-architecture.md) for the authoritative description of the implemented component and session architecture.
 
 ## Status
 
@@ -76,9 +74,9 @@ workspace crates, including container/runtime packaging, shutdown control,
 transport-security modes, and tracing. Every production gvmd adapter operation
 uses rust-gvm's typed request/response execution boundary; this repository does
 not construct or parse GMP XML. The runtime-generated OpenAPI document is
-contract-tested against the curated release specification. gRPC and MCP remain
-planned surfaces; their specs and roadmap should be read as forward-looking
-design material rather than shipped runtime behavior.
+contract-tested against the curated release specification. MCP remains a
+planned surface; its roadmap should be read as forward-looking design material
+rather than shipped runtime behavior.
 
 ## Shared Session Model
 
@@ -89,7 +87,7 @@ The gateway's multi-request execution model is session-backed rather than statel
 - the gvmd adapter owns the live authenticated backend connection bound to that session
 - commands for one session execute serially against gvmd, with explicit backpressure on queue saturation
 
-That session/connection model is shared architecture for REST today and planned gRPC later, even though the exact transport-security deployment mode is now configurable (`disabled`, `terminated_by_proxy`, `native`).
+That session/connection model underpins the REST gateway. Its transport-security deployment mode is configurable (`disabled`, `terminated_by_proxy`, `native`).
 
 ## Getting Started
 
@@ -239,7 +237,6 @@ Useful follow-up commands:
   - [docs/user/examples.md](docs/user/examples.md)
   - [docs/user/migration.md](docs/user/migration.md)
 - [REST API OpenSpec](spec/rest-api/openspec.md)
-- [gRPC API OpenSpec](spec/grpc-api/openspec.md)
 - [Gateway Architecture](docs/gateway-architecture.md)
 - [GMP to REST Translation Model](docs/gmp-rest-translation.md)
 - [Historical documentation archive](docs/archive/README.md)

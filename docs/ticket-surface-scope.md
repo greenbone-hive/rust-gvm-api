@@ -27,7 +27,7 @@ its existing ticket command and response support for direct GMP consumers.
 - Ticket-specific contracts, domain types, application ports, outgoing-adapter
   behavior, and positive gateway tests are not maintained.
 - `rust-gvm-api` will not add ticket discovery, create, clone, update, or delete
-  operations to REST, gRPC, MCP, CLI, or another public adapter.
+  operations to REST, MCP, CLI, or another public adapter.
 - `rust-gvm` keeps its existing ticket command builders, response models, typed
   client integration, and mock behavior, but will not expand them with new
   ticket-specific commands, fields, helpers, mock behavior, or conformance work.

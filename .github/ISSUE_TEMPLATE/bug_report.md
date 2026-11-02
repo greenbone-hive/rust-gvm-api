@@ -27,4 +27,4 @@ labels: bug
 - rust-gvm-api version:
 - Rust version:
 - OS:
-- API type (REST/gRPC):
+- Affected REST endpoint:

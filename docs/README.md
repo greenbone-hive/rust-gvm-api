@@ -41,8 +41,6 @@ as an equally authoritative description of the running service.
 ## Specifications
 
 - [`spec/rest-api/`](../spec/rest-api/) is normative for public REST behavior.
-- [`spec/grpc-api/`](../spec/grpc-api/) is forward-looking; gRPC is not part of
-  the current runtime.
 
 ## Historical material
 

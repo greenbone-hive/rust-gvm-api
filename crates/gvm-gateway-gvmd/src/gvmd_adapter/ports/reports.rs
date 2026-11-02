@@ -678,7 +678,7 @@ fn map_report_detail_error(
     }
 }
 
-// The gateway translates between REST/gRPC and GMP, but it does not emulate
+// The gateway translates between REST and GMP, but it does not emulate
 // GMP functionality that the connected gvmd does not implement yet.
 fn unsupported_typed_report_detail_error(command: &str, resource: &str) -> GatewayError {
     GatewayError::NotImplemented(format!(

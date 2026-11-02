@@ -37,7 +37,8 @@ and [upstream surface dispositions](../../docs/upstream-surface-dispositions.md)
 ## 2. Architecture
 
 The REST adapter follows the shared gateway architecture defined in [docs/gateway-architecture.md](../../docs/gateway-architecture.md).
-For REST specifically, that means the crate layering from issue `#26` plus the shared session/connection execution model from issue `#27`.
+Its crate layering and session/connection execution model are implemented by
+the responsibilities below.
 
 Current responsibilities inside the architecture:
 
@@ -111,7 +112,7 @@ Hypermedia controls are optional and not required for API completeness or review
 
 ### Proxy Responsibility Boundary
 
-This proxy translates between REST/gRPC and GMP while providing an idiomatic interface for clients.
+This proxy translates between REST and GMP while providing an idiomatic interface for clients.
 
 That translation boundary is intentionally limited:
 
@@ -466,7 +467,7 @@ Current required coverage:
 
 ### Rate Limiting
 
-Fixed-window rate limiting per global API surface and authenticated subject, aligned with the session model in #27:
+Fixed-window rate limiting per global API surface and authenticated subject, aligned with the session model described above:
 - Defaults are conservative and configurable (`rate_limit_*` config keys)
 - Subject keys are derived from Bearer tokens or request-scoped Basic credentials without logging raw secrets
 - Session-creation and unauthenticated source keys use the direct TCP peer by default, or the first `X-Forwarded-For` client IP only when the direct peer matches an explicit `trusted_proxy_cidrs` entry
@@ -514,7 +515,7 @@ Logging notes:
 - `local_log_output = "stdout"` preserves the default local formatter path.
 - `local_log_output = "journald"` targets `systemd-journald` directly for systemd deployments and must fail startup clearly when journald is unavailable.
 
-This explicit mode contract supersedes the earlier TLS-only ingress assumption from issue `#27` while preserving its shared session/connection model.
+These modes preserve the session/connection ownership model described above.
 
 ## 5. Implementation Status And Contract Governance
 
@@ -534,8 +535,8 @@ boundary. Unit, integration, contract, architecture, and compose-backed live
 tests protect the REST contract and backend translation. New behavior remains
 spec-first and requires focused regression coverage.
 
-gRPC and MCP adapters remain planned work. Their design documents are
-forward-looking and do not describe shipped runtime surfaces.
+The MCP adapter remains planned work. Its design material is forward-looking
+and does not describe a shipped runtime surface.
 
 ## 6. Error Handling
 

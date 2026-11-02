@@ -30,7 +30,7 @@ Instead, use **GitHub Private Vulnerability Reporting**:
 
 ### What qualifies
 
-- Authentication/authorization bypass in REST or gRPC APIs
+- Authentication/authorization bypass in the REST API
 - Credential exposure in API responses, logs, or headers
 - Injection vulnerabilities (SQL, XML, command)
 - Improper input validation leading to resource exhaustion (DoS)

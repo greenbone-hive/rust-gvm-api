@@ -1,7 +1,8 @@
 # Gateway Architecture
 
 This document is the repository-local architecture reference for `rust-gvm-api`.
-It reflects the design intent captured in [issue #26](https://github.com/greenbone-hive/rust-gvm-api/issues/26), the shared session/connection model from [issue #27](https://github.com/greenbone-hive/rust-gvm-api/issues/27), and the current repository shape on `main`.
+It describes the implemented component boundaries, session/connection model,
+and current repository shape on `main`.
 
 ## Core Rules
 
@@ -10,7 +11,8 @@ It reflects the design intent captured in [issue #26](https://github.com/greenbo
   All GMP XML parsing and protocol-shape handling belong in `rust-gvm`; the gateway consumes typed models and protocol APIs from `rust-gvm`.
 - `rust-gvm-api` must not locally construct GMP command XML or normalize GMP wire/display values.
   If a gateway change needs that behavior, the implementation stops and the missing typed support is reported against [`greenbone-hive/rust-gvm`](https://github.com/greenbone-hive/rust-gvm) instead.
-- REST, gRPC, and future MCP are peer incoming adapters over one shared execution core.
+- REST is the implemented incoming adapter. Future MCP work is planned to use
+  the same execution core rather than duplicate gateway domain or gvmd logic.
 - `rust-gvm-api` intentionally exposes no GMP ticket surface. Ticket discovery
   and lifecycle operations are excluded by the
   [GMP ticket surface decision](ticket-surface-scope.md).
@@ -43,7 +45,6 @@ Their responsibilities are:
 ## Adapter Status
 
 - REST is the implemented public adapter on `main`.
-- gRPC remains a planned adapter and contract surface; its spec should align to this architecture, but it is not wired into the default workspace build today.
 - MCP is planned as another peer adapter over the same application core; it is not yet implemented.
 
 ## High-Level Structure
@@ -51,13 +52,11 @@ Their responsibilities are:
 ```text
 Clients
   ├─ REST
-  ├─ gRPC (planned)
   └─ MCP  (planned)
          │
          ▼
 Incoming adapters
   ├─ gvm-gateway-rest
-  ├─ gvm-gateway-grpc (planned)
   └─ gvm-gateway-mcp  (planned)
          │
          ▼
@@ -85,7 +84,7 @@ rust-gvm -> gvmd
 
 ## Shared Session Execution Model
 
-- Persistent sessions are the shared execution model for multi-request workflows across REST and planned gRPC.
+- Persistent sessions are the execution model for multi-request REST workflows.
 - A successful session bootstrap yields an opaque bearer token that identifies one authenticated gateway session.
 - The domain `SessionManager` owns:
   - token generation and lookup
@@ -107,25 +106,29 @@ rust-gvm -> gvmd
 4. Every successful command dispatch refreshes the session's idle-expiry window.
 5. Explicit teardown, idle expiry, or backend disconnect invalidates the token and closes the bound connection.
 
-## Transport-Security Note
+## Transport-Security Model
 
-Issue `#27` originally assumed TLS-only public transport. The current repository has since refined that into the explicit shared transport-security contract from issue `#130`:
+The gateway implements an explicit transport-security contract:
 
 - `disabled` for intentional plain HTTP
 - `terminated_by_proxy` for HTTP behind a trusted TLS-terminating proxy
 - `native` for direct HTTPS from the gateway process
 
-That newer transport contract supersedes the older blanket "no plain HTTP" assumption while leaving the session/connection architecture from `#27` intact.
+These modes do not change session ownership: the domain owns session lifecycle,
+and the gvmd adapter owns the authenticated backend connection bound to each
+session.
 
 ## Development Implications
 
-- Architecture discussions and new adapter work should update this document together with issue `#26` when the design changes materially.
+- Architecture changes should update this document together with the relevant
+  implementation and specifications.
 - The GMP boundary architecture test is an executable guard for the `rust-gvm` ownership rule.
   New local GMP command construction, response parsing, or wire/display-name normalization in `gvm-gateway-gvmd` is a stop-and-report event, not a reason to add another gateway workaround.
-- Shared session/connection behavior changes should stay aligned with issue `#27` or its successor issues.
+- Shared session/connection behavior changes should stay aligned across the
+  domain, application, gvmd adapter, REST adapter, and composition root.
 - Coverage audits and adapter-parity plans should treat all GMP ticket operations
   as a deliberate exclusion, not as missing endpoints.
-- Specs under `spec/rest-api/` and `spec/grpc-api/` should treat this document as the architectural source of truth.
+- Specs under `spec/rest-api/` should treat this document as the architectural source of truth.
 - Repo docs must distinguish clearly between:
   - implemented gateway surfaces on `main`
   - planned adapter surfaces
