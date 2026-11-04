@@ -491,7 +491,7 @@ components:
         id:
           type: string
         nvt:
-          $ref: "./results.yaml#/components/schemas/NvtRef"
+          $ref: "./results.yaml#/components/schemas/NvtRefSummary"
         host:
           type: string
         port:
@@ -562,7 +562,7 @@ components:
         id:
           type: string
         nvt:
-          $ref: "./results.yaml#/components/schemas/NvtRef"
+          $ref: "./results.yaml#/components/schemas/NvtRefSummary"
         cve:
           type: string
         host:

@@ -498,7 +498,8 @@ fn result_from_gmp_preserves_references_and_nvt_metadata() {
     );
     let parsed = GetResultsResponse::from_response(&response).unwrap();
 
-    let result = result_from_gmp(parsed.items.into_iter().next().unwrap());
+    let result =
+        result_from_gmp(parsed.items.into_iter().next().unwrap()).expect("valid result should map");
     let nvt = result.nvt.expect("nvt should map");
 
     assert_eq!(
@@ -529,6 +530,87 @@ fn result_from_gmp_preserves_references_and_nvt_metadata() {
 }
 
 #[test]
+fn result_from_gmp_preserves_distinct_epss_selections_and_native_percentile() {
+    // Ordinary results must retain both backend selections independently,
+    // including the GMP-native 0..=100 percentile and optional CVE severity.
+    let parsed = GetResultsResponse::from_response(&GmpResponse::from(
+        r#"<get_results_response status="200" status_text="OK">
+            <result id="550e8400-e29b-41d4-a716-446655440000">
+                <name>EPSS result</name>
+                <nvt oid="1.3.6.1">
+                    <epss>
+                        <max_severity><score>0.12345</score><percentile>98.765</percentile><cve id="CVE-2026-0001"><severity>9.8</severity></cve></max_severity>
+                        <max_epss><score>0.54321</score><percentile>99.5</percentile><cve id="CVE-2026-0002"/></max_epss>
+                    </epss>
+                </nvt>
+            </result>
+        </get_results_response>"#,
+    ))
+    .expect("typed result EPSS should parse");
+
+    let result = result_from_gmp(parsed.items.into_iter().next().unwrap())
+        .expect("valid result EPSS should map");
+    let epss = result.nvt.unwrap().epss.expect("EPSS should be present");
+
+    assert_eq!(epss.max_severity.score, 0.12345);
+    assert_eq!(epss.max_severity.percentile, 98.765);
+    assert_eq!(epss.max_severity.cve.id, "CVE-2026-0001");
+    assert_eq!(epss.max_severity.cve.severity, Some(9.8));
+    assert_eq!(epss.max_epss.score, 0.54321);
+    assert_eq!(epss.max_epss.percentile, 99.5);
+    assert_eq!(epss.max_epss.cve.id, "CVE-2026-0002");
+    assert_eq!(epss.max_epss.cve.severity, None);
+}
+
+#[test]
+fn nvt_from_gmp_rejects_invalid_present_epss_numbers_as_backend_data() {
+    // Present EPSS is an all-or-error backend projection: malformed,
+    // non-finite, and out-of-range values must never degrade to omission.
+    for (score, percentile, severity) in [
+        ("not-a-number", "50", "5"),
+        ("0.5", "NaN", "5"),
+        ("0.5", "50", "inf"),
+        ("1.01", "50", "5"),
+        ("0.5", "100.01", "5"),
+        ("0.5", "50", "10.01"),
+    ] {
+        let xml = format!(
+            r#"<get_nvts_response status="200" status_text="OK">
+                <nvt oid="1.3.6.1"><name>Invalid EPSS</name><epss>
+                    <max_severity><score>{score}</score><percentile>{percentile}</percentile><cve id="CVE-2026-0001"><severity>{severity}</severity></cve></max_severity>
+                    <max_epss><score>0.5</score><percentile>50</percentile><cve id="CVE-2026-0002"/></max_epss>
+                </epss></nvt>
+            </get_nvts_response>"#
+        );
+        let parsed = GetNvtsResponse::from_response(&GmpResponse::from(xml.as_str()))
+            .expect("typed EPSS retains invalid numeric text for adapter validation");
+
+        let error = nvt_from_gmp(parsed.items.into_iter().next().unwrap())
+            .expect_err("invalid present EPSS must fail the NVT response");
+        assert!(matches!(error, GatewayError::BackendUnavailable(_)));
+    }
+}
+
+#[test]
+fn result_from_gmp_propagates_invalid_present_epss_as_backend_data() {
+    // Result endpoints share the same strict EPSS mapper as catalog NVTs, so
+    // malformed typed text must become a gateway error instead of disappearing.
+    let parsed = GetResultsResponse::from_response(&GmpResponse::from(
+        r#"<get_results_response status="200" status_text="OK">
+            <result id="550e8400-e29b-41d4-a716-446655440000"><name>Invalid EPSS result</name><nvt oid="1.3.6.1"><epss>
+                <max_severity><score>0.5</score><percentile>50</percentile><cve id="CVE-2026-0001"/></max_severity>
+                <max_epss><score>broken</score><percentile>50</percentile><cve id="CVE-2026-0002"/></max_epss>
+            </epss></nvt></result>
+        </get_results_response>"#,
+    ))
+    .expect("typed result EPSS should preserve malformed numeric text");
+
+    let error = result_from_gmp(parsed.items.into_iter().next().unwrap())
+        .expect_err("malformed result EPSS must fail the response");
+    assert!(matches!(error, GatewayError::BackendUnavailable(_)));
+}
+
+#[test]
 fn nvt_from_gmp_preserves_optional_discovery_marker() {
     // Catalog NVT responses distinguish discovery true, discovery false, and
     // absence; downstream optional booleans must preserve all three states.
@@ -545,6 +627,9 @@ fn nvt_from_gmp_preserves_optional_discovery_marker() {
         .items
         .into_iter()
         .map(nvt_from_gmp)
+        .collect::<Result<Vec<_>, _>>()
+        .expect("valid NVTs should map")
+        .into_iter()
         .map(|nvt| nvt.discovery)
         .collect::<Vec<_>>();
     assert_eq!(discovery, vec![Some(true), Some(false), None]);
@@ -568,7 +653,8 @@ fn result_from_gmp_omits_missing_reference_names() {
     );
     let parsed = GetResultsResponse::from_response(&response).unwrap();
 
-    let result = result_from_gmp(parsed.items.into_iter().next().unwrap());
+    let result =
+        result_from_gmp(parsed.items.into_iter().next().unwrap()).expect("valid result should map");
 
     assert_eq!(
         result.task.as_ref().map(|task| task.id.as_str()),

@@ -114,6 +114,70 @@ components:
         typeMetadata:
           type: string
           description: Source-shaped NVT type metadata supplied by gvmd. The gateway preserves this value without parsing or narrowing its schema.
+        epss:
+          $ref: "#/components/schemas/Epss"
+
+    NvtRefSummary:
+      type: object
+      properties:
+        oid:
+          type: string
+        name:
+          type: string
+        family:
+          type: string
+        cvssBase:
+          type: number
+          format: double
+        cves:
+          type: array
+          items:
+            type: string
+        tags:
+          type: string
+        typeMetadata:
+          type: string
+          description: Source-shaped NVT type metadata supplied by gvmd. The gateway preserves this value without parsing or narrowing its schema.
+
+    Epss:
+      type: object
+      required:
+        - maxEpss
+        - maxSeverity
+      properties:
+        maxEpss:
+          $ref: "#/components/schemas/EpssSelection"
+        maxSeverity:
+          $ref: "#/components/schemas/EpssSelection"
+
+    EpssSelection:
+      type: object
+      required:
+        - score
+        - percentile
+        - cve
+      properties:
+        score:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+          description: EPSS probability score.
+        percentile:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 100
+          description: EPSS percentile in the backend-native percentage range.
+        cve:
+          type: string
+          description: CVE identifier selected for this EPSS maximum.
+        severity:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 10
+          description: Optional severity of the selected CVE.
 
     ResultList:
       type: object

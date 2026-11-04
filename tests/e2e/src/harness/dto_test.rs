@@ -4,7 +4,8 @@
 use serde_json::json;
 
 use super::{
-    CredentialStore, IdentityOwner, IdentityResourceMeta, ReportOperatingSystemSummary, User,
+    CredentialStore, Epss, IdentityOwner, IdentityResourceMeta, NvtRefSummary,
+    ReportOperatingSystemSummary, User,
 };
 
 #[test]
@@ -99,4 +100,43 @@ fn credential_store_deserializes_optional_capability_fields() {
     assert_eq!(store.provider.as_deref(), Some("cyberark"));
     assert_eq!(store.default, None);
     assert_eq!(store.writable, None);
+}
+
+#[test]
+fn epss_deserializes_the_flat_public_selection_contract() {
+    // The E2E harness must decode the issue #620 REST shape so live route
+    // comparisons cannot silently ignore an incompatible nested CVE object.
+    let epss: Epss = serde_json::from_value(json!({
+        "maxEpss": {
+            "score": 0.54321,
+            "percentile": 99.5,
+            "cve": "CVE-2026-0002"
+        },
+        "maxSeverity": {
+            "score": 0.12345,
+            "percentile": 98.765,
+            "cve": "CVE-2026-0001",
+            "severity": 9.8
+        }
+    }))
+    .expect("flat EPSS selection should deserialize");
+
+    assert_eq!(epss.max_epss.cve, "CVE-2026-0002");
+    assert_eq!(epss.max_epss.severity, None);
+    assert_eq!(epss.max_severity.severity, Some(9.8));
+}
+
+#[test]
+fn summary_nvt_reference_rejects_epss() {
+    // Report-vulnerability and other summary NVT references remain explicitly
+    // EPSS-free even while ordinary result references gain the additive field.
+    let result = serde_json::from_value::<NvtRefSummary>(json!({
+        "oid": "1.3.6.1",
+        "epss": {
+            "maxEpss": { "score": 0.5, "percentile": 50.0, "cve": "CVE-2026-0001" },
+            "maxSeverity": { "score": 0.4, "percentile": 40.0, "cve": "CVE-2026-0002" }
+        }
+    }));
+
+    assert!(result.is_err(), "summary NVT references must reject EPSS");
 }

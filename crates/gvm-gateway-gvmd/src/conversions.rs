@@ -12,9 +12,9 @@ use gvm_gateway_domain::{
     Agent, AgentConfig, AgentControlConfig, AgentGroup, AgentHeartbeatConfig,
     AgentInstallerInstruction, AgentRetryConfig, AgentScriptExecutorConfig, AgentSupportBundle,
     Alert, AssetHost, AssetIdentifier, CertBundAdvisory, Cpe, Credential, Cve, DfnCertAdvisory,
-    Feed, Filter, GatewayError, GenericAsset, GenericConfig, Group, Host, IdentityOwner,
-    IdentityResourceMeta, JobArtifact, Note, Nvt, NvtFamily, NvtRef, OciImageTarget,
-    OperatingSystem, OperatingSystemHost, Override, Permission, PortList, Report,
+    Epss, EpssCve, EpssSelection, Feed, Filter, GatewayError, GenericAsset, GenericConfig, Group,
+    Host, IdentityOwner, IdentityResourceMeta, JobArtifact, Note, Nvt, NvtFamily, NvtRef,
+    OciImageTarget, OperatingSystem, OperatingSystemHost, Override, Permission, PortList, Report,
     ReportApplication, ReportClosedCve, ReportCve, ReportError, ReportFormat, ReportHost,
     ReportOperatingSystem, ReportPortSummary, ReportVulnerability, ResourceRef, ResultCount, Role,
     ScanConfig, ScanResult, Scanner, Schedule, SupportingResourceMeta, Tag, Target, Task,
@@ -460,23 +460,29 @@ pub(crate) fn report_from_gmp(report: gvm_gmp::responses::Report) -> Report {
     }
 }
 
-pub(crate) fn result_from_gmp(result: gvm_gmp::responses::ScanResult) -> ScanResult {
+pub(crate) fn result_from_gmp(
+    result: gvm_gmp::responses::ScanResult,
+) -> Result<ScanResult, GatewayError> {
     let severity = result.severity_score();
 
-    let nvt = result.nvt.map(|n| {
-        let cvss_base = n.cvss_base_score();
-        NvtRef {
-            oid: Some(n.oid),
-            name: n.name,
-            family: n.family,
-            cvss_base,
-            cves: n.cves,
-            tags: n.tags,
-            type_metadata: n.type_metadata,
-        }
-    });
+    let nvt = result
+        .nvt
+        .map(|n| {
+            let cvss_base = n.cvss_base_score();
+            Ok(NvtRef {
+                oid: Some(n.oid),
+                name: n.name,
+                family: n.family,
+                cvss_base,
+                cves: n.cves,
+                tags: n.tags,
+                type_metadata: n.type_metadata,
+                epss: n.epss.map(epss_from_gmp).transpose()?,
+            })
+        })
+        .transpose()?;
 
-    ScanResult {
+    Ok(ScanResult {
         id: result.meta.id.to_string(),
         name: result.meta.name,
         host: result.host,
@@ -489,7 +495,7 @@ pub(crate) fn result_from_gmp(result: gvm_gmp::responses::ScanResult) -> ScanRes
         report: result.report.map(resource_ref_from_named_entity),
         hosts_count: None,
         occurrences: None,
-    }
+    })
 }
 
 pub(crate) fn result_from_report_vulnerability(
@@ -513,6 +519,7 @@ pub(crate) fn result_from_report_vulnerability(
             cves: vulnerability.cves,
             tags: None,
             type_metadata: None,
+            epss: None,
         }),
         hosts_count: vulnerability.hosts_count,
         occurrences: vulnerability.occurrences,
@@ -561,6 +568,7 @@ pub(crate) fn report_closed_cve_from_gmp(
             cves: closed_cve.cve.clone().into_iter().collect(),
             tags: None,
             type_metadata: None,
+            epss: None,
         }),
         cve: closed_cve.cve,
     })
@@ -904,11 +912,11 @@ pub(crate) fn dfn_cert_advisory_from_gmp(
     }
 }
 
-pub(crate) fn nvt_from_gmp(nvt: gvm_gmp::responses::Nvt) -> Nvt {
+pub(crate) fn nvt_from_gmp(nvt: gvm_gmp::responses::Nvt) -> Result<Nvt, GatewayError> {
     let cvss_base = nvt.cvss_base_score();
     let severity = nvt.severity_score();
 
-    Nvt {
+    Ok(Nvt {
         oid: nvt.oid,
         name: nvt.name,
         family: nvt.family,
@@ -917,7 +925,8 @@ pub(crate) fn nvt_from_gmp(nvt: gvm_gmp::responses::Nvt) -> Nvt {
         tags: nvt.tags,
         solution_type: nvt.solution_type,
         discovery: nvt.discovery,
-    }
+        epss: nvt.epss.map(epss_from_gmp).transpose()?,
+    })
 }
 
 pub(crate) fn nvt_family_from_gmp(nvt_family: gvm_gmp::responses::NvtFamily) -> NvtFamily {
@@ -1121,6 +1130,72 @@ fn nvt_ref_from_gmp(nvt: gvm_gmp::responses::common::NvtReference) -> NvtRef {
         cves: vec![],
         tags: None,
         type_metadata: None,
+        epss: None,
+    }
+}
+
+fn epss_from_gmp(epss: gvm_gmp::responses::Epss) -> Result<Epss, GatewayError> {
+    Ok(Epss {
+        max_epss: epss_selection_from_gmp(epss.max_epss, "max_epss")?,
+        max_severity: epss_selection_from_gmp(epss.max_severity, "max_severity")?,
+    })
+}
+
+fn epss_selection_from_gmp(
+    selection: gvm_gmp::responses::EpssSelection,
+    field: &str,
+) -> Result<EpssSelection, GatewayError> {
+    let score = bounded_backend_f64(
+        selection.score_value(),
+        &selection.score,
+        &format!("EPSS {field} score"),
+        1.0,
+    )?;
+    let percentile = bounded_backend_f64(
+        selection.percentile_value(),
+        &selection.percentile,
+        &format!("EPSS {field} percentile"),
+        100.0,
+    )?;
+    let severity = selection
+        .cve
+        .severity
+        .as_deref()
+        .map(|value| {
+            bounded_backend_f64(
+                selection.cve.severity_score(),
+                value,
+                &format!("EPSS {field} CVE severity"),
+                10.0,
+            )
+        })
+        .transpose()?;
+
+    Ok(EpssSelection {
+        score,
+        percentile,
+        cve: EpssCve {
+            id: selection.cve.id,
+            severity,
+        },
+    })
+}
+
+fn bounded_backend_f64(
+    parsed: Option<f64>,
+    raw: &str,
+    field: &str,
+    maximum: f64,
+) -> Result<f64, GatewayError> {
+    let parsed = parsed.ok_or_else(|| {
+        GatewayError::BackendUnavailable(format!("gvmd returned invalid {field}: {raw}"))
+    })?;
+    if (0.0..=maximum).contains(&parsed) {
+        Ok(parsed)
+    } else {
+        Err(GatewayError::BackendUnavailable(format!(
+            "gvmd returned out-of-range {field}: {raw}"
+        )))
     }
 }
 

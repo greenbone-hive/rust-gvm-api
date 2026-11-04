@@ -44,6 +44,8 @@ pub(crate) struct NvtResponse {
     /// marker.
     #[serde(skip_serializing_if = "Option::is_none")]
     discovery: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    epss: Option<crate::results::EpssResponse>,
 }
 
 impl From<gvm_gateway_domain::Nvt> for NvtResponse {
@@ -57,6 +59,7 @@ impl From<gvm_gateway_domain::Nvt> for NvtResponse {
             tags: nvt.tags,
             solution_type: nvt.solution_type,
             discovery: nvt.discovery,
+            epss: nvt.epss.map(crate::results::EpssResponse::from),
         }
     }
 }

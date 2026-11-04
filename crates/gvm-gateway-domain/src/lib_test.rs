@@ -453,6 +453,7 @@ fn scan_result_serializes_camel_case() {
             cves: vec!["CVE-2024-1234".to_string()],
             tags: None,
             type_metadata: None,
+            epss: None,
         }),
         description: Some("A vulnerability was found.".to_string()),
         task: None,
@@ -479,6 +480,7 @@ fn nvt_ref_omits_empty_cves() {
         cves: vec![],
         tags: None,
         type_metadata: None,
+        epss: None,
     };
     let json = serde_json::to_string(&nvt).unwrap();
     assert!(!json.contains("\"cves\""));

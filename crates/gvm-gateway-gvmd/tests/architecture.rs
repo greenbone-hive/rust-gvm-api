@@ -14,12 +14,16 @@ const RUST_GVM_COMPONENTS: &[&str] = &[
     "gvm-mock-server",
     "gvm-protocol",
 ];
-// Issue #588 accepts the published rust-gvm v0.8.0 release. The tag, its exact
-// resolved revision, the full release-derived facade inventory, and the ledger
-// must remain immutable and atomic across all five workspace dependencies.
+// Issue #620 temporarily consumes typed EPSS support from this merged commit.
+// Replace this exact-revision draft pin with the eventual post-v0.9 release
+// tag and reconcile the release inventory below once that tag exists.
+const RUST_GVM_DEPENDENCY_VERSION: &str = "0.9.0";
+const RUST_GVM_DEPENDENCY_REVISION: &str = "d57605b5d1284c36e3f4e58112a6a987baa3395b";
+// Issue #588 accepted the published rust-gvm v0.8.0 facade inventory. Keep
+// that reviewed method/ledger baseline honest until it is regenerated and
+// reconciled for the eventual release replacing the temporary dependency pin.
 const RUST_GVM_PIN_REFERENCE: &str = "release-tag";
 const RUST_GVM_PIN_TAG: &str = "v0.8.0";
-const RUST_GVM_PIN_VERSION: &str = "0.8.0";
 const RUST_GVM_PIN_REVISION: &str = "f20a01f7297060f02b6f577bba7261cacb585fc3";
 const RUST_GVM_TYPED_FACADE_METHOD_COUNT: usize = 267;
 const RUST_GVM_TYPED_FACADE_SNAPSHOT: &str = "tests/fixtures/rust-gvm-v0.8.0-typed-facade.tsv";
@@ -293,16 +297,16 @@ fn rust_gvm_components_resolve_to_one_revision() {
         "all five rust-gvm components must be present in Cargo.lock"
     );
     let expected_source = format!(
-        "git+https://github.com/greenbone-hive/rust-gvm?tag={RUST_GVM_PIN_TAG}#{RUST_GVM_PIN_REVISION}"
+        "git+https://github.com/greenbone-hive/rust-gvm?rev={RUST_GVM_DEPENDENCY_REVISION}#{RUST_GVM_DEPENDENCY_REVISION}"
     );
     for (component, (version, source)) in &releases {
         assert_eq!(
-            *version, RUST_GVM_PIN_VERSION,
-            "{component} must resolve to rust-gvm v{RUST_GVM_PIN_VERSION}"
+            *version, RUST_GVM_DEPENDENCY_VERSION,
+            "{component} must resolve to rust-gvm v{RUST_GVM_DEPENDENCY_VERSION}"
         );
         assert_eq!(
             *source, expected_source,
-            "{component} must resolve through rust-gvm tag {RUST_GVM_PIN_TAG} to the exact accepted release revision"
+            "{component} must resolve to the exact rust-gvm issue #620 dependency revision"
         );
     }
 
@@ -314,12 +318,12 @@ fn rust_gvm_components_resolve_to_one_revision() {
             .find(|line| line.trim_start().starts_with(&format!("{component} =")))
             .unwrap_or_else(|| panic!("{component} must be declared in workspace dependencies"));
         assert!(
-            dependency.contains(&format!("tag = \"{RUST_GVM_PIN_TAG}\"")),
-            "{component} must pin the immutable issue #588 release tag {RUST_GVM_PIN_TAG} in Cargo.toml: {dependency}"
+            dependency.contains(&format!("rev = \"{RUST_GVM_DEPENDENCY_REVISION}\"")),
+            "{component} must pin the exact issue #620 dependency revision in Cargo.toml: {dependency}"
         );
         assert!(
-            !dependency.contains("branch =") && !dependency.contains("rev ="),
-            "{component} release dependency must use only tag {RUST_GVM_PIN_TAG}: {dependency}"
+            !dependency.contains("branch =") && !dependency.contains("tag ="),
+            "{component} temporary dependency must use only the exact revision: {dependency}"
         );
     }
 }
@@ -330,8 +334,8 @@ fn rust_gvm_typed_facade_dispositions_are_complete_and_pinned() {
     // the accepted release facade. The checked-in inventory is regenerated
     // from that exact release, so reconciliation derives the method count from
     // its full inventory instead of trusting a separately maintained count.
-    // Shared tag/revision constants couple it to the immutable dependency-lock
-    // guard above while preserving an offline test.
+    // Its own tag/revision metadata preserves an honest offline release
+    // baseline while the dependency guard above records the temporary commit.
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let snapshot_source = fs::read_to_string(manifest_dir.join(RUST_GVM_TYPED_FACADE_SNAPSHOT))
         .expect("read checked-in rust-gvm typed-facade snapshot");

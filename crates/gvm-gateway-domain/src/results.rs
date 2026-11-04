@@ -70,6 +70,41 @@ pub struct NvtRef {
     /// Source-shaped NVT type metadata supplied by gvmd.
     #[serde(rename = "typeMetadata", skip_serializing_if = "Option::is_none")]
     pub type_metadata: Option<String>,
+    /// EPSS selections supplied by gvmd for this NVT.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub epss: Option<Epss>,
+}
+
+/// EPSS selections for an NVT.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct Epss {
+    /// CVE selected for the highest EPSS score.
+    #[serde(rename = "maxEpss")]
+    pub max_epss: EpssSelection,
+    /// CVE selected for the highest severity.
+    #[serde(rename = "maxSeverity")]
+    pub max_severity: EpssSelection,
+}
+
+/// One selected CVE and its EPSS measurements.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct EpssSelection {
+    /// EPSS probability score in the inclusive range 0 to 1.
+    pub score: f64,
+    /// Backend-native EPSS percentile in the inclusive range 0 to 100.
+    pub percentile: f64,
+    /// Selected CVE metadata.
+    pub cve: EpssCve,
+}
+
+/// CVE metadata attached to an EPSS selection.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct EpssCve {
+    /// CVE identifier.
+    pub id: String,
+    /// CVE severity in the inclusive range 0 to 10 when supplied by gvmd.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub severity: Option<f64>,
 }
 
 /// Paginated result list response.

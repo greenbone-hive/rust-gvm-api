@@ -4,7 +4,44 @@
 use anyhow::{Context, Result};
 use reqwest::{header, StatusCode};
 
-use super::{http::truncate, ProblemResponse};
+use super::{http::truncate, Epss, ProblemResponse};
+
+/// Assert the public EPSS shape while allowing feeds that do not publish EPSS.
+pub fn assert_epss_shape(epss: &Epss, context: &str) {
+    for (selection_name, selection) in [
+        ("maxEpss", &epss.max_epss),
+        ("maxSeverity", &epss.max_severity),
+    ] {
+        assert!(
+            selection.score.is_finite() && (0.0..=1.0).contains(&selection.score),
+            "{context} {selection_name} score must be finite and in 0..=1"
+        );
+        assert!(
+            selection.percentile.is_finite() && (0.0..=100.0).contains(&selection.percentile),
+            "{context} {selection_name} percentile must be finite and in 0..=100"
+        );
+        assert!(
+            selection.cve.starts_with("CVE-"),
+            "{context} {selection_name} must expose a CVE identifier"
+        );
+        if let Some(severity) = selection.severity {
+            assert!(
+                severity.is_finite() && (0.0..=10.0).contains(&severity),
+                "{context} {selection_name} severity must be finite and in 0..=10"
+            );
+        }
+    }
+}
+
+/// Assert exact optional EPSS agreement across two reads of the same resource.
+pub fn assert_optional_epss_matches(actual: Option<&Epss>, expected: Option<&Epss>, context: &str) {
+    // EPSS is additive and can be absent in live feeds, but independent REST
+    // reads must not disagree when the backend supplies it.
+    assert_eq!(actual, expected, "{context} drifted between REST reads");
+    if let Some(epss) = actual {
+        assert_epss_shape(epss, context);
+    }
+}
 
 pub async fn assert_problem_response(
     response: reqwest::Response,

@@ -1664,7 +1664,7 @@ components:
         text:
           type: string
         nvt:
-          $ref: "./results.yaml#/components/schemas/NvtRef"
+          $ref: "./results.yaml#/components/schemas/NvtRefSummary"
         hosts:
           type: array
           items:
@@ -1775,7 +1775,7 @@ components:
         text:
           type: string
         nvt:
-          $ref: "./results.yaml#/components/schemas/NvtRef"
+          $ref: "./results.yaml#/components/schemas/NvtRefSummary"
         hosts:
           type: array
           items:
@@ -1884,6 +1884,8 @@ components:
         discovery:
           type: boolean
           description: Whether gvmd marks this as a discovery NVT. Omitted when the backend does not provide the marker.
+        epss:
+          $ref: "./results.yaml#/components/schemas/Epss"
 
     NvtList:
       type: object

@@ -348,6 +348,9 @@ pub struct Nvt {
     /// Whether gvmd marks this as a discovery NVT.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub discovery: Option<bool>,
+    /// Optional EPSS selections supplied by gvmd.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub epss: Option<crate::Epss>,
 }
 
 /// Paginated NVT list response.

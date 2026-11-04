@@ -3,8 +3,9 @@
 
 use anyhow::{anyhow, Context, Result};
 use gvm_gateway_e2e::harness::{
-    E2eHarness, ListResponse, PortList, Report, ReportFormat, ResultList, ScanConfig, ScanResult,
-    Scanner, SessionResponse, Target, Task, TlsCertificateList,
+    assert_optional_epss_matches, E2eHarness, ListResponse, PortList, Report, ReportClosedCveList,
+    ReportFormat, ReportVulnerabilityList, ResultList, ScanConfig, ScanResult, Scanner,
+    SessionResponse, Target, Task, TlsCertificateList,
 };
 use reqwest::{
     header::{CONTENT_DISPOSITION, CONTENT_TYPE},
@@ -306,13 +307,14 @@ async fn rest_discovery_lifecycle_completes_scan_and_links_report() -> Result<()
         let top_level_results = harness.list_results_page(&session.token, 1, 1).await?;
         assert_result_pagination_shape("top-level results", &top_level_results, Some(1));
 
-        let result_to_fetch = first_results_page
-            .data
-            .first()
-            .or_else(|| report_results.data.first())
-            .or_else(|| top_level_results.data.first())
-            .cloned();
-        if let Some(result) = result_to_fetch {
+        for (surface, result) in [
+            ("report result", first_results_page.data.first()),
+            ("ordinary result list", top_level_results.data.first()),
+            ("embedded report result", report.results.first()),
+        ] {
+            let Some(result) = result else {
+                continue;
+            };
             let fetched = harness.get_result(&session.token, &result.id).await?;
             assert_eq!(fetched.id, result.id, "result id drifted on read");
             assert!(
@@ -327,7 +329,16 @@ async fn rest_discovery_lifecycle_completes_scan_and_links_report() -> Result<()
                     "result report reference drifted on read"
                 );
             }
-        } else {
+            assert_optional_epss_matches(
+                fetched.nvt.as_ref().and_then(|nvt| nvt.epss.as_ref()),
+                result.nvt.as_ref().and_then(|nvt| nvt.epss.as_ref()),
+                &format!("{surface}/detail NVT EPSS for result {}", result.id),
+            );
+        }
+        if first_results_page.data.is_empty()
+            && top_level_results.data.is_empty()
+            && report.results.is_empty()
+        {
             eprintln!("result detail read skipped because the completed scan returned no results");
         }
 
@@ -380,7 +391,6 @@ async fn rest_discovery_lifecycle_completes_scan_and_links_report() -> Result<()
             assert_report_vulnerabilities_page_links_report(
                 &vulnerabilities,
                 &report,
-                &created.task,
             );
 
             let tls_certificates = harness
@@ -406,13 +416,7 @@ async fn rest_discovery_lifecycle_completes_scan_and_links_report() -> Result<()
             let closed_cves = harness
                 .get_report_closed_cves_page(&session.token, &action.report_id, 1, 25)
                 .await?;
-            assert_report_results_page_links_report(
-                "report closed CVEs",
-                &closed_cves,
-                &report,
-                &created.task,
-                Some(25),
-            );
+            assert_report_closed_cves_page(&closed_cves);
         } else {
             let unsupported = harness
                 .get_report_vulnerabilities_problem(&session.token, &action.report_id, 1, 25)
@@ -812,11 +816,21 @@ fn assert_report_results_page_links_report(
 }
 
 fn assert_report_vulnerabilities_page_links_report(
-    page: &ResultList,
+    page: &ReportVulnerabilityList,
     report: &Report,
-    task: &Task,
 ) {
-    assert_report_results_page_links_report("report vulnerabilities", page, report, task, Some(25));
+    assert_eq!(
+        page.pagination.page, 1,
+        "report vulnerabilities list used an unexpected page"
+    );
+    assert_eq!(
+        page.pagination.per_page, 25,
+        "report vulnerabilities list used an unexpected page size"
+    );
+    assert!(
+        page.data.len() <= page.pagination.per_page as usize,
+        "report vulnerabilities list returned more items than its page size"
+    );
 
     if let Some(total) = report.result_count.as_ref().and_then(|count| count.total) {
         assert!(
@@ -827,11 +841,40 @@ fn assert_report_vulnerabilities_page_links_report(
         );
     }
 
-    for result in &page.data {
+    for vulnerability in &page.data {
         assert!(
-            result.nvt.is_some() || result.severity.is_some() || !result.name.trim().is_empty(),
-            "vulnerability result {} did not expose finding metadata",
-            result.id
+            vulnerability.nvt.is_some()
+                || vulnerability.severity.is_some()
+                || vulnerability.host.is_some()
+                || vulnerability.occurrences.is_some(),
+            "report vulnerability {:?} did not expose finding metadata",
+            vulnerability.id
+        );
+        // `NvtRefSummary` rejects an unexpected `epss` property during
+        // deserialization, keeping this aggregate response purpose-shaped.
+    }
+}
+
+fn assert_report_closed_cves_page(page: &ReportClosedCveList) {
+    // The strict summary DTO rejects EPSS on closed-CVE NVT references while
+    // keeping the live assertion tolerant of an empty report category.
+    assert_eq!(page.pagination.page, 1, "report closed CVEs page drifted");
+    assert_eq!(
+        page.pagination.per_page, 25,
+        "report closed CVEs page size drifted"
+    );
+    assert!(
+        page.data.len() <= page.pagination.per_page as usize,
+        "report closed CVEs returned more items than its page size"
+    );
+    for finding in &page.data {
+        assert!(
+            finding.nvt.is_some()
+                || finding.cve.is_some()
+                || finding.host.is_some()
+                || finding.severity.is_some(),
+            "report closed CVE {:?} did not expose finding metadata",
+            finding.id
         );
     }
 }

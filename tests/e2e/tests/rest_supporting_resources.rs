@@ -3,9 +3,9 @@
 
 use anyhow::{Context, Result};
 use gvm_gateway_e2e::harness::{
-    CreatedResource, Credential, E2eHarness, ListResponse, NoteResource, NvtCatalogEntry,
-    OverrideResource, PortList, ScanConfig, ScanResult, Scanner, SecInfoEntry, SessionResponse,
-    Target, Task,
+    assert_optional_epss_matches, CreatedResource, Credential, E2eHarness, ListResponse,
+    NoteResource, NvtCatalogEntry, OverrideResource, PortList, ScanConfig, ScanResult, Scanner,
+    SecInfoEntry, SessionResponse, Target, Task,
 };
 
 // Covers stable list/read contracts for supporting catalogs used by setup and discovery flows.
@@ -1067,6 +1067,11 @@ fn assert_nvt_matches_read(fetched: &NvtCatalogEntry, selected: &NvtCatalogEntry
     assert_eq!(
         fetched.solution_type, selected.solution_type,
         "nvt solution type drifted on read"
+    );
+    assert_optional_epss_matches(
+        fetched.epss.as_ref(),
+        selected.epss.as_ref(),
+        "nvt list/detail EPSS",
     );
 }
 
