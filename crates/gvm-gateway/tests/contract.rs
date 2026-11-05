@@ -15,11 +15,12 @@ use gvm_gateway_domain::{
     CreateTargetInput, CreateTaskInput, Credential, CredentialPage, CredentialPort,
     CredentialQuery, CredentialStore, GatewayError, GetReportOpts, ImportReportInput,
     ModifyAlertInput, ModifyCredentialInput, ModifyCredentialStoreInput, ModifyTargetInput,
-    ModifyTaskInput, Pagination, Report, ReportApplicationPage, ReportClosedCvePage, ReportCvePage,
-    ReportErrorPage, ReportHostPage, ReportOperatingSystemPage, ReportPage, ReportPort,
-    ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResourceRef, ResultPage, ResultQuery,
-    ScanResult, SessionLimits, SessionManager, Target, TargetPage, TargetPort, TargetQuery, Task,
-    TaskAction, TaskObservers, TaskPage, TaskPort, TaskQuery, TlsCertificatePage,
+    ModifyTaskInput, Pagination, Qod, Report, ReportApplicationPage, ReportClosedCvePage,
+    ReportCvePage, ReportErrorPage, ReportHostPage, ReportOperatingSystemPage, ReportPage,
+    ReportPort, ReportPortPage, ReportQuery, ReportVulnerabilityPage, ResourceRef, ResultPage,
+    ResultPort, ResultQuery, ScanResult, SessionLimits, SessionManager, Target, TargetPage,
+    TargetPort, TargetQuery, Task, TaskAction, TaskObservers, TaskPage, TaskPort, TaskQuery,
+    TlsCertificatePage,
 };
 use gvm_gateway_gvmd::StaticGvmdAdapter;
 use gvm_gateway_rest::{
@@ -255,6 +256,80 @@ async fn report_drill_down_and_operating_system_routes_expose_typed_contracts() 
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
 
     harness.shutdown().await;
+}
+
+#[tokio::test]
+async fn qod_is_consistent_across_shared_result_endpoints() {
+    // Issue #623 adds QoD to the one shared result representation. Prove the
+    // list, detail, and report-result HTTP handlers all serialize it identically.
+    let report_id = "550e8400-e29b-41d4-a716-446655440000";
+    let result_id = "770e8400-e29b-41d4-a716-446655440000";
+    let (addr, token, handle) = spawn_result_contract_server(
+        Arc::new(JsonExportReportPort {
+            embed_results: true,
+            ..JsonExportReportPort::default()
+        }),
+        Arc::new(QodResultPort),
+    )
+    .await;
+    let client = Client::new();
+
+    let list = client
+        .get(format!("http://{addr}/api/v1/results?page=1&perPage=10"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .expect("result list response")
+        .error_for_status()
+        .expect("result list status")
+        .json::<Value>()
+        .await
+        .expect("result list JSON");
+    let detail = client
+        .get(format!("http://{addr}/api/v1/results/{result_id}"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .expect("result detail response")
+        .error_for_status()
+        .expect("result detail status")
+        .json::<Value>()
+        .await
+        .expect("result detail JSON");
+    let report_results = client
+        .get(format!(
+            "http://{addr}/api/v1/reports/{report_id}/results?page=1&perPage=10"
+        ))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .expect("report results response")
+        .error_for_status()
+        .expect("report results status")
+        .json::<Value>()
+        .await
+        .expect("report results JSON");
+    let report = client
+        .get(format!(
+            "http://{addr}/api/v1/reports/{report_id}?page=1&perPage=10"
+        ))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .expect("embedded report response")
+        .error_for_status()
+        .expect("embedded report status")
+        .json::<Value>()
+        .await
+        .expect("embedded report JSON");
+
+    let expected = serde_json::json!({"value": 95, "type": "remote_vul"});
+    assert_eq!(list["data"][0]["qod"], expected);
+    assert_eq!(detail["qod"], expected);
+    assert_eq!(report_results["data"][0]["qod"], expected);
+    assert_eq!(report["results"][0]["qod"], expected);
+
+    handle.abort();
 }
 
 #[tokio::test]
@@ -596,6 +671,7 @@ async fn report_delete_rejects_obsolete_permanence_choice_before_permanent_delet
     let deleted_ids = Arc::new(Mutex::new(Vec::new()));
     let report_port = Arc::new(JsonExportReportPort {
         deleted_ids: Arc::clone(&deleted_ids),
+        embed_results: false,
     });
     let (addr, token, handle) = spawn_report_server(report_port).await;
     let report_id = "550e8400-e29b-41d4-a716-446655440000";
@@ -1197,6 +1273,44 @@ async fn spawn_report_server(
     (addr, token, handle)
 }
 
+async fn spawn_result_contract_server(
+    report_port: Arc<dyn ReportPort>,
+    result_port: Arc<dyn ResultPort>,
+) -> (std::net::SocketAddr, String, tokio::task::JoinHandle<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let sessions = Arc::new(SessionManager::default());
+    let token = sessions.create("admin").unwrap().token;
+    let adapter = Arc::new(StaticGvmdAdapter::ready("22.7"));
+    let service = GatewayService::new(
+        GatewayPorts {
+            system: adapter.clone(),
+            alerts: adapter.clone(),
+            schedules: adapter.clone(),
+            credentials: adapter.clone(),
+            port_lists: adapter.clone(),
+            feeds: adapter.clone(),
+            identity: adapter.clone(),
+            targets: adapter.clone(),
+            tasks: adapter.clone(),
+            auth: adapter.clone(),
+            reports: report_port,
+            results: result_port,
+            scan_configs: adapter.clone(),
+            scanners: adapter.clone(),
+            agents: adapter.clone(),
+            supporting_resources: adapter,
+        },
+        sessions,
+    );
+    let app = build_router(service);
+    let handle = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    (addr, token, handle)
+}
+
 async fn spawn_report_server_with_users(
     report_port: Arc<dyn ReportPort>,
 ) -> (
@@ -1243,9 +1357,31 @@ async fn spawn_report_server_with_users(
 #[derive(Default)]
 struct JsonExportReportPort {
     deleted_ids: Arc<Mutex<Vec<String>>>,
+    embed_results: bool,
 }
 
 struct AcceptingAlertPort;
+
+struct QodResultPort;
+
+#[async_trait]
+impl ResultPort for QodResultPort {
+    async fn list_results(&self, _: &str, query: &ResultQuery) -> Result<ResultPage, GatewayError> {
+        Ok(ResultPage {
+            data: vec![scan_result_response("550e8400-e29b-41d4-a716-446655440000")],
+            pagination: Pagination {
+                page: query.page,
+                per_page: query.per_page,
+                total: 1,
+                total_pages: 1,
+            },
+        })
+    }
+
+    async fn get_result(&self, _: &str, _: &str) -> Result<ScanResult, GatewayError> {
+        Ok(scan_result_response("550e8400-e29b-41d4-a716-446655440000"))
+    }
+}
 
 #[async_trait]
 impl AlertPort for AcceptingAlertPort {
@@ -1353,7 +1489,11 @@ impl ReportPort for JsonExportReportPort {
         id: &str,
         _: &GetReportOpts,
     ) -> Result<Report, GatewayError> {
-        Ok(report_response(id))
+        let mut report = report_response(id);
+        if self.embed_results {
+            report.results = vec![scan_result_response(id)];
+        }
+        Ok(report)
     }
 
     async fn delete_report(&self, _: &str, id: &str) -> Result<(), GatewayError> {
@@ -1784,6 +1924,10 @@ fn scan_result_response(report_id: &str) -> ScanResult {
         port: None,
         severity: Some(5.0),
         threat: Some("Medium".to_string()),
+        qod: Some(Qod {
+            value: Some(95),
+            type_: Some("remote_vul".to_string()),
+        }),
         nvt: None,
         description: None,
         task: None,

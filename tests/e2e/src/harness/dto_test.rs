@@ -5,7 +5,7 @@ use serde_json::json;
 
 use super::{
     CredentialStore, Epss, IdentityOwner, IdentityResourceMeta, NvtRefSummary,
-    ReportOperatingSystemSummary, User,
+    ReportOperatingSystemSummary, ScanResult, User,
 };
 
 #[test]
@@ -124,6 +124,42 @@ fn epss_deserializes_the_flat_public_selection_contract() {
     assert_eq!(epss.max_epss.cve, "CVE-2026-0002");
     assert_eq!(epss.max_epss.severity, None);
     assert_eq!(epss.max_severity.severity, Some(9.8));
+}
+
+#[test]
+fn scan_result_qod_deserializes_complete_partial_and_absent_shapes() {
+    // The live harness must retain every optional QoD state so cross-route
+    // parity checks cannot silently collapse missing children into defaults.
+    let complete: ScanResult = serde_json::from_value(json!({
+        "id": "123e4567-e89b-12d3-a456-426614174001",
+        "name": "Complete QoD",
+        "qod": { "value": 95, "type": "remote_vul" }
+    }))
+    .expect("complete QoD should deserialize");
+    assert_eq!(complete.qod.as_ref().and_then(|qod| qod.value), Some(95));
+    assert_eq!(
+        complete.qod.as_ref().and_then(|qod| qod.type_.as_deref()),
+        Some("remote_vul")
+    );
+
+    let partial: ScanResult = serde_json::from_value(json!({
+        "id": "123e4567-e89b-12d3-a456-426614174002",
+        "name": "Partial QoD",
+        "qod": { "type": "remote_banner" }
+    }))
+    .expect("partial QoD should deserialize");
+    assert_eq!(partial.qod.as_ref().and_then(|qod| qod.value), None);
+    assert_eq!(
+        partial.qod.as_ref().and_then(|qod| qod.type_.as_deref()),
+        Some("remote_banner")
+    );
+
+    let absent: ScanResult = serde_json::from_value(json!({
+        "id": "123e4567-e89b-12d3-a456-426614174003",
+        "name": "Absent QoD"
+    }))
+    .expect("absent QoD should deserialize");
+    assert!(absent.qod.is_none());
 }
 
 #[test]

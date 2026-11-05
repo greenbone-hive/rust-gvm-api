@@ -26,6 +26,9 @@ pub struct ScanResult {
     /// Threat level.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub threat: Option<String>,
+    /// Quality of detection supplied by gvmd.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub qod: Option<Qod>,
     /// NVT reference.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub nvt: Option<NvtRef>,
@@ -44,6 +47,17 @@ pub struct ScanResult {
     /// Number of result occurrences represented by an aggregate vulnerability.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub occurrences: Option<u32>,
+}
+
+/// Quality of Detection (QoD) metadata for a scan result.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct Qod {
+    /// Detection-confidence percentage in the inclusive range 0 to 100.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<u32>,
+    /// Backend-defined detection method, such as `remote_vul`.
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    pub type_: Option<String>,
 }
 
 /// NVT (Network Vulnerability Test) reference.

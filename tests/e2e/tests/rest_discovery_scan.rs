@@ -3,9 +3,9 @@
 
 use anyhow::{anyhow, Context, Result};
 use gvm_gateway_e2e::harness::{
-    assert_optional_epss_matches, E2eHarness, ListResponse, PortList, Report, ReportClosedCveList,
-    ReportFormat, ReportVulnerabilityList, ResultList, ScanConfig, ScanResult, Scanner,
-    SessionResponse, Target, Task, TlsCertificateList,
+    assert_optional_epss_matches, assert_optional_qod_matches, E2eHarness, ListResponse, PortList,
+    Report, ReportClosedCveList, ReportFormat, ReportVulnerabilityList, ResultList, ScanConfig,
+    ScanResult, Scanner, SessionResponse, Target, Task, TlsCertificateList,
 };
 use reqwest::{
     header::{CONTENT_DISPOSITION, CONTENT_TYPE},
@@ -333,6 +333,11 @@ async fn rest_discovery_lifecycle_completes_scan_and_links_report() -> Result<()
                 fetched.nvt.as_ref().and_then(|nvt| nvt.epss.as_ref()),
                 result.nvt.as_ref().and_then(|nvt| nvt.epss.as_ref()),
                 &format!("{surface}/detail NVT EPSS for result {}", result.id),
+            );
+            assert_optional_qod_matches(
+                fetched.qod.as_ref(),
+                result.qod.as_ref(),
+                &format!("{surface}/detail QoD for result {}", result.id),
             );
         }
         if first_results_page.data.is_empty()

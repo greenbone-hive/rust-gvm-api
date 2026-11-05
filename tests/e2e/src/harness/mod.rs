@@ -18,8 +18,8 @@ mod resources;
 mod dto_test;
 
 pub use assertions::{
-    assert_epss_shape, assert_optional_epss_matches, assert_problem_response,
-    assert_problem_response_any,
+    assert_epss_shape, assert_optional_epss_matches, assert_optional_qod_matches,
+    assert_problem_response, assert_problem_response_any,
 };
 pub use config::{CredentialStoreFixture, E2eConfig};
 pub use dto::*;

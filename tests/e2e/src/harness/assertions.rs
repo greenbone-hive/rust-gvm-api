@@ -4,7 +4,7 @@
 use anyhow::{Context, Result};
 use reqwest::{header, StatusCode};
 
-use super::{http::truncate, Epss, ProblemResponse};
+use super::{http::truncate, Epss, ProblemResponse, Qod};
 
 /// Assert the public EPSS shape while allowing feeds that do not publish EPSS.
 pub fn assert_epss_shape(epss: &Epss, context: &str) {
@@ -40,6 +40,24 @@ pub fn assert_optional_epss_matches(actual: Option<&Epss>, expected: Option<&Eps
     assert_eq!(actual, expected, "{context} drifted between REST reads");
     if let Some(epss) = actual {
         assert_epss_shape(epss, context);
+    }
+}
+
+/// Assert exact optional QoD agreement across two reads of the same result.
+pub fn assert_optional_qod_matches(actual: Option<&Qod>, expected: Option<&Qod>, context: &str) {
+    // QoD is optional at the object and child-field levels, but independent
+    // REST projections of one backend result must preserve the exact shape.
+    assert_eq!(actual, expected, "{context} drifted between REST reads");
+    if let Some(qod) = actual {
+        if let Some(value) = qod.value {
+            assert!(value <= 100, "{context} value must be in 0..=100");
+        }
+        if let Some(type_) = qod.type_.as_deref() {
+            assert!(
+                !type_.trim().is_empty(),
+                "{context} type must be non-empty when supplied"
+            );
+        }
     }
 }
 

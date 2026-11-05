@@ -563,6 +563,56 @@ fn result_from_gmp_preserves_distinct_epss_selections_and_native_percentile() {
 }
 
 #[test]
+fn result_from_gmp_preserves_complete_partial_and_absent_qod() {
+    // rust-gvm owns GMP parsing; the adapter must copy every optional typed
+    // QoD field without fabricating absent values or dropping an empty child.
+    let parsed = GetResultsResponse::from_response(&GmpResponse::from(
+        r#"<get_results_response status="200" status_text="OK">
+            <result id="550e8400-e29b-41d4-a716-446655440001">
+                <name>Complete QoD</name>
+                <qod><value>95</value><type>remote_vul</type></qod>
+            </result>
+            <result id="550e8400-e29b-41d4-a716-446655440002">
+                <name>Value-only QoD</name>
+                <qod><value>80</value></qod>
+            </result>
+            <result id="550e8400-e29b-41d4-a716-446655440003">
+                <name>Type-only QoD</name>
+                <qod><type>remote_banner</type></qod>
+            </result>
+            <result id="550e8400-e29b-41d4-a716-446655440004">
+                <name>Absent QoD</name>
+            </result>
+        </get_results_response>"#,
+    ))
+    .expect("typed result QoD should parse");
+
+    let results = parsed
+        .items
+        .into_iter()
+        .map(result_from_gmp)
+        .collect::<Result<Vec<_>, _>>()
+        .expect("typed result QoD should map");
+
+    assert_eq!(results[0].qod.as_ref().and_then(|qod| qod.value), Some(95));
+    assert_eq!(
+        results[0].qod.as_ref().and_then(|qod| qod.type_.as_deref()),
+        Some("remote_vul")
+    );
+    assert_eq!(results[1].qod.as_ref().and_then(|qod| qod.value), Some(80));
+    assert_eq!(
+        results[1].qod.as_ref().and_then(|qod| qod.type_.as_deref()),
+        None
+    );
+    assert_eq!(results[2].qod.as_ref().and_then(|qod| qod.value), None);
+    assert_eq!(
+        results[2].qod.as_ref().and_then(|qod| qod.type_.as_deref()),
+        Some("remote_banner")
+    );
+    assert!(results[3].qod.is_none());
+}
+
+#[test]
 fn nvt_from_gmp_rejects_invalid_present_epss_numbers_as_backend_data() {
     // Present EPSS is an all-or-error backend projection: malformed,
     // non-finite, and out-of-range values must never degrade to omission.
