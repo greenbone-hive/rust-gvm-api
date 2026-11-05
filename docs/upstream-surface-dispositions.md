@@ -6,9 +6,10 @@ availability does not by itself authorize a REST route, domain port, or OpenAPI
 operation. Completed issue #381 is the closure record for the v0.7.0 baseline;
 new upstream methods require a new, explicit disposition review.
 
-Issue #588 accepts rust-gvm v0.8.0. All five workspace dependencies use that
-immutable release tag, which resolves to revision
-`f20a01f7297060f02b6f577bba7261cacb585fc3`. The tag, resolved revision,
+Issue #588 established the reviewed rust-gvm v0.8.0 facade inventory. Issue
+#620 advances the current dependency and inventory baseline to v0.9.0. All five
+workspace dependencies use that immutable release tag, which resolves to revision
+`d57605b5d1284c36e3f4e58112a6a987baa3395b`. The tag, resolved revision,
 fixture, and method ledger are coupled fail-closed by the architecture guard.
 
 The complete method-level closure record is the machine-readable
@@ -17,7 +18,7 @@ classifies every public async method in the pinned `rust-gvm` typed facade as
 exactly one of `exposed`, `mapped`, `internal`, `blocked`, `deferred`, or
 `omitted`, with a review rationale and repository evidence. The offline drift
 guard reconciles that ledger against the checked-in
-[`rust-gvm-v0.8.0-typed-facade.tsv`](../crates/gvm-gateway-gvmd/tests/fixtures/rust-gvm-v0.8.0-typed-facade.tsv)
+[`rust-gvm-v0.9.0-typed-facade.tsv`](../crates/gvm-gateway-gvmd/tests/fixtures/rust-gvm-v0.9.0-typed-facade.tsv)
 snapshot at the accepted release and the workspace's immutable dependency tag.
 This table remains the family-level product narrative; the TSV is the
 exhaustive per-method source of truth.
@@ -42,7 +43,7 @@ Disposition meanings are deliberately closed:
 | Report-configuration list, detail, create, clone, modify, and delete | Omitted under #381; no administration REST surface is planned in this migration. | `reportConfigId` remains an optional, validated selector on synchronous and job-backed report export. |
 | Report-format create/import, clone, modify, delete, and verify | Omitted or deferred under #381; canonical upstream mutation requests do not authorize new administration routes. | Existing report-format list/detail and report export selection remain supported. |
 | TLS-certificate create/import, clone, modify, and delete | Omitted under #381; this migration does not add certificate administration or transport TLS/mTLS controls. | Existing global TLS-certificate list/detail and report-scoped projections remain supported. |
-| NVT and result projections | The release's optional catalog-NVT `discovery` flag and source-shaped result-NVT `type_metadata` string are adopted additively on existing resources. | `discovery` and `typeMetadata` are optional and omitted when gvmd does not provide them; `typeMetadata` is not parsed or narrowed by the gateway. |
+| NVT and result projections | The v0.8.0 release's optional catalog-NVT `discovery` flag and source-shaped result-NVT `type_metadata` string, plus v0.9.0's optional EPSS projection on catalog NVTs and ordinary-result NVT references, are adopted additively on existing resources. | `discovery`, `typeMetadata`, and `epss` are optional and omitted when gvmd does not provide them; aggregate report-vulnerability, closed-CVE, note, and override NVT summaries remain EPSS-free. `typeMetadata` is not parsed or narrowed by the gateway. |
 | NVT preference and scan-config NVT/family selection mutations | Adopted through completed #523 using canonical typed requests; the migration added no routes and did not alter the existing public contract. | Existing NVT, NVT-family, scan-config NVT, preference, and selection routes keep their current REST/OpenAPI surface. |
 | Generic SecInfo dispatch and observed-vulnerability detail | Omitted under #381; the gateway keeps the existing specialized CVE, CPE, CERT-Bund, DFN-CERT, and vulnerability list/detail disposition and does not expose the upstream generic command as a new endpoint. Additional detailed NVT `tech_info.description_md` and the `web_application_vt` subtype remain unconsumed with that generic get-info surface. | SecInfo identifiers remain opaque strings, and existing list filters, pagination, conversions, and error mapping remain supported. |
 | Agent support-bundle encryption selector | Adopted as the optional `encryption` query on the existing support-bundle download route. | Omission, explicit `false`, and explicit `true` remain distinct through REST, domain, and the typed request; no new route is added. |
