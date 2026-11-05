@@ -24,8 +24,6 @@ const RUST_GVM_DEPENDENCY_REVISION: &str = "d57605b5d1284c36e3f4e58112a6a987baa3
 // issue #620 advances the accepted baseline to v0.9.0. Because that release
 // changes no production gvm-client facade source, all 267 dispositions remain.
 const RUST_GVM_PIN_REFERENCE: &str = "release-tag";
-const RUST_GVM_PIN_TAG: &str = "v0.9.0";
-const RUST_GVM_PIN_REVISION: &str = "d57605b5d1284c36e3f4e58112a6a987baa3395b";
 const RUST_GVM_TYPED_FACADE_METHOD_COUNT: usize = 267;
 const RUST_GVM_TYPED_FACADE_SNAPSHOT: &str = "tests/fixtures/rust-gvm-v0.9.0-typed-facade.tsv";
 const RUST_GVM_DISPOSITION_LEDGER: &str = "../../docs/upstream-surface-dispositions.tsv";
@@ -369,7 +367,7 @@ fn rust_gvm_typed_facade_dispositions_are_complete_and_pinned() {
     ));
     if snapshot.methods.len() != RUST_GVM_TYPED_FACADE_METHOD_COUNT {
         errors.push(format!(
-            "upstream snapshot has {} methods, expected {RUST_GVM_TYPED_FACADE_METHOD_COUNT}; regenerate it from rust-gvm release {RUST_GVM_PIN_TAG} at {RUST_GVM_PIN_REVISION}",
+            "upstream snapshot has {} methods, expected {RUST_GVM_TYPED_FACADE_METHOD_COUNT}; regenerate it from rust-gvm release {RUST_GVM_DEPENDENCY_TAG} at {RUST_GVM_DEPENDENCY_REVISION}",
             snapshot.methods.len()
         ));
     }
@@ -482,13 +480,13 @@ fn typed_facade_metadata_rejects_any_other_release_revision() {
     let errors = pinned_metadata_errors(
         "test fixture",
         RUST_GVM_PIN_REFERENCE,
-        RUST_GVM_PIN_TAG,
+        RUST_GVM_DEPENDENCY_TAG,
         "0000000000000000000000000000000000000000",
     );
 
-    assert!(errors
-        .iter()
-        .any(|error| { error.contains("revision is") && error.contains(RUST_GVM_PIN_REVISION) }));
+    assert!(errors.iter().any(|error| {
+        error.contains("revision is") && error.contains(RUST_GVM_DEPENDENCY_REVISION)
+    }));
 }
 
 #[test]
@@ -1461,14 +1459,14 @@ fn pinned_metadata_errors(label: &str, reference: &str, tag: &str, revision: &st
             "{label} reference is {reference:?}, expected {RUST_GVM_PIN_REFERENCE:?}; regenerate the upstream snapshot and reconcile every ledger row with the dependency pin"
         ));
     }
-    if tag != RUST_GVM_PIN_TAG {
+    if tag != RUST_GVM_DEPENDENCY_TAG {
         errors.push(format!(
-            "{label} tag is {tag:?}, expected {RUST_GVM_PIN_TAG:?}; regenerate the upstream snapshot and reconcile every ledger row with the dependency pin"
+            "{label} tag is {tag:?}, expected {RUST_GVM_DEPENDENCY_TAG:?}; regenerate the upstream snapshot and reconcile every ledger row with the dependency pin"
         ));
     }
-    if revision != RUST_GVM_PIN_REVISION {
+    if revision != RUST_GVM_DEPENDENCY_REVISION {
         errors.push(format!(
-            "{label} revision is {revision:?}, expected {RUST_GVM_PIN_REVISION:?}; regenerate the upstream snapshot and reconcile every ledger row with the dependency pin"
+            "{label} revision is {revision:?}, expected {RUST_GVM_DEPENDENCY_REVISION:?}; regenerate the upstream snapshot and reconcile every ledger row with the dependency pin"
         ));
     }
     errors

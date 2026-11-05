@@ -276,13 +276,9 @@ impl ScanConfigPort for GvmdAdapter {
             let parsed = self
                 .execute_with_session(session_token, "scan_configs.nvts.list", request)
                 .await?;
-            items.extend(
-                parsed
-                    .items
-                    .into_iter()
-                    .map(nvt_from_gmp)
-                    .collect::<Result<Vec<_>, _>>()?,
-            );
+            for item in parsed.items {
+                items.push(nvt_from_gmp(item)?);
+            }
         }
         items.sort_by(|left, right| left.name.cmp(&right.name));
         let total = items.len() as u32;

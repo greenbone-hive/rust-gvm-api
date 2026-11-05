@@ -1050,13 +1050,9 @@ impl SupportingResourcePort for GvmdAdapter {
                         nvt_request(query, Some(family.name))?,
                     )
                     .await?;
-                items.extend(
-                    parsed
-                        .items
-                        .into_iter()
-                        .map(nvt_from_gmp)
-                        .collect::<Result<Vec<_>, _>>()?,
-                );
+                for item in parsed.items {
+                    items.push(nvt_from_gmp(item)?);
+                }
             }
             total = items.len() as u32;
         } else {
@@ -1072,13 +1068,9 @@ impl SupportingResourcePort for GvmdAdapter {
                 parsed.counts.total,
                 parsed.items.len(),
             );
-            items.extend(
-                parsed
-                    .items
-                    .into_iter()
-                    .map(nvt_from_gmp)
-                    .collect::<Result<Vec<_>, _>>()?,
-            );
+            for item in parsed.items {
+                items.push(nvt_from_gmp(item)?);
+            }
         }
         sort_nvts(
             &mut items,
