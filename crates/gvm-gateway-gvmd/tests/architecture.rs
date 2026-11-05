@@ -14,15 +14,18 @@ const RUST_GVM_COMPONENTS: &[&str] = &[
     "gvm-mock-server",
     "gvm-protocol",
 ];
-// Issue #588 accepts the published rust-gvm v0.8.0 release. The tag, its exact
-// resolved revision, the full release-derived facade inventory, and the ledger
-// must remain immutable and atomic across all five workspace dependencies.
+// Issue #620 consumes typed EPSS support from the immutable v0.9.0 release.
+// Guard both its annotated tag and exact target commit so all five workspace
+// components continue to share one published rust-gvm baseline.
+const RUST_GVM_DEPENDENCY_VERSION: &str = "0.9.0";
+const RUST_GVM_DEPENDENCY_TAG: &str = "v0.9.0";
+const RUST_GVM_DEPENDENCY_REVISION: &str = "d57605b5d1284c36e3f4e58112a6a987baa3395b";
+// Issue #588 established the reviewed rust-gvm v0.8.0 facade inventory, and
+// issue #620 advances the accepted baseline to v0.9.0. Because that release
+// changes no production gvm-client facade source, all 267 dispositions remain.
 const RUST_GVM_PIN_REFERENCE: &str = "release-tag";
-const RUST_GVM_PIN_TAG: &str = "v0.8.0";
-const RUST_GVM_PIN_VERSION: &str = "0.8.0";
-const RUST_GVM_PIN_REVISION: &str = "f20a01f7297060f02b6f577bba7261cacb585fc3";
 const RUST_GVM_TYPED_FACADE_METHOD_COUNT: usize = 267;
-const RUST_GVM_TYPED_FACADE_SNAPSHOT: &str = "tests/fixtures/rust-gvm-v0.8.0-typed-facade.tsv";
+const RUST_GVM_TYPED_FACADE_SNAPSHOT: &str = "tests/fixtures/rust-gvm-v0.9.0-typed-facade.tsv";
 const RUST_GVM_DISPOSITION_LEDGER: &str = "../../docs/upstream-surface-dispositions.tsv";
 const ALLOWED_DISPOSITIONS: &[&str] = &[
     "exposed", "mapped", "internal", "blocked", "deferred", "omitted",
@@ -293,16 +296,16 @@ fn rust_gvm_components_resolve_to_one_revision() {
         "all five rust-gvm components must be present in Cargo.lock"
     );
     let expected_source = format!(
-        "git+https://github.com/greenbone-hive/rust-gvm?tag={RUST_GVM_PIN_TAG}#{RUST_GVM_PIN_REVISION}"
+        "git+https://github.com/greenbone-hive/rust-gvm?tag={RUST_GVM_DEPENDENCY_TAG}#{RUST_GVM_DEPENDENCY_REVISION}"
     );
     for (component, (version, source)) in &releases {
         assert_eq!(
-            *version, RUST_GVM_PIN_VERSION,
-            "{component} must resolve to rust-gvm v{RUST_GVM_PIN_VERSION}"
+            *version, RUST_GVM_DEPENDENCY_VERSION,
+            "{component} must resolve to rust-gvm v{RUST_GVM_DEPENDENCY_VERSION}"
         );
         assert_eq!(
             *source, expected_source,
-            "{component} must resolve through rust-gvm tag {RUST_GVM_PIN_TAG} to the exact accepted release revision"
+            "{component} must resolve to rust-gvm {RUST_GVM_DEPENDENCY_TAG} at its exact target commit"
         );
     }
 
@@ -314,12 +317,12 @@ fn rust_gvm_components_resolve_to_one_revision() {
             .find(|line| line.trim_start().starts_with(&format!("{component} =")))
             .unwrap_or_else(|| panic!("{component} must be declared in workspace dependencies"));
         assert!(
-            dependency.contains(&format!("tag = \"{RUST_GVM_PIN_TAG}\"")),
-            "{component} must pin the immutable issue #588 release tag {RUST_GVM_PIN_TAG} in Cargo.toml: {dependency}"
+            dependency.contains(&format!("tag = \"{RUST_GVM_DEPENDENCY_TAG}\"")),
+            "{component} must pin rust-gvm {RUST_GVM_DEPENDENCY_TAG} in Cargo.toml: {dependency}"
         );
         assert!(
             !dependency.contains("branch =") && !dependency.contains("rev ="),
-            "{component} release dependency must use only tag {RUST_GVM_PIN_TAG}: {dependency}"
+            "{component} release dependency must use only the immutable tag: {dependency}"
         );
     }
 }
@@ -330,8 +333,8 @@ fn rust_gvm_typed_facade_dispositions_are_complete_and_pinned() {
     // the accepted release facade. The checked-in inventory is regenerated
     // from that exact release, so reconciliation derives the method count from
     // its full inventory instead of trusting a separately maintained count.
-    // Shared tag/revision constants couple it to the immutable dependency-lock
-    // guard above while preserving an offline test.
+    // Its own tag/revision metadata preserves an honest offline release
+    // baseline alongside the dependency guard above.
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let snapshot_source = fs::read_to_string(manifest_dir.join(RUST_GVM_TYPED_FACADE_SNAPSHOT))
         .expect("read checked-in rust-gvm typed-facade snapshot");
@@ -364,7 +367,7 @@ fn rust_gvm_typed_facade_dispositions_are_complete_and_pinned() {
     ));
     if snapshot.methods.len() != RUST_GVM_TYPED_FACADE_METHOD_COUNT {
         errors.push(format!(
-            "upstream snapshot has {} methods, expected {RUST_GVM_TYPED_FACADE_METHOD_COUNT}; regenerate it from rust-gvm release {RUST_GVM_PIN_TAG} at {RUST_GVM_PIN_REVISION}",
+            "upstream snapshot has {} methods, expected {RUST_GVM_TYPED_FACADE_METHOD_COUNT}; regenerate it from rust-gvm release {RUST_GVM_DEPENDENCY_TAG} at {RUST_GVM_DEPENDENCY_REVISION}",
             snapshot.methods.len()
         ));
     }
@@ -477,13 +480,13 @@ fn typed_facade_metadata_rejects_any_other_release_revision() {
     let errors = pinned_metadata_errors(
         "test fixture",
         RUST_GVM_PIN_REFERENCE,
-        RUST_GVM_PIN_TAG,
+        RUST_GVM_DEPENDENCY_TAG,
         "0000000000000000000000000000000000000000",
     );
 
-    assert!(errors
-        .iter()
-        .any(|error| { error.contains("revision is") && error.contains(RUST_GVM_PIN_REVISION) }));
+    assert!(errors.iter().any(|error| {
+        error.contains("revision is") && error.contains(RUST_GVM_DEPENDENCY_REVISION)
+    }));
 }
 
 #[test]
@@ -1456,14 +1459,14 @@ fn pinned_metadata_errors(label: &str, reference: &str, tag: &str, revision: &st
             "{label} reference is {reference:?}, expected {RUST_GVM_PIN_REFERENCE:?}; regenerate the upstream snapshot and reconcile every ledger row with the dependency pin"
         ));
     }
-    if tag != RUST_GVM_PIN_TAG {
+    if tag != RUST_GVM_DEPENDENCY_TAG {
         errors.push(format!(
-            "{label} tag is {tag:?}, expected {RUST_GVM_PIN_TAG:?}; regenerate the upstream snapshot and reconcile every ledger row with the dependency pin"
+            "{label} tag is {tag:?}, expected {RUST_GVM_DEPENDENCY_TAG:?}; regenerate the upstream snapshot and reconcile every ledger row with the dependency pin"
         ));
     }
-    if revision != RUST_GVM_PIN_REVISION {
+    if revision != RUST_GVM_DEPENDENCY_REVISION {
         errors.push(format!(
-            "{label} revision is {revision:?}, expected {RUST_GVM_PIN_REVISION:?}; regenerate the upstream snapshot and reconcile every ledger row with the dependency pin"
+            "{label} revision is {revision:?}, expected {RUST_GVM_DEPENDENCY_REVISION:?}; regenerate the upstream snapshot and reconcile every ledger row with the dependency pin"
         ));
     }
     errors

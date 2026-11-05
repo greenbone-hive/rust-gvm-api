@@ -27,7 +27,7 @@ use crate::{
     },
     openapi::{created_json, ok_json, problem_response, ResourceIdPathDoc},
     query::DeleteResourceQueryParams,
-    results::NvtRefResponse,
+    results::NvtRefSummaryResponse,
 };
 
 #[derive(Clone, Debug, Serialize, JsonSchema)]
@@ -38,7 +38,7 @@ pub(crate) struct OverrideResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     text: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    nvt: Option<NvtRefResponse>,
+    nvt: Option<NvtRefSummaryResponse>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     hosts: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -61,7 +61,7 @@ impl From<gvm_gateway_domain::Override> for OverrideResponse {
         Self {
             meta: SupportingResourceMetaResponse::from(override_.meta),
             text: override_.text,
-            nvt: override_.nvt.map(NvtRefResponse::from),
+            nvt: override_.nvt.map(NvtRefSummaryResponse::from),
             hosts: override_.hosts,
             port: override_.port,
             severity: override_.severity,

@@ -34,7 +34,7 @@ use crate::{
         ReportListQueryDoc, ReportResultsQueryDoc, ResourceIdPathDoc,
     },
     query::{decoded_query_pairs, parse_collection_query},
-    results::{NvtRefResponse, ResultListResponse, ResultResponse, Threat},
+    results::{NvtRefSummaryResponse, ResultListResponse, ResultResponse, Threat},
     router::bearer_token,
     targets::validate_uuid,
 };
@@ -419,7 +419,7 @@ pub(crate) struct ReportVulnerabilityResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    nvt: Option<NvtRefResponse>,
+    nvt: Option<NvtRefSummaryResponse>,
     #[serde(skip_serializing_if = "Option::is_none")]
     host: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -438,7 +438,7 @@ impl From<gvm_gateway_domain::ReportVulnerability> for ReportVulnerabilityRespon
     fn from(vulnerability: gvm_gateway_domain::ReportVulnerability) -> Self {
         Self {
             id: vulnerability.id,
-            nvt: vulnerability.nvt.map(NvtRefResponse::from),
+            nvt: vulnerability.nvt.map(NvtRefSummaryResponse::from),
             host: vulnerability.host,
             port: vulnerability.port,
             severity: vulnerability.severity,
@@ -531,7 +531,7 @@ pub(crate) struct ReportClosedCveResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    nvt: Option<NvtRefResponse>,
+    nvt: Option<NvtRefSummaryResponse>,
     #[serde(skip_serializing_if = "Option::is_none")]
     cve: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -546,7 +546,7 @@ impl From<gvm_gateway_domain::ReportClosedCve> for ReportClosedCveResponse {
     fn from(closed_cve: gvm_gateway_domain::ReportClosedCve) -> Self {
         Self {
             id: closed_cve.id,
-            nvt: closed_cve.nvt.map(NvtRefResponse::from),
+            nvt: closed_cve.nvt.map(NvtRefSummaryResponse::from),
             cve: closed_cve.cve,
             host: closed_cve.host,
             severity: closed_cve.severity,

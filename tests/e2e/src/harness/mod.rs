@@ -17,7 +17,10 @@ mod resources;
 #[cfg(test)]
 mod dto_test;
 
-pub use assertions::{assert_problem_response, assert_problem_response_any};
+pub use assertions::{
+    assert_epss_shape, assert_optional_epss_matches, assert_problem_response,
+    assert_problem_response_any,
+};
 pub use config::{CredentialStoreFixture, E2eConfig};
 pub use dto::*;
 

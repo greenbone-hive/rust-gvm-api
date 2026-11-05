@@ -276,7 +276,9 @@ impl ScanConfigPort for GvmdAdapter {
             let parsed = self
                 .execute_with_session(session_token, "scan_configs.nvts.list", request)
                 .await?;
-            items.extend(parsed.items.into_iter().map(nvt_from_gmp));
+            for item in parsed.items {
+                items.push(nvt_from_gmp(item)?);
+            }
         }
         items.sort_by(|left, right| left.name.cmp(&right.name));
         let total = items.len() as u32;
@@ -303,6 +305,7 @@ impl ScanConfigPort for GvmdAdapter {
             .into_iter()
             .find(|item| item.oid == oid)
             .map(nvt_from_gmp)
+            .transpose()?
             .ok_or_else(|| {
                 GatewayError::NotFound(format!("NVT {oid} not selected by scan config {id}"))
             })

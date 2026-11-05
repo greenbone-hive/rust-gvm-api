@@ -249,7 +249,7 @@ pub struct NoteResource {
     pub id: String,
     pub name: String,
     pub text: Option<String>,
-    pub nvt: Option<NvtRef>,
+    pub nvt: Option<NvtRefSummary>,
     #[serde(default)]
     pub hosts: Vec<String>,
     pub port: Option<String>,
@@ -266,7 +266,7 @@ pub struct OverrideResource {
     pub id: String,
     pub name: String,
     pub text: Option<String>,
-    pub nvt: Option<NvtRef>,
+    pub nvt: Option<NvtRefSummary>,
     #[serde(default)]
     pub hosts: Vec<String>,
     pub port: Option<String>,
@@ -292,6 +292,7 @@ pub struct NvtCatalogEntry {
     #[serde(rename = "solutionType")]
     pub solution_type: Option<String>,
     pub discovery: Option<bool>,
+    pub epss: Option<Epss>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -680,6 +681,24 @@ pub struct ScanResult {
     pub nvt: Option<NvtRef>,
 }
 
+/// The optional EPSS selections exposed only by catalog and ordinary-result NVTs.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct Epss {
+    #[serde(rename = "maxEpss")]
+    pub max_epss: EpssSelection,
+    #[serde(rename = "maxSeverity")]
+    pub max_severity: EpssSelection,
+}
+
+/// One public EPSS selection. CVE and severity are siblings by contract.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct EpssSelection {
+    pub score: f64,
+    pub percentile: f64,
+    pub cve: String,
+    pub severity: Option<f64>,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct NvtRef {
     pub oid: Option<String>,
@@ -691,4 +710,57 @@ pub struct NvtRef {
     pub tags: Option<String>,
     #[serde(rename = "typeMetadata")]
     pub type_metadata: Option<String>,
+    pub epss: Option<Epss>,
+}
+
+/// Purpose-shaped NVT references intentionally do not expose EPSS.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NvtRefSummary {
+    pub oid: Option<String>,
+    pub name: Option<String>,
+    pub family: Option<String>,
+    #[serde(rename = "cvssBase")]
+    pub cvss_base: Option<f64>,
+    pub cves: Option<Vec<String>>,
+    pub tags: Option<String>,
+    #[serde(rename = "typeMetadata")]
+    pub type_metadata: Option<String>,
+}
+
+/// Aggregate report-vulnerability rows have an EPSS-free NVT summary by contract.
+#[derive(Clone, Debug, Deserialize)]
+pub struct ReportVulnerability {
+    pub id: Option<String>,
+    pub nvt: Option<NvtRefSummary>,
+    pub host: Option<String>,
+    pub port: Option<String>,
+    pub severity: Option<f64>,
+    pub threat: Option<String>,
+    #[serde(rename = "hostsCount")]
+    pub hosts_count: Option<u32>,
+    pub occurrences: Option<u32>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct ReportVulnerabilityList {
+    pub data: Vec<ReportVulnerability>,
+    pub pagination: Pagination,
+}
+
+/// Closed-CVE rows keep their NVT reference summary-shaped and EPSS-free.
+#[derive(Clone, Debug, Deserialize)]
+pub struct ReportClosedCve {
+    pub id: Option<String>,
+    pub nvt: Option<NvtRefSummary>,
+    pub cve: Option<String>,
+    pub host: Option<String>,
+    pub severity: Option<f64>,
+    pub threat: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct ReportClosedCveList {
+    pub data: Vec<ReportClosedCve>,
+    pub pagination: Pagination,
 }

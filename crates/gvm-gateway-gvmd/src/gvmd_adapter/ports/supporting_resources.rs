@@ -1050,7 +1050,9 @@ impl SupportingResourcePort for GvmdAdapter {
                         nvt_request(query, Some(family.name))?,
                     )
                     .await?;
-                items.extend(parsed.items.into_iter().map(nvt_from_gmp));
+                for item in parsed.items {
+                    items.push(nvt_from_gmp(item)?);
+                }
             }
             total = items.len() as u32;
         } else {
@@ -1066,7 +1068,9 @@ impl SupportingResourcePort for GvmdAdapter {
                 parsed.counts.total,
                 parsed.items.len(),
             );
-            items.extend(parsed.items.into_iter().map(nvt_from_gmp));
+            for item in parsed.items {
+                items.push(nvt_from_gmp(item)?);
+            }
         }
         sort_nvts(
             &mut items,
@@ -1089,6 +1093,7 @@ impl SupportingResourcePort for GvmdAdapter {
             .into_iter()
             .next()
             .map(nvt_from_gmp)
+            .transpose()?
             .ok_or_else(|| GatewayError::NotFound(format!("nvt {oid} not found")))
     }
 

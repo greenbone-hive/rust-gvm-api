@@ -27,7 +27,7 @@ use crate::{
     },
     openapi::{created_json, ok_json, problem_response, ResourceIdPathDoc},
     query::DeleteResourceQueryParams,
-    results::NvtRefResponse,
+    results::NvtRefSummaryResponse,
 };
 
 #[derive(Clone, Debug, Serialize, JsonSchema)]
@@ -38,7 +38,7 @@ pub(crate) struct NoteResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     text: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    nvt: Option<NvtRefResponse>,
+    nvt: Option<NvtRefSummaryResponse>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     hosts: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -59,7 +59,7 @@ impl From<gvm_gateway_domain::Note> for NoteResponse {
         Self {
             meta: SupportingResourceMetaResponse::from(note.meta),
             text: note.text,
-            nvt: note.nvt.map(NvtRefResponse::from),
+            nvt: note.nvt.map(NvtRefSummaryResponse::from),
             hosts: note.hosts,
             port: note.port,
             severity: note.severity,

@@ -122,7 +122,7 @@ impl ReportPort for GvmdAdapter {
             .items
             .into_iter()
             .map(result_from_gmp)
-            .collect();
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(report)
     }
@@ -301,7 +301,7 @@ impl ReportPort for GvmdAdapter {
             .items
             .into_iter()
             .map(result_from_gmp)
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, _>>()?;
 
         let total = gvmd_total(parsed.counts.filtered, parsed.counts.total, items.len());
 

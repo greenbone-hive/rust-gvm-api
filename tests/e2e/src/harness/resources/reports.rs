@@ -205,7 +205,7 @@ impl E2eHarness {
         report_id: &str,
         page: u32,
         per_page: u32,
-    ) -> Result<ResultList> {
+    ) -> Result<ReportClosedCveList> {
         self.send_json(
             self.authed(
                 Method::GET,
@@ -224,7 +224,7 @@ impl E2eHarness {
         report_id: &str,
         page: u32,
         per_page: u32,
-    ) -> Result<ResultList> {
+    ) -> Result<ReportVulnerabilityList> {
         self.send_json(
             self.authed(
                 Method::GET,

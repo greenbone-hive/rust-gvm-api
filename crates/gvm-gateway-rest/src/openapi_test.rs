@@ -55,6 +55,77 @@ fn generated_openapi_matches_curated_spec() {
 }
 
 #[test]
+fn epss_schema_is_bounded_and_excludes_report_vulnerabilities() {
+    // Issue #620 adds EPSS only to catalog NVTs and ordinary-result NVT refs;
+    // generated and curated contracts must agree on ranges and the #624 boundary.
+    let generated = build_openapi();
+    let schemas = &generated["components"]["schemas"];
+    assert!(schemas["Nvt"]["properties"].get("epss").is_some());
+    assert!(schemas["NvtRef"]["properties"].get("epss").is_some());
+    assert_eq!(
+        schemas["EpssSelection"]["properties"]["score"]["minimum"],
+        0.0
+    );
+    assert_eq!(
+        schemas["EpssSelection"]["properties"]["score"]["maximum"],
+        1.0
+    );
+    assert_eq!(
+        schemas["EpssSelection"]["properties"]["percentile"]["minimum"],
+        0.0
+    );
+    assert_eq!(
+        schemas["EpssSelection"]["properties"]["percentile"]["maximum"],
+        100.0
+    );
+    assert_eq!(
+        schemas["EpssSelection"]["properties"]["severity"]["maximum"],
+        10.0
+    );
+    assert_eq!(
+        schemas["EpssSelection"]["properties"]["severity"]["minimum"],
+        0.0
+    );
+    assert_eq!(
+        schemas["EpssSelection"]["properties"]["cve"]["type"],
+        "string"
+    );
+    assert!(schemas.get("EpssCve").is_none());
+    assert_eq!(
+        schemas["ReportVulnerability"]["properties"]["nvt"]["$ref"],
+        "#/components/schemas/NvtRefSummary"
+    );
+    assert!(schemas["NvtRefSummary"]["properties"].get("epss").is_none());
+
+    let spec_dir = root_spec_path()
+        .parent()
+        .expect("REST spec directory")
+        .to_path_buf();
+    let results = read_yaml(&spec_dir.join("results.yaml"));
+    let supporting = read_yaml(&spec_dir.join("supporting-resources.yaml"));
+    let reports = read_yaml(&spec_dir.join("reports.yaml"));
+    assert!(results["components"]["schemas"]["NvtRef"]["properties"]
+        .get("epss")
+        .is_some());
+    assert_eq!(
+        results["components"]["schemas"]["EpssSelection"]["properties"]["percentile"]["maximum"],
+        100
+    );
+    assert_eq!(
+        results["components"]["schemas"]["EpssSelection"]["properties"]["cve"]["type"],
+        "string"
+    );
+    assert!(results["components"]["schemas"].get("EpssCve").is_none());
+    assert!(supporting["components"]["schemas"]["Nvt"]["properties"]
+        .get("epss")
+        .is_some());
+    assert_eq!(
+        reports["components"]["schemas"]["ReportVulnerability"]["properties"]["nvt"]["$ref"],
+        "./results.yaml#/components/schemas/NvtRefSummary"
+    );
+}
+
+#[test]
 fn generated_and_curated_metadata_describe_the_current_typed_contract() {
     // Top-level metadata is what runtime Redoc and release-shipped clients see.
     // Keep it tied to the compiled API version and implemented authentication

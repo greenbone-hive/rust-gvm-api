@@ -61,6 +61,8 @@ pub(crate) struct NvtRefResponse {
     /// parsing or narrowing its schema.
     #[serde(rename = "typeMetadata", skip_serializing_if = "Option::is_none")]
     type_metadata: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    epss: Option<EpssResponse>,
 }
 
 impl From<gvm_gateway_domain::NvtRef> for NvtRefResponse {
@@ -73,6 +75,86 @@ impl From<gvm_gateway_domain::NvtRef> for NvtRefResponse {
             cves: n.cves,
             tags: n.tags,
             type_metadata: n.type_metadata,
+            epss: n.epss.map(EpssResponse::from),
+        }
+    }
+}
+
+/// EPSS selections for an NVT.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[schemars(rename = "Epss")]
+pub(crate) struct EpssResponse {
+    #[serde(rename = "maxEpss")]
+    max_epss: EpssSelectionResponse,
+    #[serde(rename = "maxSeverity")]
+    max_severity: EpssSelectionResponse,
+}
+
+impl From<gvm_gateway_domain::Epss> for EpssResponse {
+    fn from(epss: gvm_gateway_domain::Epss) -> Self {
+        Self {
+            max_epss: EpssSelectionResponse::from(epss.max_epss),
+            max_severity: EpssSelectionResponse::from(epss.max_severity),
+        }
+    }
+}
+
+/// One EPSS maximum with its selected CVE identifier and optional severity.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[schemars(rename = "EpssSelection")]
+pub(crate) struct EpssSelectionResponse {
+    #[schemars(range(min = 0.0, max = 1.0))]
+    score: f64,
+    #[schemars(range(min = 0.0, max = 100.0))]
+    percentile: f64,
+    /// CVE identifier selected for this EPSS maximum.
+    cve: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(range(min = 0.0, max = 10.0))]
+    severity: Option<f64>,
+}
+
+impl From<gvm_gateway_domain::EpssSelection> for EpssSelectionResponse {
+    fn from(selection: gvm_gateway_domain::EpssSelection) -> Self {
+        Self {
+            score: selection.score,
+            percentile: selection.percentile,
+            cve: selection.cve.id,
+            severity: selection.cve.severity,
+        }
+    }
+}
+
+/// NVT reference used by response surfaces that do not expose EPSS.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[schemars(rename = "NvtRefSummary")]
+pub(crate) struct NvtRefSummaryResponse {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    oid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    family: Option<String>,
+    #[serde(rename = "cvssBase", skip_serializing_if = "Option::is_none")]
+    cvss_base: Option<f64>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    cves: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tags: Option<String>,
+    #[serde(rename = "typeMetadata", skip_serializing_if = "Option::is_none")]
+    type_metadata: Option<String>,
+}
+
+impl From<gvm_gateway_domain::NvtRef> for NvtRefSummaryResponse {
+    fn from(nvt: gvm_gateway_domain::NvtRef) -> Self {
+        Self {
+            oid: nvt.oid,
+            name: nvt.name,
+            family: nvt.family,
+            cvss_base: nvt.cvss_base,
+            cves: nvt.cves,
+            tags: nvt.tags,
+            type_metadata: nvt.type_metadata,
         }
     }
 }

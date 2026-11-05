@@ -48,7 +48,7 @@ impl ResultPort for GvmdAdapter {
             .items
             .into_iter()
             .map(result_from_gmp)
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, _>>()?;
 
         let total = gvmd_total(parsed.counts.filtered, parsed.counts.total, items.len());
 
@@ -71,6 +71,7 @@ impl ResultPort for GvmdAdapter {
             .into_iter()
             .next()
             .map(result_from_gmp)
+            .transpose()?
             .ok_or_else(|| GatewayError::NotFound(format!("result {id} not found")))
     }
 }
