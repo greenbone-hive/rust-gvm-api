@@ -189,6 +189,23 @@ async fn ordinary_gmp_status_400_remains_http_400() {
     );
 }
 
+#[test]
+fn unclassified_typed_gmp_status_400_maps_to_rest_bad_request() {
+    // Regression for #637: a future or backend-specific semantic kind must
+    // retain GMP's raw 400 caller-correctable meaning at the REST boundary.
+    let response = RestError::from_gateway_error(
+        map_typed_server_error(
+            Some(GmpServerErrorKind::Unknown),
+            400,
+            "backend rejected an unclassified request".to_string(),
+        ),
+        "/api/v1/scanners",
+    )
+    .into_response();
+
+    assert_eq!(response.status(), axum::http::StatusCode::BAD_REQUEST);
+}
+
 #[tokio::test]
 async fn gmp_authentication_failure_remains_http_401() {
     // Control case: the established status-400 authentication classification
@@ -278,6 +295,19 @@ fn map_parse_error_400_to_invalid_input() {
         message: "bad request".to_string(),
     };
     let mapped = map_parse_error(error);
+    assert!(matches!(mapped, GatewayError::InvalidInput(_)));
+}
+
+#[test]
+fn unclassified_parser_gmp_status_400_maps_to_invalid_input() {
+    // Regression for #637: legacy parser errors need the same raw-status
+    // fallback when rust-gvm has no semantic classification for the message.
+    let mapped = map_parser_server_error(
+        Some(GmpServerErrorKind::Unknown),
+        400,
+        "backend rejected an unclassified request".to_string(),
+    );
+
     assert!(matches!(mapped, GatewayError::InvalidInput(_)));
 }
 
