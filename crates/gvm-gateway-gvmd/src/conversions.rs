@@ -24,7 +24,8 @@ use gvm_gateway_domain::{
 use gvm_gmp::{
     commands::{assets::AssetType, configs::ConfigUsageType},
     AlertCondition, AlertEvent, AlertMethod, AliveTest, CredentialType, EntityId,
-    PermissionSubjectType, SnmpAuthAlgorithm, SnmpPrivacyAlgorithm, UserAuthType,
+    GmpServerErrorKind, PermissionSubjectType, SnmpAuthAlgorithm, SnmpPrivacyAlgorithm,
+    UserAuthType,
 };
 
 // ============================================================================
@@ -1030,6 +1031,7 @@ pub(crate) fn parse_permission_subject_type(
 // ============================================================================
 
 pub(crate) fn map_gvm_error(error: gvm_client::GvmError) -> GatewayError {
+    let server_error_kind = error.server_error_kind();
     match error {
         gvm_client::GvmError::Parse(error) => map_parse_error(error),
         // Canonical complete requests validate before any bytes are sent. Keep
@@ -1039,26 +1041,9 @@ pub(crate) fn map_gvm_error(error: gvm_client::GvmError) -> GatewayError {
         gvm_client::GvmError::UnsupportedCommand { .. } => {
             GatewayError::NotImplemented(error.to_string())
         }
-        gvm_client::GvmError::Server {
-            status: 400,
-            message,
-        } if is_authentication_failure(&message) => GatewayError::Unauthorized(message),
-        gvm_client::GvmError::Server {
-            status: 400,
-            message,
-        } => GatewayError::InvalidInput(message),
-        gvm_client::GvmError::Server {
-            status: 401,
-            message,
-        } => GatewayError::Unauthorized(message),
-        gvm_client::GvmError::Server {
-            status: 403,
-            message,
-        } => GatewayError::Forbidden(message),
-        gvm_client::GvmError::Server {
-            status: 404,
-            message,
-        } => GatewayError::NotFound(message),
+        gvm_client::GvmError::Server { status, message } => {
+            map_typed_server_error(server_error_kind, status, message)
+        }
         gvm_client::GvmError::Timeout(duration) => {
             GatewayError::GatewayTimeout(format!("gvmd timeout after {duration:?}"))
         }
@@ -1217,33 +1202,41 @@ fn parse_optional_backend_f64(
 }
 
 pub(crate) fn map_parse_error(error: gvm_gmp::responses::ParseError) -> GatewayError {
+    let server_error_kind = error.server_error_kind();
     match error {
-        gvm_gmp::responses::ParseError::ServerError {
-            status: 404,
-            message,
-        } => GatewayError::NotFound(message),
-        gvm_gmp::responses::ParseError::ServerError {
-            status: 400,
-            message,
-        } if is_authentication_failure(&message) => GatewayError::Unauthorized(message),
-        gvm_gmp::responses::ParseError::ServerError {
-            status: 400,
-            message,
-        } => GatewayError::InvalidInput(message),
-        gvm_gmp::responses::ParseError::ServerError {
-            status: 401,
-            message,
-        } => GatewayError::Unauthorized(message),
-        gvm_gmp::responses::ParseError::ServerError {
-            status: 403,
-            message,
-        } => GatewayError::Forbidden(message),
+        gvm_gmp::responses::ParseError::ServerError { status, message } => {
+            map_parser_server_error(server_error_kind, status, message)
+        }
         other => GatewayError::BackendUnavailable(other.to_string()),
     }
 }
 
-fn is_authentication_failure(message: &str) -> bool {
-    message.eq_ignore_ascii_case("authentication failed")
+fn map_typed_server_error(
+    kind: Option<GmpServerErrorKind>,
+    status: u16,
+    message: String,
+) -> GatewayError {
+    match kind {
+        Some(GmpServerErrorKind::InvalidInput) => GatewayError::InvalidInput(message),
+        Some(GmpServerErrorKind::AuthenticationFailure) => GatewayError::Unauthorized(message),
+        Some(GmpServerErrorKind::PermissionDenied) => GatewayError::Forbidden(message),
+        _ if status == 404 => GatewayError::NotFound(message),
+        _ => GatewayError::BackendUnavailable(format!("server error (status {status}): {message}")),
+    }
+}
+
+fn map_parser_server_error(
+    kind: Option<GmpServerErrorKind>,
+    status: u16,
+    message: String,
+) -> GatewayError {
+    match kind {
+        Some(GmpServerErrorKind::InvalidInput) => GatewayError::InvalidInput(message),
+        Some(GmpServerErrorKind::AuthenticationFailure) => GatewayError::Unauthorized(message),
+        Some(GmpServerErrorKind::PermissionDenied) => GatewayError::Forbidden(message),
+        _ if status == 404 => GatewayError::NotFound(message),
+        _ => GatewayError::BackendUnavailable(format!("server error {status}: {message}")),
+    }
 }
 
 // ============================================================================

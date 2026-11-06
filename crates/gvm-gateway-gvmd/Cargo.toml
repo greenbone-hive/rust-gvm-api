@@ -19,6 +19,8 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+axum.workspace = true
+gvm-gateway-rest = { path = "../gvm-gateway-rest" }
 gvm-mock-server.workspace = true
 gvm-protocol.workspace = true
 tracing-subscriber.workspace = true

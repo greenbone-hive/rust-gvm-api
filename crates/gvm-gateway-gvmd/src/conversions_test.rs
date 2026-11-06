@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Greenbone AG
 
+use std::{collections::VecDeque, io};
+
 use super::*;
+use async_trait::async_trait;
+use axum::response::IntoResponse;
+use gvm_connection::{ConnectionError, GvmConnection};
+use gvm_gateway_rest::error::RestError;
 use gvm_gmp::responses::{
     GetAgentGroupsResponse, GetAgentInstallerInstructionResponse, GetAgentSupportBundleResponse,
     GetAgentsResponse, GetAlertsResponse, GetAssetsResponse, GetConfigsResponse,
@@ -13,6 +19,75 @@ use gvm_gmp::responses::{
     GetUsersResponse,
 };
 use gvm_protocol::Response as GmpResponse;
+
+#[derive(Debug)]
+struct ScriptedConnection {
+    responses: VecDeque<Vec<u8>>,
+    connected: bool,
+}
+
+impl ScriptedConnection {
+    fn new(responses: impl IntoIterator<Item = impl Into<Vec<u8>>>) -> Self {
+        Self {
+            responses: responses.into_iter().map(Into::into).collect(),
+            connected: false,
+        }
+    }
+}
+
+#[async_trait]
+impl GvmConnection for ScriptedConnection {
+    async fn connect(&mut self) -> gvm_connection::Result<()> {
+        self.connected = true;
+        Ok(())
+    }
+
+    async fn disconnect(&mut self) -> gvm_connection::Result<()> {
+        self.connected = false;
+        Ok(())
+    }
+
+    async fn send(&mut self, _data: &[u8]) -> gvm_connection::Result<()> {
+        if self.connected {
+            Ok(())
+        } else {
+            Err(ConnectionError::NotConnected)
+        }
+    }
+
+    async fn read(&mut self) -> gvm_connection::Result<Vec<u8>> {
+        self.responses.pop_front().ok_or_else(|| {
+            ConnectionError::ReadFailed(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "scripted response exhausted",
+            ))
+        })
+    }
+
+    fn is_connected(&self) -> bool {
+        self.connected
+    }
+}
+
+async fn typed_scanner_error_status(status_text: &str) -> axum::http::StatusCode {
+    let response = format!(r#"<get_scanners_response status="400" status_text="{status_text}"/>"#);
+    let connection = ScriptedConnection::new([
+        br#"<get_version_response status="200" status_text="OK"><version>22.7</version></get_version_response>"#.to_vec(),
+        response.into_bytes(),
+    ]);
+    let mut client = gvm_client::GmpClient::connect(connection)
+        .await
+        .expect("scripted client should negotiate the GMP version");
+    let error = client
+        .execute(gvm_gmp::commands::scanners::GetScannersRequest::default())
+        .await
+        .expect_err("scripted scanner response should fail typed execution");
+    let gateway_error = map_gvm_error(error);
+
+    RestError::from_gateway_error(gateway_error, "/api/v1/scanners")
+        .into_response()
+        .status()
+}
 
 #[test]
 fn parse_entity_id_valid() {
@@ -78,6 +153,50 @@ fn map_gvm_error_400_authentication_failed_to_unauthorized() {
     };
     let mapped = map_gvm_error(error);
     assert!(matches!(mapped, GatewayError::Unauthorized(_)));
+}
+
+#[test]
+fn map_gvm_error_400_permission_denied_to_forbidden() {
+    // The gateway must consume rust-gvm's semantic classification because
+    // gvmd encodes this authorization failure with its generic status 400.
+    let error = gvm_client::GvmError::Server {
+        status: 400,
+        message: "Permission denied".to_string(),
+    };
+
+    let mapped = map_gvm_error(error);
+
+    assert!(matches!(mapped, GatewayError::Forbidden(_)));
+}
+
+#[tokio::test]
+async fn gmp_permission_denied_maps_to_403() {
+    // Regression for #632: exercise the real typed request execution and both
+    // production error adapters without depending on a host socket transport.
+    assert_eq!(
+        typed_scanner_error_status("Permission denied").await,
+        axum::http::StatusCode::FORBIDDEN
+    );
+}
+
+#[tokio::test]
+async fn ordinary_gmp_status_400_remains_http_400() {
+    // Control case: semantic permission handling must preserve ordinary
+    // caller-correctable status-400 input failures.
+    assert_eq!(
+        typed_scanner_error_status("Invalid scanner filter").await,
+        axum::http::StatusCode::BAD_REQUEST
+    );
+}
+
+#[tokio::test]
+async fn gmp_authentication_failure_remains_http_401() {
+    // Control case: the established status-400 authentication classification
+    // must still reach the REST boundary as 401.
+    assert_eq!(
+        typed_scanner_error_status("Authentication failed").await,
+        axum::http::StatusCode::UNAUTHORIZED
+    );
 }
 
 #[test]
@@ -172,6 +291,20 @@ fn map_parse_error_400_authentication_failed_to_unauthorized() {
     };
     let mapped = map_parse_error(error);
     assert!(matches!(mapped, GatewayError::Unauthorized(_)));
+}
+
+#[test]
+fn map_parse_error_400_permission_denied_to_forbidden() {
+    // Legacy parser errors must agree with typed client execution while older
+    // response parsing entry points remain part of the adapter.
+    let error = gvm_gmp::responses::ParseError::ServerError {
+        status: 400,
+        message: "Permission denied".to_string(),
+    };
+
+    let mapped = map_parse_error(error);
+
+    assert!(matches!(mapped, GatewayError::Forbidden(_)));
 }
 
 #[test]
