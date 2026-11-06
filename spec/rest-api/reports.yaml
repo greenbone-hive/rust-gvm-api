@@ -501,12 +501,16 @@ components:
           format: double
         threat:
           type: string
-          enum:
-            - High
-            - Medium
-            - Low
-            - Log
-            - Alarm
+          anyOf:
+            - type: string
+              enum:
+                - High
+                - Medium
+                - Low
+                - Log
+                - Alarm
+            - type: string
+          description: Known values are listed for documentation and client generation. This list is not exhaustive; unknown future values may also be returned verbatim, and clients must preserve them.
         hostsCount:
           type: integer
         occurrences:
@@ -572,12 +576,16 @@ components:
           format: double
         threat:
           type: string
-          enum:
-            - High
-            - Medium
-            - Low
-            - Log
-            - Alarm
+          anyOf:
+            - type: string
+              enum:
+                - High
+                - Medium
+                - Low
+                - Log
+                - Alarm
+            - type: string
+          description: Known values are listed for documentation and client generation. This list is not exhaustive; unknown future values may also be returned verbatim, and clients must preserve them.
 
     ReportClosedCveList:
       type: object

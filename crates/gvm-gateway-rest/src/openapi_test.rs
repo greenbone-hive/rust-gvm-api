@@ -768,162 +768,540 @@ fn generated_openapi_secinfo_ids_remain_plain_strings() {
 }
 
 #[test]
-fn generated_openapi_documents_open_enum_fields_as_non_exhaustive() {
+fn generated_and_curated_response_enums_accept_known_and_unknown_values_of_the_right_type() {
+    // Issue #633 is a validation contract, not a prose convention: every open
+    // response enum must accept known and future values while rejecting a
+    // value of the wrong JSON primitive type in both published schemas.
     let generated = build_openapi();
     let schemas = &generated["components"]["schemas"];
+    let root_spec_path = root_spec_path();
+    let spec_dir = root_spec_path.parent().expect("REST spec directory");
+    let common = read_yaml(&spec_dir.join("common.yaml"));
+    let tasks = read_yaml(&spec_dir.join("tasks.yaml"));
+    let feeds = read_yaml(&spec_dir.join("feeds.yaml"));
+    let scanners = read_yaml(&spec_dir.join("scanners.yaml"));
+    let scan_configs = read_yaml(&spec_dir.join("scan-configs.yaml"));
+    let alerts = read_yaml(&spec_dir.join("alerts.yaml"));
+    let results = read_yaml(&spec_dir.join("results.yaml"));
+    let reports = read_yaml(&spec_dir.join("reports.yaml"));
+    let identity = read_yaml(&spec_dir.join("identity.yaml"));
+    let emerging = read_yaml(&spec_dir.join("emerging.yaml"));
 
-    // Open enums deliberately keep OpenAPI enum lists for docs/codegen while
-    // their descriptions define the non-exhaustive runtime contract.
+    for (context, schema, known, unknown, wrong_type, known_values) in [
+        (
+            "generated AliveTest",
+            &schemas["AliveTest"],
+            json!("ICMP Ping"),
+            json!("Passive DNS"),
+            json!(1),
+            json!([
+                "Scan Config Default",
+                "ICMP Ping",
+                "TCP-ACK Service Ping",
+                "TCP-SYN Service Ping",
+                "ARP Ping",
+                "ICMP, TCP-ACK Service Ping",
+                "ICMP, ARP Ping",
+                "TCP-ACK Service, ARP Ping",
+                "ICMP, TCP-ACK Service, ARP Ping",
+                "Consider Alive"
+            ]),
+        ),
+        (
+            "generated HostsOrdering",
+            &schemas["HostsOrdering"],
+            json!("sequential"),
+            json!("by-latency"),
+            json!(1),
+            json!(["sequential", "random", "reverse"]),
+        ),
+        (
+            "generated TaskStatus",
+            &schemas["TaskStatus"],
+            json!("Running"),
+            json!("Future State"),
+            json!(1),
+            json!([
+                "New",
+                "Requested",
+                "Queued",
+                "Running",
+                "Stop Requested",
+                "Stopping",
+                "Processing",
+                "Done",
+                "Stopped",
+                "Error",
+                "Delete Requested",
+                "Ultimate Delete Requested",
+                "Container",
+                "Interrupted"
+            ]),
+        ),
+        (
+            "generated CredentialType",
+            &schemas["Credential"]["properties"]["type"],
+            json!("up"),
+            json!("future_credential"),
+            json!(1),
+            json!([
+                "cc", "pw", "snmp", "snmpv3", "up", "usk", "cs_cc", "cs_pw", "cs_pgp", "cs_smime",
+                "cs_snmp", "cs_up", "cs_usk"
+            ]),
+        ),
+        (
+            "generated FeedType",
+            &schemas["FeedType"],
+            json!("NVT"),
+            json!("COMMUNITY_DATA"),
+            json!(1),
+            json!(["NVT", "CERT", "SCAP", "GVMD_DATA"]),
+        ),
+        (
+            "generated ScannerType",
+            &schemas["ScannerType"],
+            json!("OpenVAS"),
+            json!("Sensor"),
+            json!(1),
+            json!(["OpenVAS", "CVE", "OSP"]),
+        ),
+        (
+            "generated AlertEvent",
+            &schemas["Alert"]["properties"]["event"],
+            json!("task_run_status_changed"),
+            json!("future_event"),
+            json!(1),
+            json!(["task_run_status_changed", "updated_secinfo", "new_secinfo"]),
+        ),
+        (
+            "generated AlertCondition",
+            &schemas["Alert"]["properties"]["condition"],
+            json!("always"),
+            json!("future_condition"),
+            json!(1),
+            json!([
+                "always",
+                "filter_count_at_least",
+                "filter_count_changed",
+                "severity_at_least",
+                "severity_changed"
+            ]),
+        ),
+        (
+            "generated AlertMethod",
+            &schemas["Alert"]["properties"]["method"],
+            json!("email"),
+            json!("future_method"),
+            json!(1),
+            json!([
+                "email",
+                "http_get",
+                "scp",
+                "send_email",
+                "smb",
+                "snmp",
+                "sourcefire_connector",
+                "start_task",
+                "syslog",
+                "tippingpoint",
+                "verinice_ce",
+                "verinice_net",
+                "alemba"
+            ]),
+        ),
+        (
+            "generated Threat",
+            &schemas["Threat"],
+            json!("High"),
+            json!("FutureThreat"),
+            json!(1),
+            json!(["High", "Medium", "Low", "Log", "Alarm"]),
+        ),
+        (
+            "generated AuthenticationType",
+            &schemas["User"]["allOf"][1]["properties"]["authenticationType"],
+            json!("file"),
+            json!("future_auth"),
+            json!(1),
+            json!(["file", "ldap_connect", "radius_connect"]),
+        ),
+        (
+            "generated AssetType",
+            &schemas["AssetType"],
+            json!("host"),
+            json!("future_asset"),
+            json!(1),
+            json!(["host", "os", "tls_certificate"]),
+        ),
+        (
+            "generated ConfigUsageType",
+            &schemas["ConfigUsageType"],
+            json!("scan"),
+            json!("future_usage"),
+            json!(1),
+            json!(["scan", "audit", "policy"]),
+        ),
+    ] {
+        assert_open_enum_schema(
+            schema,
+            &known,
+            &unknown,
+            &wrong_type,
+            &known_values,
+            context,
+        );
+    }
+
     assert_open_enum_schema(
-        schemas,
-        &schemas["CredentialType"],
-        json!([
-            "cc", "pw", "snmp", "snmpv3", "up", "usk", "cs_cc", "cs_pw", "cs_pgp", "cs_smime",
-            "cs_snmp", "cs_up", "cs_usk"
-        ]),
-        "CredentialType",
-    );
-    assert_open_enum_schema(
-        schemas,
-        &schemas["FeedType"],
-        json!(["NVT", "CERT", "SCAP", "GVMD_DATA"]),
-        "FeedType",
-    );
-    assert_open_enum_schema(
-        schemas,
-        &schemas["AuthenticationType"],
-        json!(["file", "ldap_connect", "radius_connect"]),
-        "AuthenticationType",
-    );
-    assert_open_enum_schema(
-        schemas,
         &schemas["ScanConfigType"],
-        json!([0, 1]),
-        "ScanConfigType",
-    );
-    assert_open_enum_schema(
-        schemas,
-        &schemas["AssetType"],
-        json!(["host", "os", "tls_certificate"]),
-        "AssetType",
-    );
-    assert_open_enum_schema(
-        schemas,
-        &schemas["ConfigUsageType"],
-        json!(["scan", "audit", "policy"]),
-        "ConfigUsageType",
+        &json!(0),
+        &json!(42),
+        &json!("0"),
+        &json!([0, 1]),
+        "generated ScanConfigType",
     );
 
-    let alert_props = &schemas["Alert"]["properties"];
-    assert_open_enum_schema(
-        schemas,
-        &alert_props["event"],
-        json!(["task_run_status_changed", "updated_secinfo", "new_secinfo"]),
-        "Alert.event",
-    );
-    assert_open_enum_schema(
-        schemas,
-        &alert_props["condition"],
-        json!([
-            "always",
-            "filter_count_at_least",
-            "filter_count_changed",
-            "severity_at_least",
-            "severity_changed"
-        ]),
-        "Alert.condition",
-    );
-    assert_open_enum_schema(
-        schemas,
-        &alert_props["method"],
-        json!([
-            "email",
-            "http_get",
-            "scp",
-            "send_email",
-            "smb",
-            "snmp",
-            "sourcefire_connector",
-            "start_task",
-            "syslog",
-            "tippingpoint",
-            "verinice_ce",
-            "verinice_net",
-            "alemba"
-        ]),
-        "Alert.method",
-    );
+    for (context, schema, known, unknown, wrong_type, known_values) in [
+        (
+            "curated AliveTestResponse",
+            &common["components"]["schemas"]["AliveTestResponse"],
+            json!("ICMP Ping"),
+            json!("Passive DNS"),
+            json!(1),
+            json!([
+                "Scan Config Default",
+                "ICMP Ping",
+                "TCP-ACK Service Ping",
+                "TCP-SYN Service Ping",
+                "ARP Ping",
+                "ICMP, TCP-ACK Service Ping",
+                "ICMP, ARP Ping",
+                "TCP-ACK Service, ARP Ping",
+                "ICMP, TCP-ACK Service, ARP Ping",
+                "Consider Alive"
+            ]),
+        ),
+        (
+            "curated HostsOrdering",
+            &common["components"]["schemas"]["HostsOrdering"],
+            json!("sequential"),
+            json!("by-latency"),
+            json!(1),
+            json!(["sequential", "random", "reverse"]),
+        ),
+        (
+            "curated Task.status",
+            &tasks["components"]["schemas"]["Task"]["properties"]["status"],
+            json!("Running"),
+            json!("Future State"),
+            json!(1),
+            schemas["TaskStatus"]["anyOf"][0]["enum"].clone(),
+        ),
+        (
+            "curated Credential.type",
+            &common["components"]["schemas"]["CredentialTypeResponse"],
+            json!("up"),
+            json!("future_credential"),
+            json!(1),
+            json!([
+                "cc", "pw", "snmp", "snmpv3", "up", "usk", "cs_cc", "cs_pw", "cs_pgp", "cs_smime",
+                "cs_snmp", "cs_up", "cs_usk"
+            ]),
+        ),
+        (
+            "curated Feed.type",
+            &feeds["components"]["schemas"]["Feed"]["properties"]["type"],
+            json!("NVT"),
+            json!("COMMUNITY_DATA"),
+            json!(1),
+            json!(["NVT", "CERT", "SCAP", "GVMD_DATA"]),
+        ),
+        (
+            "curated Scanner.type",
+            &scanners["components"]["schemas"]["Scanner"]["properties"]["type"],
+            json!("OpenVAS"),
+            json!("Sensor"),
+            json!(1),
+            json!(["OpenVAS", "CVE", "OSP"]),
+        ),
+        (
+            "curated Alert.event",
+            &alerts["components"]["schemas"]["Alert"]["properties"]["event"],
+            json!("task_run_status_changed"),
+            json!("future_event"),
+            json!(1),
+            json!(["task_run_status_changed", "updated_secinfo", "new_secinfo"]),
+        ),
+        (
+            "curated Alert.condition",
+            &alerts["components"]["schemas"]["Alert"]["properties"]["condition"],
+            json!("always"),
+            json!("future_condition"),
+            json!(1),
+            json!([
+                "always",
+                "filter_count_at_least",
+                "filter_count_changed",
+                "severity_at_least",
+                "severity_changed"
+            ]),
+        ),
+        (
+            "curated Alert.method",
+            &alerts["components"]["schemas"]["Alert"]["properties"]["method"],
+            json!("email"),
+            json!("future_method"),
+            json!(1),
+            json!([
+                "email",
+                "http_get",
+                "scp",
+                "send_email",
+                "smb",
+                "snmp",
+                "sourcefire_connector",
+                "start_task",
+                "syslog",
+                "tippingpoint",
+                "verinice_ce",
+                "verinice_net",
+                "alemba"
+            ]),
+        ),
+        (
+            "curated Result.threat",
+            &results["components"]["schemas"]["Result"]["properties"]["threat"],
+            json!("High"),
+            json!("FutureThreat"),
+            json!(1),
+            json!(["High", "Medium", "Low", "Log", "Alarm"]),
+        ),
+        (
+            "curated ReportVulnerability.threat",
+            &reports["components"]["schemas"]["ReportVulnerability"]["properties"]["threat"],
+            json!("High"),
+            json!("FutureThreat"),
+            json!(1),
+            json!(["High", "Medium", "Low", "Log", "Alarm"]),
+        ),
+        (
+            "curated ReportClosedCve.threat",
+            &reports["components"]["schemas"]["ReportClosedCve"]["properties"]["threat"],
+            json!("High"),
+            json!("FutureThreat"),
+            json!(1),
+            json!(["High", "Medium", "Low", "Log", "Alarm"]),
+        ),
+        (
+            "curated User.authenticationType",
+            &identity["components"]["schemas"]["User"]["allOf"][1]["properties"]
+                ["authenticationType"],
+            json!("file"),
+            json!("future_auth"),
+            json!(1),
+            json!(["file", "ldap_connect", "radius_connect"]),
+        ),
+        (
+            "curated AssetType",
+            &emerging["components"]["schemas"]["AssetType"],
+            json!("host"),
+            json!("future_asset"),
+            json!(1),
+            json!(["host", "os", "tls_certificate"]),
+        ),
+        (
+            "curated ConfigUsageType",
+            &emerging["components"]["schemas"]["ConfigUsageType"],
+            json!("scan"),
+            json!("future_usage"),
+            json!(1),
+            json!(["scan", "audit", "policy"]),
+        ),
+    ] {
+        assert_open_enum_schema(
+            schema,
+            &known,
+            &unknown,
+            &wrong_type,
+            &known_values,
+            context,
+        );
+    }
 
-    let create_alert_props = &schemas["CreateAlert"]["properties"];
     assert_open_enum_schema(
-        schemas,
-        &create_alert_props["event"],
-        json!(["task_run_status_changed", "updated_secinfo", "new_secinfo"]),
-        "CreateAlert.event",
+        &scan_configs["components"]["schemas"]["ScanConfig"]["properties"]["type"],
+        &json!(0),
+        &json!(42),
+        &json!("0"),
+        &json!([0, 1]),
+        "curated ScanConfig.type",
     );
-    assert_open_enum_schema(
-        schemas,
-        &create_alert_props["condition"],
-        json!([
-            "always",
-            "filter_count_at_least",
-            "filter_count_changed",
-            "severity_at_least",
-            "severity_changed"
-        ]),
-        "CreateAlert.condition",
-    );
-    assert_open_enum_schema(
-        schemas,
-        &create_alert_props["method"],
-        json!([
-            "email",
-            "http_get",
-            "scp",
-            "send_email",
-            "smb",
-            "snmp",
-            "sourcefire_connector",
-            "start_task",
-            "syslog",
-            "tippingpoint",
-            "verinice_ce",
-            "verinice_net",
-            "alemba"
-        ]),
-        "CreateAlert.method",
-    );
+}
 
-    assert_open_enum_schema(
-        schemas,
-        &schemas["Credential"]["properties"]["type"],
-        json!([
-            "cc", "pw", "snmp", "snmpv3", "up", "usk", "cs_cc", "cs_pw", "cs_pgp", "cs_smime",
-            "cs_snmp", "cs_up", "cs_usk"
-        ]),
-        "Credential.type",
-    );
-    assert_open_enum_schema(
-        schemas,
-        &schemas["CreateCredential"]["properties"]["type"],
-        json!([
-            "cc", "pw", "snmp", "snmpv3", "up", "usk", "cs_cc", "cs_pw", "cs_pgp", "cs_smime",
-            "cs_snmp", "cs_up", "cs_usk"
-        ]),
-        "CreateCredential.type",
-    );
-    assert_open_enum_schema(
-        schemas,
-        &schemas["Feed"]["properties"]["type"],
-        json!(["NVT", "CERT", "SCAP", "GVMD_DATA"]),
-        "Feed.type",
-    );
-    assert_open_enum_schema(
-        schemas,
-        &schemas["User"]["allOf"][1]["properties"]["authenticationType"],
-        json!(["file", "ldap_connect", "radius_connect"]),
-        "User.authenticationType",
-    );
+#[test]
+fn representative_serialized_responses_validate_against_generated_and_curated_enum_contracts() {
+    // Validate actual DTO serialization for the string and integer open-enum
+    // families. Mutating only the enum field to the wrong primitive proves
+    // that openness does not degrade into accepting arbitrary JSON values.
+    let generated = build_openapi();
+    let schemas = &generated["components"]["schemas"];
+    let root_spec_path = root_spec_path();
+    let spec_dir = root_spec_path.parent().expect("REST spec directory");
+    let tasks = read_yaml(&spec_dir.join("tasks.yaml"));
+    let scan_configs = read_yaml(&spec_dir.join("scan-configs.yaml"));
+
+    let known_task = serialized_task_response("Running");
+    let unknown_task = serialized_task_response("Future State");
+    let mut wrong_task = unknown_task.clone();
+    wrong_task["status"] = json!(7);
+    for (context, schema) in [
+        (
+            "generated Task.status response",
+            &schemas["Task"]["properties"]["status"],
+        ),
+        (
+            "curated Task.status response",
+            &tasks["components"]["schemas"]["Task"]["properties"]["status"],
+        ),
+    ] {
+        assert_response_field_contract(
+            schemas,
+            "status",
+            schema,
+            &known_task,
+            &unknown_task,
+            &wrong_task,
+            context,
+        );
+    }
+
+    let known_config = serialized_scan_config_response(0);
+    let unknown_config = serialized_scan_config_response(42);
+    let mut wrong_config = unknown_config.clone();
+    wrong_config["type"] = json!("42");
+    for (context, schema) in [
+        (
+            "generated ScanConfig.type response",
+            &schemas["ScanConfig"]["properties"]["type"],
+        ),
+        (
+            "curated ScanConfig.type response",
+            &scan_configs["components"]["schemas"]["ScanConfig"]["properties"]["type"],
+        ),
+    ] {
+        assert_response_field_contract(
+            schemas,
+            "type",
+            schema,
+            &known_config,
+            &unknown_config,
+            &wrong_config,
+            context,
+        );
+    }
+}
+
+#[test]
+fn request_only_closed_enums_remain_restrictive() {
+    // Opening response enums must not broaden request selectors whose curated
+    // contracts intentionally enumerate the only accepted input values.
+    let generated = build_openapi();
+    let schemas = &generated["components"]["schemas"];
+    let root_spec_path = root_spec_path();
+    let spec_dir = root_spec_path.parent().expect("REST spec directory");
+    let common = read_yaml(&spec_dir.join("common.yaml"));
+    let feeds = read_yaml(&spec_dir.join("feeds.yaml"));
+    let tasks = read_yaml(&spec_dir.join("tasks.yaml"));
+    let alerts = read_yaml(&spec_dir.join("alerts.yaml"));
+    let identity = read_yaml(&spec_dir.join("identity.yaml"));
+
+    let generated_feed_type = generated["paths"]["/feeds"]["get"]["parameters"]
+        .as_array()
+        .expect("generated feed parameters")
+        .iter()
+        .find(|parameter| parameter["name"] == "type")
+        .map(|parameter| &parameter["schema"])
+        .expect("generated feed type parameter");
+    let curated_feed_type = &feeds["paths"]["/feeds"]["get"]["parameters"][0]["schema"];
+    let generated_task_type = &schemas["CreateTask"]["properties"]["type"];
+    let curated_task_type = &tasks["components"]["schemas"]["CreateTask"]["properties"]["type"];
+
+    for (context, schema, known, unknown) in [
+        (
+            "generated feed type request",
+            generated_feed_type,
+            json!("NVT"),
+            json!("FUTURE"),
+        ),
+        (
+            "curated feed type request",
+            curated_feed_type,
+            json!("NVT"),
+            json!("FUTURE"),
+        ),
+        (
+            "generated task type request",
+            generated_task_type,
+            json!("classic"),
+            json!("future"),
+        ),
+        (
+            "curated task type request",
+            curated_task_type,
+            json!("classic"),
+            json!("future"),
+        ),
+        (
+            "generated alert event request",
+            &schemas["CreateAlert"]["properties"]["event"],
+            json!("task_run_status_changed"),
+            json!("future_event"),
+        ),
+        (
+            "curated alert event request",
+            &alerts["components"]["schemas"]["CreateAlert"]["properties"]["event"],
+            json!("task_run_status_changed"),
+            json!("future_event"),
+        ),
+        (
+            "generated credential type request",
+            &schemas["CreateCredential"]["properties"]["type"],
+            json!("up"),
+            json!("future_credential"),
+        ),
+        (
+            "curated credential type request",
+            &common["components"]["schemas"]["CredentialType"],
+            json!("up"),
+            json!("future_credential"),
+        ),
+        (
+            "generated authentication type request",
+            &schemas["CreateUser"]["properties"]["authenticationType"],
+            json!("file"),
+            json!("future_auth"),
+        ),
+        (
+            "curated authentication type request",
+            &identity["components"]["schemas"]["CreateUser"]["properties"]["authenticationType"],
+            json!("file"),
+            json!("future_auth"),
+        ),
+    ] {
+        let schema = resolve_local_schema_ref(schemas, schema);
+        assert!(
+            schema_accepts_instance(schema, &known),
+            "{context} rejects known value"
+        );
+        assert!(
+            !schema_accepts_instance(schema, &unknown),
+            "{context} accepts unknown value"
+        );
+        assert!(
+            !schema_accepts_instance(schema, &json!(1)),
+            "{context} accepts wrong primitive type"
+        );
+    }
 }
 
 #[test]
@@ -941,7 +1319,8 @@ fn generated_and_curated_generic_resource_contracts_match_semantics() {
 
     for name in ["AssetType", "ConfigUsageType"] {
         assert_eq!(
-            generated_schemas[name]["enum"], curated["components"]["schemas"][name]["enum"],
+            generated_schemas[name]["anyOf"][0]["enum"],
+            curated["components"]["schemas"][name]["anyOf"][0]["enum"],
             "generated and curated {name} known values must match"
         );
         assert_eq!(
@@ -1348,29 +1727,174 @@ fn response_statuses(operation: &Value) -> BTreeSet<&str> {
         .collect()
 }
 
-fn assert_open_enum_schema(schemas: &Value, schema: &Value, expected_values: Value, context: &str) {
-    let schema = resolve_local_schema_ref(schemas, schema);
-
+fn assert_open_enum_schema(
+    schema: &Value,
+    known: &Value,
+    unknown: &Value,
+    wrong_type: &Value,
+    expected_values: &Value,
+    context: &str,
+) {
     assert_eq!(
-        schema["enum"], expected_values,
+        &schema["anyOf"][0]["enum"], expected_values,
         "{context} should list known values for OpenAPI docs and client generation"
     );
+    assert!(
+        schema_accepts_instance(schema, known),
+        "{context} rejects a documented value: {known}"
+    );
+    assert!(
+        schema_accepts_instance(schema, unknown),
+        "{context} rejects an unknown future value: {unknown}"
+    );
+    assert!(
+        !schema_accepts_instance(schema, wrong_type),
+        "{context} accepts a value of the wrong primitive type: {wrong_type}"
+    );
+}
 
-    let description = schema["description"]
-        .as_str()
-        .unwrap_or_else(|| panic!("{context} should describe the open-enum contract"));
+fn assert_response_field_contract(
+    generated_schemas: &Value,
+    field: &str,
+    field_schema: &Value,
+    known_response: &Value,
+    unknown_response: &Value,
+    wrong_response: &Value,
+    context: &str,
+) {
+    let field_schema = resolve_local_schema_ref(generated_schemas, field_schema);
+    let mut properties = Map::new();
+    properties.insert(field.to_string(), field_schema.clone());
+    let response_projection = json!({
+        "type": "object",
+        "required": [field],
+        "properties": properties
+    });
+
     assert!(
-        description.contains("This list is not exhaustive"),
-        "{context} should document that known enum values are non-exhaustive"
+        schema_accepts_instance(&response_projection, known_response),
+        "{context} rejects a serialized response containing a known value"
     );
     assert!(
-        description.contains("unknown future values"),
-        "{context} should document future backend values"
+        schema_accepts_instance(&response_projection, unknown_response),
+        "{context} rejects a serialized response containing an unknown value"
     );
     assert!(
-        description.contains("clients must preserve them"),
-        "{context} should document client preservation of unknown values"
+        !schema_accepts_instance(&response_projection, wrong_response),
+        "{context} accepts a response containing the wrong primitive type"
     );
+}
+
+/// Evaluate the JSON Schema assertions used by the enum contract tests.
+///
+/// Keeping this focused evaluator in the test module avoids adding a large
+/// validator dependency solely for primitive enum projections while still
+/// exercising the emitted `type`, `enum`, `anyOf`, `required`, and
+/// `properties` semantics against serialized response instances.
+fn schema_accepts_instance(schema: &Value, instance: &Value) -> bool {
+    if let Some(branches) = schema.get("anyOf").and_then(Value::as_array) {
+        if !branches
+            .iter()
+            .any(|branch| schema_accepts_instance(branch, instance))
+        {
+            return false;
+        }
+    }
+
+    if let Some(values) = schema.get("enum").and_then(Value::as_array) {
+        if !values.contains(instance) {
+            return false;
+        }
+    }
+
+    if let Some(schema_type) = schema.get("type").and_then(Value::as_str) {
+        let type_matches = match schema_type {
+            "array" => instance.is_array(),
+            "boolean" => instance.is_boolean(),
+            "integer" => instance.as_i64().is_some() || instance.as_u64().is_some(),
+            "null" => instance.is_null(),
+            "number" => instance.is_number(),
+            "object" => instance.is_object(),
+            "string" => instance.is_string(),
+            _ => false,
+        };
+        if !type_matches {
+            return false;
+        }
+    }
+
+    if let Some(object) = instance.as_object() {
+        if let Some(required) = schema.get("required").and_then(Value::as_array) {
+            if required
+                .iter()
+                .filter_map(Value::as_str)
+                .any(|field| !object.contains_key(field))
+            {
+                return false;
+            }
+        }
+
+        if let Some(properties) = schema.get("properties").and_then(Value::as_object) {
+            if properties.iter().any(|(field, field_schema)| {
+                object
+                    .get(field)
+                    .is_some_and(|value| !schema_accepts_instance(field_schema, value))
+            }) {
+                return false;
+            }
+        }
+    }
+
+    true
+}
+
+fn serialized_task_response(status: &str) -> Value {
+    use gvm_gateway_domain::{Task, TaskObservers};
+
+    serde_json::to_value(crate::tasks::TaskResponse::from(Task {
+        id: "123e4567-e89b-12d3-a456-426614174000".to_string(),
+        name: "Contract task".to_string(),
+        comment: None,
+        status: status.to_string(),
+        progress: Some(42),
+        target: None,
+        agent_group: None,
+        oci_image_target: None,
+        web_application_target: None,
+        scan_config: None,
+        scanner: None,
+        schedule: None,
+        alerts: vec![],
+        alterable: None,
+        hosts_ordering: None,
+        observers: TaskObservers::default(),
+        schedule_periods: None,
+        last_report: None,
+        current_report: None,
+        report_count: Some(3),
+        usage_type: None,
+        trend: None,
+        in_use: false,
+        writable: true,
+    }))
+    .expect("task response should serialize")
+}
+
+fn serialized_scan_config_response(config_type: u32) -> Value {
+    serde_json::to_value(crate::scan_configs::ScanConfigResponse::from(
+        gvm_gateway_domain::ScanConfig {
+            id: "123e4567-e89b-12d3-a456-426614174000".to_string(),
+            name: "Contract scan config".to_string(),
+            comment: None,
+            family_count: Some(2),
+            nvt_count: Some(12),
+            config_type: Some(config_type),
+            usage_type: Some("scan".to_string()),
+            in_use: false,
+            writable: true,
+        },
+    ))
+    .expect("scan-config response should serialize")
 }
 
 fn resolve_local_schema_ref<'a>(schemas: &'a Value, schema: &'a Value) -> &'a Value {

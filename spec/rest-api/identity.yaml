@@ -659,10 +659,14 @@ components:
               description: Host restriction expression as stored by gvmd.
             authenticationType:
               type: string
-              enum:
-                - file
-                - ldap_connect
-                - radius_connect
+              anyOf:
+                - type: string
+                  enum:
+                    - file
+                    - ldap_connect
+                    - radius_connect
+                - type: string
+              description: Known values are listed for documentation and client generation. This list is not exhaustive; unknown future values may also be returned verbatim, and clients must preserve them.
 
     CreateUser:
       type: object

@@ -563,11 +563,17 @@ components:
   schemas:
     AssetType:
       type: string
-      enum: [host, os, tls_certificate]
+      anyOf:
+        - type: string
+          enum: [host, os, tls_certificate]
+        - type: string
       description: Known values are listed for documentation and client generation. This list is not exhaustive; unknown future values may also be returned verbatim, and clients must preserve them.
     ConfigUsageType:
       type: string
-      enum: [scan, audit, policy]
+      anyOf:
+        - type: string
+          enum: [scan, audit, policy]
+        - type: string
       description: Known values are listed for documentation and client generation. This list is not exhaustive; unknown future values may also be returned verbatim, and clients must preserve them.
     AssetIdentifier:
       type: object

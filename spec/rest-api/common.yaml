@@ -302,7 +302,7 @@ components:
     # ─── Enums ────────────────────────────────────────────────
     AliveTest:
       type: string
-      enum:
+      enum: &aliveTestValues
         - Scan Config Default
         - ICMP Ping
         - TCP-ACK Service Ping
@@ -314,16 +314,28 @@ components:
         - "ICMP, TCP-ACK Service, ARP Ping"
         - Consider Alive
 
+    AliveTestResponse:
+      type: string
+      anyOf:
+        - type: string
+          enum: *aliveTestValues
+        - type: string
+      description: Known values are listed for documentation and client generation. This list is not exhaustive; unknown future values may also be returned verbatim, and clients must preserve them.
+
     HostsOrdering:
       type: string
-      enum:
-        - sequential
-        - random
-        - reverse
+      anyOf:
+        - type: string
+          enum:
+            - sequential
+            - random
+            - reverse
+        - type: string
+      description: Known values are listed for documentation and client generation. This list is not exhaustive; unknown future values may also be returned verbatim, and clients must preserve them.
 
     CredentialType:
       type: string
-      enum:
+      enum: &credentialTypeValues
         - cc
         - pw
         - snmp
@@ -339,6 +351,32 @@ components:
         - cs_usk
       description: |
         Credential type:
+        - `cc` — Client certificate
+        - `pw` — Password only
+        - `snmp` — SNMP v1/v2c
+        - `snmpv3` — SNMP v3
+        - `up` — Username + password
+        - `usk` — Username + SSH key
+        - `cs_cc` — Credential-store client certificate
+        - `cs_pw` — Credential-store password only
+        - `cs_pgp` — Credential-store PGP encryption key
+        - `cs_smime` — Credential-store S/MIME certificate
+        - `cs_snmp` — Credential-store SNMP credential
+        - `cs_up` — Credential-store username + password
+        - `cs_usk` — Credential-store username + SSH key
+
+    CredentialTypeResponse:
+      type: string
+      anyOf:
+        - type: string
+          enum: *credentialTypeValues
+        - type: string
+      description: |
+        Known values are listed for documentation and client generation. This
+        list is not exhaustive; unknown future values may also be returned
+        verbatim, and clients must preserve them.
+
+        Known credential types:
         - `cc` — Client certificate
         - `pw` — Password only
         - `snmp` — SNMP v1/v2c

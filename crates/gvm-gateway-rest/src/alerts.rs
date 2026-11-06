@@ -27,13 +27,37 @@ use crate::{
         create_resource, delete_resource, get_resource, list_resource, update_resource,
         ValidateInto,
     },
-    open_enum::open_string_enum,
+    open_enum::{closed_string_enum_schema, open_string_enum, open_string_enum_schema},
     openapi::{created_json, ok_json, problem_response, ResourceIdPathDoc, TargetListQueryDoc},
     query::{CollectionListQuery, DeleteResourceQueryParams},
     targets::validate_uuid,
 };
 
 pub use gvm_gateway_domain::{Alert, AlertPage, AlertQuery, CreateAlertInput, ModifyAlertInput};
+
+fn alert_event_request_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    closed_string_enum_schema("AlertEventRequest", AlertEvent::known_values())
+}
+
+fn alert_condition_request_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    closed_string_enum_schema("AlertConditionRequest", AlertCondition::known_values())
+}
+
+fn alert_method_request_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    closed_string_enum_schema("AlertMethodRequest", AlertMethod::known_values())
+}
+
+fn alert_event_response_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    open_string_enum_schema("AlertEventResponse", AlertEvent::known_values())
+}
+
+fn alert_condition_response_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    open_string_enum_schema("AlertConditionResponse", AlertCondition::known_values())
+}
+
+fn alert_method_response_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    open_string_enum_schema("AlertMethodResponse", AlertMethod::known_values())
+}
 
 open_string_enum! {
     /// Alert event selector.
@@ -83,12 +107,15 @@ pub(crate) struct AlertResponse {
     comment: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schemars(required)]
+    #[schemars(schema_with = "alert_event_response_schema")]
     event: Option<AlertEvent>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schemars(required)]
+    #[schemars(schema_with = "alert_condition_response_schema")]
     condition: Option<AlertCondition>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schemars(required)]
+    #[schemars(schema_with = "alert_method_response_schema")]
     method: Option<AlertMethod>,
     #[serde(
         rename = "eventData",
@@ -157,10 +184,13 @@ pub(crate) struct CreateAlertRequest {
     name: String,
     comment: Option<String>,
     #[schemars(required)]
+    #[schemars(schema_with = "alert_event_request_schema")]
     event: Option<AlertEvent>,
     #[schemars(required)]
+    #[schemars(schema_with = "alert_condition_request_schema")]
     condition: Option<AlertCondition>,
     #[schemars(required)]
+    #[schemars(schema_with = "alert_method_request_schema")]
     method: Option<AlertMethod>,
     #[serde(rename = "eventData", default)]
     event_data: HashMap<String, String>,

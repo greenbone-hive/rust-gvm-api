@@ -229,21 +229,24 @@ components:
           description: |
             Task lifecycle status as reported by gvmd. Unknown future gvmd
             values are preserved even when they are not listed here.
-          enum:
-            - New
-            - Requested
-            - Queued
-            - Running
-            - Stop Requested
-            - Stopping
-            - Processing
-            - Done
-            - Stopped
-            - Error
-            - Delete Requested
-            - Ultimate Delete Requested
-            - Container
-            - Interrupted
+          anyOf:
+            - type: string
+              enum:
+                - New
+                - Requested
+                - Queued
+                - Running
+                - Stop Requested
+                - Stopping
+                - Processing
+                - Done
+                - Stopped
+                - Error
+                - Delete Requested
+                - Ultimate Delete Requested
+                - Container
+                - Interrupted
+            - type: string
         progress:
           type: integer
         target:

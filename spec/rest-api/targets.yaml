@@ -175,7 +175,7 @@ components:
           items:
             type: string
         aliveTest:
-          $ref: "./common.yaml#/components/schemas/AliveTest"
+          $ref: "./common.yaml#/components/schemas/AliveTestResponse"
         portList:
           $ref: "./common.yaml#/components/schemas/ResourceRef"
         reverseLookupOnly:
