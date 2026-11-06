@@ -14,6 +14,7 @@ async fn assert_observer_update(
     usage_type: &str,
     update: Value,
     expected: Value,
+    expected_status: StatusCode,
 ) {
     let id = Uuid::new_v4();
     let usage_type = usage_type.to_string();
@@ -39,8 +40,20 @@ async fn assert_observer_update(
         .unwrap();
     let status = response.status();
     let updated = response.json::<Value>().await.unwrap();
-    assert_eq!(status, StatusCode::OK, "update failed: {updated}");
-    assert_eq!(updated["observers"]["users"], expected);
+    assert_eq!(
+        status, expected_status,
+        "unexpected update response: {updated}"
+    );
+    if expected_status == StatusCode::BAD_REQUEST {
+        assert_eq!(updated["code"], "bad_request");
+        assert!(harness
+            .server
+            .command_history()
+            .iter()
+            .all(|record| record.command_name() != "modify_task"));
+    } else {
+        assert_eq!(updated["observers"]["users"], expected);
+    }
 
     // A separate read proves backend state survived the round trip, rather
     // than relying only on the update handler's response.
@@ -52,10 +65,11 @@ async fn assert_observer_update(
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        response.json::<Value>().await.unwrap()["observers"]["users"],
-        expected
-    );
+    let persisted = response.json::<Value>().await.unwrap();
+    assert_eq!(persisted["observers"]["users"], expected);
+    if expected_status == StatusCode::BAD_REQUEST {
+        assert_eq!(persisted["name"], "Shared scan");
+    }
     harness.shutdown().await;
 }
 
@@ -69,6 +83,7 @@ async fn task_and_audit_rename_preserves_omitted_observers() {
             usage_type,
             json!({"name": "Renamed"}),
             json!(["alice"]),
+            StatusCode::OK,
         )
         .await;
     }
@@ -83,6 +98,7 @@ async fn task_and_audit_explicit_observers_replace_existing_users() {
             usage_type,
             json!({"observers": ["bob"]}),
             json!(["bob"]),
+            StatusCode::OK,
         )
         .await;
     }
@@ -98,6 +114,23 @@ async fn task_and_audit_empty_observers_clear_existing_users() {
             usage_type,
             json!({"observers": []}),
             Value::Null,
+            StatusCode::OK,
+        )
+        .await;
+    }
+}
+
+#[tokio::test]
+async fn task_and_audit_null_observers_are_rejected_without_backend_mutation() {
+    // Review regression #635: null is outside the array-only contract. Reject
+    // the entire update before any mutation, preserving both access and name.
+    for (collection, usage_type) in [("tasks", "scan"), ("audits", "audit")] {
+        assert_observer_update(
+            collection,
+            usage_type,
+            json!({"name": "Must not apply", "observers": null}),
+            json!(["alice"]),
+            StatusCode::BAD_REQUEST,
         )
         .await;
     }

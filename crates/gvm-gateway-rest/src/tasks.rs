@@ -573,7 +573,8 @@ pub struct ModifyTaskRequest {
     /// Optional alterable flag.
     pub alterable: Option<bool>,
     /// Observer users: omitted leaves them unchanged; an empty list clears them.
-    #[serde(default)]
+    /// Explicit null is invalid.
+    #[serde(default, deserialize_with = "deserialize_observer_users")]
     pub observers: Option<Vec<String>>,
     /// Optional schedule periods.
     #[serde(rename = "schedulePeriods")]
@@ -581,6 +582,15 @@ pub struct ModifyTaskRequest {
     /// Optional key-value scan preferences.
     #[serde(default)]
     pub preferences: HashMap<String, String>,
+}
+
+// Serde calls this only for a present property. Decode the array itself so
+// explicit null is rejected; a missing property takes the field's None default.
+fn deserialize_observer_users<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Vec::<String>::deserialize(deserializer).map(Some)
 }
 
 impl ModifyTaskRequest {

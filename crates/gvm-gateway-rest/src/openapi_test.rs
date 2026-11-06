@@ -1394,3 +1394,35 @@ fn assert_empty_array_clear_contract(schema: &Value, context: &str, clear_phrase
         );
     }
 }
+
+#[test]
+fn task_observer_update_schemas_allow_omission_and_reject_null() {
+    // Review #635: runtime omission/clear/replace semantics must agree with
+    // both published array-only schemas used by task and audit update routes.
+    let generated = build_openapi();
+    let spec_dir = root_spec_path().parent().unwrap().to_path_buf();
+    let curated = read_yaml(&spec_dir.join("tasks.yaml"));
+    let generated_task = &generated["components"]["schemas"]["ModifyTask"];
+    let curated_task = &curated["components"]["schemas"]["ModifyTask"];
+    for task in [generated_task, curated_task] {
+        let observers = &task["properties"]["observers"];
+        assert_eq!(observers["type"], "array");
+        assert_eq!(observers["items"]["type"], "string");
+        assert!(!task["required"]
+            .as_array()
+            .is_some_and(|required| required.contains(&json!("observers"))));
+        let description = observers["description"].as_str().unwrap();
+        for intent in [
+            "Omit to leave unchanged",
+            "an empty array clears users",
+            "a nonempty array replaces users",
+            "Explicit null is invalid",
+        ] {
+            assert!(description.contains(intent), "missing intent: {intent}");
+        }
+    }
+    assert_eq!(
+        generated_task["properties"]["observers"]["description"],
+        curated_task["properties"]["observers"]["description"]
+    );
+}
