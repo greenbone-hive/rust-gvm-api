@@ -572,9 +572,9 @@ pub struct ModifyTaskRequest {
     pub alert_ids: Option<Vec<String>>,
     /// Optional alterable flag.
     pub alterable: Option<bool>,
-    /// Optional observers.
+    /// Observer users: omitted leaves them unchanged; an empty list clears them.
     #[serde(default)]
-    pub observers: Vec<String>,
+    pub observers: Option<Vec<String>>,
     /// Optional schedule periods.
     #[serde(rename = "schedulePeriods")]
     pub schedule_periods: Option<u32>,
