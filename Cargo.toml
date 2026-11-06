@@ -23,14 +23,14 @@ async-trait = "0.1.89"
 base64 = "0.23.0"
 axum = "0.8.9"
 clap = { version = "4.6.1", features = ["derive"] }
-# Issue #620 consumes typed EPSS support from the immutable rust-gvm v0.9.0
-# release baseline. Keep all five workspace components on that annotated tag,
-# whose target commit is d57605b5d1284c36e3f4e58112a6a987baa3395b.
-gvm-client = { git = "https://github.com/greenbone-hive/rust-gvm", tag = "v0.9.0" }
-gvm-connection = { git = "https://github.com/greenbone-hive/rust-gvm", tag = "v0.9.0" }
-gvm-gmp = { git = "https://github.com/greenbone-hive/rust-gvm", tag = "v0.9.0", features = ["serde"] }
-gvm-mock-server = { git = "https://github.com/greenbone-hive/rust-gvm", tag = "v0.9.0" }
-gvm-protocol = { git = "https://github.com/greenbone-hive/rust-gvm", tag = "v0.9.0" }
+# Issue #632 consumes typed GMP server-error classification from merged
+# rust-gvm PR #803. Keep all five workspace components on its immutable merge
+# commit until the support is available in a release newer than v0.9.0.
+gvm-client = { git = "https://github.com/greenbone-hive/rust-gvm", rev = "2b406a28da4d81be15d6d81b096d62889d9ad798" }
+gvm-connection = { git = "https://github.com/greenbone-hive/rust-gvm", rev = "2b406a28da4d81be15d6d81b096d62889d9ad798" }
+gvm-gmp = { git = "https://github.com/greenbone-hive/rust-gvm", rev = "2b406a28da4d81be15d6d81b096d62889d9ad798", features = ["serde"] }
+gvm-mock-server = { git = "https://github.com/greenbone-hive/rust-gvm", rev = "2b406a28da4d81be15d6d81b096d62889d9ad798" }
+gvm-protocol = { git = "https://github.com/greenbone-hive/rust-gvm", rev = "2b406a28da4d81be15d6d81b096d62889d9ad798" }
 http = "1.4.1"
 opentelemetry = { version = "0.33.0", features = ["trace"] }
 opentelemetry-otlp = { version = "0.33.0", features = ["grpc-tonic", "trace"] }

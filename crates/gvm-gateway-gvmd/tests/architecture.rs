@@ -14,16 +14,19 @@ const RUST_GVM_COMPONENTS: &[&str] = &[
     "gvm-mock-server",
     "gvm-protocol",
 ];
-// Issue #620 consumes typed EPSS support from the immutable v0.9.0 release.
-// Guard both its annotated tag and exact target commit so all five workspace
-// components continue to share one published rust-gvm baseline.
+// Issue #632 consumes typed GMP server-error classification from merged
+// rust-gvm PR #803. Guard its exact immutable merge commit so all five
+// workspace components continue to share one upstream baseline.
 const RUST_GVM_DEPENDENCY_VERSION: &str = "0.9.0";
-const RUST_GVM_DEPENDENCY_TAG: &str = "v0.9.0";
-const RUST_GVM_DEPENDENCY_REVISION: &str = "d57605b5d1284c36e3f4e58112a6a987baa3395b";
+const RUST_GVM_DEPENDENCY_REVISION: &str = "2b406a28da4d81be15d6d81b096d62889d9ad798";
 // Issue #588 established the reviewed rust-gvm v0.8.0 facade inventory, and
 // issue #620 advances the accepted baseline to v0.9.0. Because that release
 // changes no production gvm-client facade source, all 267 dispositions remain.
+// PR #803 adds error classification rather than async facade methods, so the
+// reviewed product-surface baseline remains the v0.9.0 release inventory.
 const RUST_GVM_PIN_REFERENCE: &str = "release-tag";
+const RUST_GVM_FACADE_TAG: &str = "v0.9.0";
+const RUST_GVM_FACADE_REVISION: &str = "d57605b5d1284c36e3f4e58112a6a987baa3395b";
 const RUST_GVM_TYPED_FACADE_METHOD_COUNT: usize = 267;
 const RUST_GVM_TYPED_FACADE_SNAPSHOT: &str = "tests/fixtures/rust-gvm-v0.9.0-typed-facade.tsv";
 const RUST_GVM_DISPOSITION_LEDGER: &str = "../../docs/upstream-surface-dispositions.tsv";
@@ -296,7 +299,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
         "all five rust-gvm components must be present in Cargo.lock"
     );
     let expected_source = format!(
-        "git+https://github.com/greenbone-hive/rust-gvm?tag={RUST_GVM_DEPENDENCY_TAG}#{RUST_GVM_DEPENDENCY_REVISION}"
+        "git+https://github.com/greenbone-hive/rust-gvm?rev={RUST_GVM_DEPENDENCY_REVISION}#{RUST_GVM_DEPENDENCY_REVISION}"
     );
     for (component, (version, source)) in &releases {
         assert_eq!(
@@ -305,7 +308,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
         );
         assert_eq!(
             *source, expected_source,
-            "{component} must resolve to rust-gvm {RUST_GVM_DEPENDENCY_TAG} at its exact target commit"
+            "{component} must resolve to rust-gvm merge commit {RUST_GVM_DEPENDENCY_REVISION}"
         );
     }
 
@@ -317,12 +320,12 @@ fn rust_gvm_components_resolve_to_one_revision() {
             .find(|line| line.trim_start().starts_with(&format!("{component} =")))
             .unwrap_or_else(|| panic!("{component} must be declared in workspace dependencies"));
         assert!(
-            dependency.contains(&format!("tag = \"{RUST_GVM_DEPENDENCY_TAG}\"")),
-            "{component} must pin rust-gvm {RUST_GVM_DEPENDENCY_TAG} in Cargo.toml: {dependency}"
+            dependency.contains(&format!("rev = \"{RUST_GVM_DEPENDENCY_REVISION}\"")),
+            "{component} must pin rust-gvm merge commit {RUST_GVM_DEPENDENCY_REVISION} in Cargo.toml: {dependency}"
         );
         assert!(
-            !dependency.contains("branch =") && !dependency.contains("rev ="),
-            "{component} release dependency must use only the immutable tag: {dependency}"
+            !dependency.contains("branch =") && !dependency.contains("tag ="),
+            "{component} dependency must use only the immutable revision: {dependency}"
         );
     }
 }
@@ -367,7 +370,7 @@ fn rust_gvm_typed_facade_dispositions_are_complete_and_pinned() {
     ));
     if snapshot.methods.len() != RUST_GVM_TYPED_FACADE_METHOD_COUNT {
         errors.push(format!(
-            "upstream snapshot has {} methods, expected {RUST_GVM_TYPED_FACADE_METHOD_COUNT}; regenerate it from rust-gvm release {RUST_GVM_DEPENDENCY_TAG} at {RUST_GVM_DEPENDENCY_REVISION}",
+            "upstream snapshot has {} methods, expected {RUST_GVM_TYPED_FACADE_METHOD_COUNT}; regenerate it from rust-gvm release {RUST_GVM_FACADE_TAG} at {RUST_GVM_FACADE_REVISION}",
             snapshot.methods.len()
         ));
     }
@@ -480,12 +483,12 @@ fn typed_facade_metadata_rejects_any_other_release_revision() {
     let errors = pinned_metadata_errors(
         "test fixture",
         RUST_GVM_PIN_REFERENCE,
-        RUST_GVM_DEPENDENCY_TAG,
+        RUST_GVM_FACADE_TAG,
         "0000000000000000000000000000000000000000",
     );
 
     assert!(errors.iter().any(|error| {
-        error.contains("revision is") && error.contains(RUST_GVM_DEPENDENCY_REVISION)
+        error.contains("revision is") && error.contains(RUST_GVM_FACADE_REVISION)
     }));
 }
 
@@ -1456,17 +1459,17 @@ fn pinned_metadata_errors(label: &str, reference: &str, tag: &str, revision: &st
     let mut errors = Vec::new();
     if reference != RUST_GVM_PIN_REFERENCE {
         errors.push(format!(
-            "{label} reference is {reference:?}, expected {RUST_GVM_PIN_REFERENCE:?}; regenerate the upstream snapshot and reconcile every ledger row with the dependency pin"
+            "{label} reference is {reference:?}, expected {RUST_GVM_PIN_REFERENCE:?}; regenerate the upstream snapshot and reconcile every ledger row with the accepted facade baseline"
         ));
     }
-    if tag != RUST_GVM_DEPENDENCY_TAG {
+    if tag != RUST_GVM_FACADE_TAG {
         errors.push(format!(
-            "{label} tag is {tag:?}, expected {RUST_GVM_DEPENDENCY_TAG:?}; regenerate the upstream snapshot and reconcile every ledger row with the dependency pin"
+            "{label} tag is {tag:?}, expected {RUST_GVM_FACADE_TAG:?}; regenerate the upstream snapshot and reconcile every ledger row with the accepted facade baseline"
         ));
     }
-    if revision != RUST_GVM_DEPENDENCY_REVISION {
+    if revision != RUST_GVM_FACADE_REVISION {
         errors.push(format!(
-            "{label} revision is {revision:?}, expected {RUST_GVM_DEPENDENCY_REVISION:?}; regenerate the upstream snapshot and reconcile every ledger row with the dependency pin"
+            "{label} revision is {revision:?}, expected {RUST_GVM_FACADE_REVISION:?}; regenerate the upstream snapshot and reconcile every ledger row with the accepted facade baseline"
         ));
     }
     errors
