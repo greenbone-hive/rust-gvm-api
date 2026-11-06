@@ -142,9 +142,9 @@ fn qod_schema_matches_gmp_optionality_semantics_and_range() {
     assert!(schemas["Qod"]["properties"]["type"]["description"]
         .as_str()
         .is_some_and(|description| description.contains("Backend-defined GMP detection method")));
-    assert!(!schemas["Qod"]["required"]
+    assert!(schemas["Qod"]["required"]
         .as_array()
-        .is_some_and(|required| !required.is_empty()));
+        .is_none_or(|required| required.is_empty()));
 
     let spec_dir = root_spec_path()
         .parent()
