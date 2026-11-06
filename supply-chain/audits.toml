@@ -19,11 +19,83 @@ criteria = "safe-to-deploy"
 delta = "0.103.15 -> 0.103.16"
 notes = "Reviewed exact 0.103.15 -> 0.103.16 source delta: eight bundled distrusted SPKIs are checked for every certificate-chain path, returning CertDistrusted; error ranking and focused tests cover the new rejection behavior."
 
+[[audits.schemars]]
+who = "rust-gvm-api security review"
+criteria = "safe-to-deploy"
+delta = "1.2.2 -> 1.2.3"
+notes = "Reviewed exact source delta: no unsafe or build-script change. It fixes internally tagged enum schema property order and reports arbitrary-precision numbers as serde errors instead of unreachable; remaining changes are qualification/lint cleanups. The only manifest change keeps the optional derive crate in lockstep."
+
+[[audits.schemars_derive]]
+who = "rust-gvm-api security review"
+criteria = "safe-to-deploy"
+delta = "1.2.2 -> 1.2.3"
+notes = "Reviewed exact proc-macro delta: the crate continues to forbid unsafe code; generated impls only gain unused-qualification allows. The remaining edits replace redundant syn paths and remove an obsolete lint allow. No dependency or build-script change."
+
+[[audits.serde_json]]
+who = "rust-gvm-api security review"
+criteria = "safe-to-deploy"
+delta = "1.0.151 -> 1.0.154"
+notes = "Reviewed exact source and unchanged build.rs delta: no unsafe change. Fixes preserve -0 token classification, non-finite f32 conversion, and invalid UTF-8 error positions; preserve_order now permits no_std via optional foldhash, which is not activated or added to this lockfile."
+
+[[audits.serde_spanned]]
+who = "rust-gvm-api security review"
+criteria = "safe-to-deploy"
+delta = "1.1.1 -> 1.1.2"
+notes = "Reviewed exact source delta: no Rust source, feature, dependency, unsafe, or build-script change; package metadata, README, license year, and release-template URL only."
+
+[[audits.sha2]]
+who = "rust-gvm-api security review"
+criteria = "safe-to-deploy"
+delta = "0.11.0 -> 0.11.1"
+notes = "Reviewed exact delta, including all AArch64, x86, wasm SIMD, and RISC-V backend changes. The refactor narrows existing intrinsic/asm unsafe blocks to fixed-size array loads/stores, removes the RISC-V unaligned-load workaround, and fixes AArch64 round-constant loads for Stacked Borrows; target-feature dispatch still guards every backend. No dependency/build-script change; rust-version rises 1.85 -> 1.88, within workspace MSRV 1.89."
+
 [[audits.tokio]]
 who = "rust-gvm-api security review"
 criteria = "safe-to-deploy"
 delta = "1.53.1 -> 1.53.3"
 notes = "Reviewed exact 1.53.1 -> 1.53.3 source delta and 1.53.2/1.53.3 release notes: bounded runtime, I/O, synchronization, and timer correctness fixes. AsyncFd registration now exposes its I/O-safety contract as unsafe and deprecates unsound safe constructors; no new dependency is introduced."
+
+[[audits.tokio]]
+who = "rust-gvm-api security review"
+criteria = "safe-to-deploy"
+delta = "1.53.3 -> 1.54.1"
+notes = "Reviewed the full exact 1.54.0/1.54.1 source delta and changelog, including runtime scheduler/injection refactors, timer-wheel overflow fixes, I/O readiness and interrupted-I/O fixes, blocking-pool changes, and target-gated Emscripten support. Changed unsafe sites centralize existing raw-pointer/OS-handle invariants; no unchecked safe API is introduced. Production dependencies are unchanged (target/dev declarations only); rust-version rises 1.71 -> 1.85, within workspace MSRV 1.89."
+
+[[audits.tokio-rustls]]
+who = "rust-gvm-api security review"
+criteria = "safe-to-deploy"
+delta = "0.26.5 -> 0.26.6"
+notes = "Reviewed exact client/server delta: no unsafe, build-script, feature, or dependency change. Both TLS streams buffer a non-transient batch-read error and return it on the next poll, preserving the documented error instead of silently losing it after copied bytes."
+
+[[audits.toml]]
+who = "rust-gvm-api security review"
+criteria = "safe-to-deploy"
+delta = "1.1.6+spec-1.1.0 -> 1.2.0+spec-1.1.0"
+notes = "Reviewed exact parser/serializer delta and manifest: crate continues to forbid unsafe code. It updates the tightly coupled toml family and refactors document serialization to preserve insertion order while reusing allocation; key/value duplicate handling and serialization entry paths are corrected. No new resolved dependency or build script."
+
+[[audits.toml_datetime]]
+who = "rust-gvm-api security review"
+criteria = "safe-to-deploy"
+delta = "1.1.1+spec-1.1.0 -> 1.1.2+spec-1.1.0"
+notes = "Reviewed exact delta: no Rust source, dependency, feature, unsafe, or build-script change; package metadata and release-template URL only. The crate continues to forbid unsafe code."
+
+[[audits.toml_parser]]
+who = "rust-gvm-api security review"
+criteria = "safe-to-deploy"
+delta = "1.1.3+spec-1.1.0 -> 1.1.5+spec-1.1.0"
+notes = "Reviewed exact lexer/parser delta: removes three optional-feature unchecked span accesses from whitespace/comment/newline validation and bounds the token-vector capacity estimate to avoid overflow. No new unsafe; the locked graph enables alloc/std, not the crate's optional unsafe feature. No dependency or build-script change."
+
+[[audits.toml_writer]]
+who = "rust-gvm-api security review"
+criteria = "safe-to-deploy"
+delta = "1.1.2+spec-1.1.0 -> 1.2.0+spec-1.1.0"
+notes = "Reviewed exact writer delta: crate continues to forbid unsafe code and has no dependency/build-script change. String metrics now fast-path only characters safe in every emitted quoting form; all other strings retain escaping. The remaining direct write_str substitutions preserve output."
+
+[[audits.uuid]]
+who = "rust-gvm-api security review"
+criteria = "safe-to-deploy"
+delta = "1.26.1 -> 1.29.0"
+notes = "Reviewed exact source and manifest delta: adds optional UUID Serde adapters, accepts case-insensitive URN prefixes, and fixes v7 timestamp monotonicity. New NonNilUuid constructors call new_unchecked only after UUID constructors set nonzero version bits; no pre-existing formatter unsafe is changed. No dependency/build-script change; rust-version rises 1.85 -> 1.89, equal to workspace MSRV."
 
 [[audits.webpki-root-certs]]
 who = "rust-gvm-api security review"
