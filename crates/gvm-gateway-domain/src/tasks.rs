@@ -259,8 +259,8 @@ pub struct ModifyTaskInput {
     pub alert_ids: Option<Vec<String>>,
     /// Optional alterable flag.
     pub alterable: Option<bool>,
-    /// Optional observers.
-    pub observers: Vec<String>,
+    /// Observer users: omitted leaves them unchanged; an empty list clears them.
+    pub observers: Option<Vec<String>>,
     /// Optional schedule periods.
     pub schedule_periods: Option<u32>,
     /// Optional key-value scan preferences.

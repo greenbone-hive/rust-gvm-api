@@ -268,6 +268,7 @@ pub(crate) struct ModifyTaskDoc {
     #[serde(rename = "alertIds")]
     alert_ids: Option<Vec<Uuid>>,
     alterable: Option<bool>,
+    /// Observer users. Omit to leave unchanged; an empty array clears users; a nonempty array replaces users. Explicit null is invalid.
     observers: Option<Vec<String>>,
     #[serde(rename = "schedulePeriods")]
     schedule_periods: Option<u32>,

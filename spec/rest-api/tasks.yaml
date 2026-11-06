@@ -494,6 +494,7 @@ components:
         alterable:
           type: boolean
         observers:
+          description: Observer users. Omit to leave unchanged; an empty array clears users; a nonempty array replaces users. Explicit null is invalid.
           type: array
           items:
             type: string

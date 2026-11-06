@@ -260,7 +260,10 @@ impl TaskPort for GvmdAdapter {
         request.config_id = config_id;
         request.scanner_id = scanner_id;
         request.alert_ids = alert_ids.map(CollectionUpdate::Replace).unwrap_or_default();
-        request.observers = CollectionUpdate::Replace(input.observers);
+        request.observers = input
+            .observers
+            .map(CollectionUpdate::Replace)
+            .unwrap_or_default();
         request.preferences = input
             .preferences
             .into_iter()
@@ -470,7 +473,10 @@ impl TaskPort for GvmdAdapter {
         request.policy_id = config_id;
         request.scanner_id = scanner_id;
         request.alert_ids = alert_ids.map(CollectionUpdate::Replace).unwrap_or_default();
-        request.observers = CollectionUpdate::Replace(input.observers);
+        request.observers = input
+            .observers
+            .map(CollectionUpdate::Replace)
+            .unwrap_or_default();
         request.preferences = input
             .preferences
             .into_iter()
