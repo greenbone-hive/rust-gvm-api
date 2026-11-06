@@ -76,6 +76,8 @@ components:
             - Low
             - Log
             - Alarm
+        qod:
+          $ref: "#/components/schemas/Qod"
         nvt:
           $ref: "#/components/schemas/NvtRef"
         description:
@@ -92,6 +94,19 @@ components:
           type: integer
           minimum: 0
           description: Number of result occurrences represented by an aggregate report vulnerability. Omitted for ordinary results and when the backend does not provide an aggregate count.
+
+    Qod:
+      type: object
+      description: Quality of Detection metadata supplied by gvmd. The object and each child field are optional because GMP may omit any of them.
+      properties:
+        value:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: GMP detection-confidence percentage. Higher values indicate greater confidence that the reported finding was detected correctly.
+        type:
+          type: string
+          description: Backend-defined GMP detection method, such as `remote_vul`. The gateway preserves this open string without normalization.
 
     NvtRef:
       type: object

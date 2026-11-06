@@ -676,9 +676,18 @@ pub struct ScanResult {
     pub port: Option<String>,
     pub severity: Option<f64>,
     pub threat: Option<String>,
+    pub qod: Option<Qod>,
     pub task: Option<ResourceRef>,
     pub report: Option<ResourceRef>,
     pub nvt: Option<NvtRef>,
+}
+
+/// Optional Quality of Detection metadata on an ordinary result.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct Qod {
+    pub value: Option<u32>,
+    #[serde(rename = "type")]
+    pub type_: Option<String>,
 }
 
 /// The optional EPSS selections exposed only by catalog and ordinary-result NVTs.

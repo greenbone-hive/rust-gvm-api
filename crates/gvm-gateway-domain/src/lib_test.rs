@@ -445,6 +445,7 @@ fn scan_result_serializes_camel_case() {
         port: Some("443/tcp".to_string()),
         severity: Some(9.8),
         threat: Some("High".to_string()),
+        qod: None,
         nvt: Some(NvtRef {
             oid: Some("1.3.6.1.4.1.25623.1.0.12345".to_string()),
             name: Some("Test NVT".to_string()),
@@ -467,6 +468,46 @@ fn scan_result_serializes_camel_case() {
     assert!(!json.contains("\"task\""));
     assert!(!json.contains("\"hostsCount\""));
     assert!(!json.contains("\"occurrences\""));
+}
+
+/// ScanResult preserves complete and partial GMP QoD objects while omitting
+/// the entire field when gvmd did not supply a QoD element.
+#[test]
+fn scan_result_qod_preserves_complete_partial_and_absent_shapes() {
+    let complete = Qod {
+        value: Some(95),
+        type_: Some("remote_vul".to_string()),
+    };
+    let partial = Qod {
+        value: None,
+        type_: Some("remote_banner".to_string()),
+    };
+
+    assert_eq!(
+        serde_json::to_value(complete).unwrap(),
+        serde_json::json!({"value": 95, "type": "remote_vul"})
+    );
+    assert_eq!(
+        serde_json::to_value(partial).unwrap(),
+        serde_json::json!({"type": "remote_banner"})
+    );
+
+    let absent = ScanResult {
+        id: "result-1".to_string(),
+        name: "No QoD".to_string(),
+        host: None,
+        port: None,
+        severity: None,
+        threat: None,
+        qod: None,
+        nvt: None,
+        description: None,
+        task: None,
+        report: None,
+        hosts_count: None,
+        occurrences: None,
+    };
+    assert!(serde_json::to_value(absent).unwrap().get("qod").is_none());
 }
 
 /// NvtRef omits the CVE list when it is empty.

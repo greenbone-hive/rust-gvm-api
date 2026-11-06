@@ -126,6 +126,51 @@ fn epss_schema_is_bounded_and_excludes_report_vulnerabilities() {
 }
 
 #[test]
+fn qod_schema_matches_gmp_optionality_semantics_and_range() {
+    // Issue #623 exposes the one shared result schema across list, detail,
+    // report, and embedded-report surfaces. Generated and curated OpenAPI must
+    // both retain GMP's optional children and 0..=100 percentage semantics.
+    let generated = build_openapi();
+    let schemas = &generated["components"]["schemas"];
+    assert_eq!(
+        schemas["Result"]["properties"]["qod"]["$ref"],
+        "#/components/schemas/Qod"
+    );
+    assert_eq!(schemas["Qod"]["properties"]["value"]["minimum"], 0);
+    assert_eq!(schemas["Qod"]["properties"]["value"]["maximum"], 100);
+    assert_eq!(schemas["Qod"]["properties"]["type"]["type"], "string");
+    assert!(schemas["Qod"]["properties"]["type"]["description"]
+        .as_str()
+        .is_some_and(|description| description.contains("Backend-defined GMP detection method")));
+    assert!(!schemas["Qod"]["required"]
+        .as_array()
+        .is_some_and(|required| !required.is_empty()));
+
+    let spec_dir = root_spec_path()
+        .parent()
+        .expect("REST spec directory")
+        .to_path_buf();
+    let results = read_yaml(&spec_dir.join("results.yaml"));
+    let reports = read_yaml(&spec_dir.join("reports.yaml"));
+    assert_eq!(
+        results["components"]["schemas"]["Result"]["properties"]["qod"]["$ref"],
+        "#/components/schemas/Qod"
+    );
+    assert_eq!(
+        results["components"]["schemas"]["Qod"]["properties"]["value"]["minimum"],
+        0
+    );
+    assert_eq!(
+        results["components"]["schemas"]["Qod"]["properties"]["value"]["maximum"],
+        100
+    );
+    assert_eq!(
+        reports["components"]["schemas"]["Report"]["properties"]["results"]["items"]["$ref"],
+        "./results.yaml#/components/schemas/Result"
+    );
+}
+
+#[test]
 fn generated_and_curated_metadata_describe_the_current_typed_contract() {
     // Top-level metadata is what runtime Redoc and release-shipped clients see.
     // Keep it tied to the compiled API version and implemented authentication

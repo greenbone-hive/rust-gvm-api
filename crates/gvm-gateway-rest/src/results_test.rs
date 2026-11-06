@@ -4,7 +4,7 @@
 use serde_json::json;
 
 use super::ResultResponse;
-use gvm_gateway_domain::{Epss, EpssCve, EpssSelection, NvtRef, ScanResult};
+use gvm_gateway_domain::{Epss, EpssCve, EpssSelection, NvtRef, Qod, ScanResult};
 
 #[test]
 fn result_response_preserves_critical_threat() {
@@ -15,6 +15,7 @@ fn result_response_preserves_critical_threat() {
         port: None,
         severity: Some(10.0),
         threat: Some("Critical".to_string()),
+        qod: None,
         nvt: None,
         description: None,
         task: None,
@@ -36,6 +37,7 @@ fn result_response_preserves_unknown_threat() {
         port: None,
         severity: Some(7.5),
         threat: Some("FutureThreat".to_string()),
+        qod: None,
         nvt: None,
         description: None,
         task: None,
@@ -59,6 +61,7 @@ fn result_response_preserves_source_shaped_type_metadata() {
         port: None,
         severity: None,
         threat: None,
+        qod: None,
         nvt: Some(NvtRef {
             oid: Some("1.3.6.1".to_string()),
             name: None,
@@ -78,6 +81,47 @@ fn result_response_preserves_source_shaped_type_metadata() {
 
     let value = serde_json::to_value(response).expect("result response should serialize");
     assert_eq!(value["nvt"]["typeMetadata"], "{\"future\":[1,true]}");
+}
+
+#[test]
+fn result_response_preserves_complete_partial_and_absent_qod() {
+    // The shared DTO feeds top-level, report, and embedded result responses;
+    // lock complete, partial, and absent GMP QoD shapes at that one boundary.
+    let complete = serde_json::to_value(ResultResponse::from(scan_result_with_qod(Some(Qod {
+        value: Some(95),
+        type_: Some("remote_vul".to_string()),
+    }))))
+    .expect("complete result QoD should serialize");
+    assert_eq!(complete["qod"], json!({"value": 95, "type": "remote_vul"}));
+
+    let partial = serde_json::to_value(ResultResponse::from(scan_result_with_qod(Some(Qod {
+        value: Some(80),
+        type_: None,
+    }))))
+    .expect("partial result QoD should serialize");
+    assert_eq!(partial["qod"], json!({"value": 80}));
+
+    let absent = serde_json::to_value(ResultResponse::from(scan_result_with_qod(None)))
+        .expect("absent result QoD should serialize");
+    assert!(absent.get("qod").is_none());
+}
+
+fn scan_result_with_qod(qod: Option<Qod>) -> ScanResult {
+    ScanResult {
+        id: "123e4567-e89b-12d3-a456-426614174000".to_string(),
+        name: "QoD result".to_string(),
+        host: None,
+        port: None,
+        severity: None,
+        threat: None,
+        qod,
+        nvt: None,
+        description: None,
+        task: None,
+        report: None,
+        hosts_count: None,
+        occurrences: None,
+    }
 }
 
 #[test]

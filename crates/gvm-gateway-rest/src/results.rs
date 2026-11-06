@@ -174,6 +174,8 @@ pub(crate) struct ResultResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     threat: Option<Threat>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    qod: Option<QodResponse>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     nvt: Option<NvtRefResponse>,
     #[serde(skip_serializing_if = "Option::is_none")]
     description: Option<String>,
@@ -196,12 +198,35 @@ impl From<gvm_gateway_domain::ScanResult> for ResultResponse {
             port: r.port,
             severity: r.severity,
             threat: r.threat.as_deref().map(Threat::parse),
+            qod: r.qod.map(QodResponse::from),
             nvt: r.nvt.map(NvtRefResponse::from),
             description: r.description,
             task: r.task.map(ResourceRefResponse::from),
             report: r.report.map(ResourceRefResponse::from),
             hosts_count: r.hosts_count,
             occurrences: r.occurrences,
+        }
+    }
+}
+
+/// Quality of Detection (QoD) metadata supplied by gvmd for a result.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[schemars(rename = "Qod")]
+pub(crate) struct QodResponse {
+    /// GMP detection-confidence percentage in the inclusive range 0 to 100.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(range(min = 0, max = 100))]
+    value: Option<u32>,
+    /// Backend-defined GMP detection method, such as `remote_vul`.
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    type_: Option<String>,
+}
+
+impl From<gvm_gateway_domain::Qod> for QodResponse {
+    fn from(qod: gvm_gateway_domain::Qod) -> Self {
+        Self {
+            value: qod.value,
+            type_: qod.type_,
         }
     }
 }
