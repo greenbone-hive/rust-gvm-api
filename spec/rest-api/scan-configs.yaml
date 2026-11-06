@@ -320,7 +320,14 @@ components:
           type: integer
         type:
           type: integer
-          description: "Config type: 0 = standard OpenVAS config, 1 = OSP config."
+          format: uint32
+          anyOf:
+            - type: integer
+              format: uint32
+              enum: [0, 1]
+            - type: integer
+              format: uint32
+          description: "Known config types are 0 (standard OpenVAS config) and 1 (OSP config). The list is not exhaustive; unknown future integer values may also be returned verbatim, and clients must preserve them."
         usageType:
           type: string
           description: "Backend usage-type discriminator: `scan` or `policy`."

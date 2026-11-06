@@ -70,10 +70,14 @@ components:
           type: integer
         type:
           type: string
-          enum:
-            - OpenVAS
-            - CVE
-            - OSP
+          anyOf:
+            - type: string
+              enum:
+                - OpenVAS
+                - CVE
+                - OSP
+            - type: string
+          description: Known values are listed for documentation and client generation. This list is not exhaustive; unknown future values may also be returned verbatim, and clients must preserve them.
         credential:
           $ref: "./common.yaml#/components/schemas/ResourceRef"
         caPub:

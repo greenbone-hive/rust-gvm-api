@@ -47,11 +47,15 @@ components:
       properties:
         type:
           type: string
-          enum:
-            - NVT
-            - CERT
-            - SCAP
-            - GVMD_DATA
+          anyOf:
+            - type: string
+              enum:
+                - NVT
+                - CERT
+                - SCAP
+                - GVMD_DATA
+            - type: string
+          description: Known values are listed for documentation and client generation. This list is not exhaustive; unknown future values may also be returned verbatim, and clients must preserve them.
         name:
           type: string
         version:

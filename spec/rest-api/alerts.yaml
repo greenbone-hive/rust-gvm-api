@@ -140,34 +140,46 @@ components:
           type: string
         event:
           type: string
-          enum:
-            - task_run_status_changed
-            - updated_secinfo
-            - new_secinfo
+          anyOf:
+            - type: string
+              enum:
+                - task_run_status_changed
+                - updated_secinfo
+                - new_secinfo
+            - type: string
+          description: Known values are listed for documentation and client generation. This list is not exhaustive; unknown future values may also be returned verbatim, and clients must preserve them.
         condition:
           type: string
-          enum:
-            - always
-            - filter_count_at_least
-            - filter_count_changed
-            - severity_at_least
-            - severity_changed
+          anyOf:
+            - type: string
+              enum:
+                - always
+                - filter_count_at_least
+                - filter_count_changed
+                - severity_at_least
+                - severity_changed
+            - type: string
+          description: Known values are listed for documentation and client generation. This list is not exhaustive; unknown future values may also be returned verbatim, and clients must preserve them.
         method:
           type: string
-          enum:
-            - email
-            - http_get
-            - scp
-            - send_email
-            - smb
-            - snmp
-            - sourcefire_connector
-            - start_task
-            - syslog
-            - tippingpoint
-            - verinice_ce
-            - verinice_net
-            - alemba
+          anyOf:
+            - type: string
+              enum:
+                - email
+                - http_get
+                - scp
+                - send_email
+                - smb
+                - snmp
+                - sourcefire_connector
+                - start_task
+                - syslog
+                - tippingpoint
+                - verinice_ce
+                - verinice_net
+                - alemba
+            - type: string
+          description: Known values are listed for documentation and client generation. This list is not exhaustive; unknown future values may also be returned verbatim, and clients must preserve them.
         eventData:
           type: object
           additionalProperties:

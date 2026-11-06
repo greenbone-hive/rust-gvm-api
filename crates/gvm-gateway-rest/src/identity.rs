@@ -33,7 +33,7 @@ use crate::{
         create_resource, delete_resource, get_resource, list_resource, update_resource,
         ValidateInto,
     },
-    open_enum::open_string_enum,
+    open_enum::{closed_string_enum_schema, open_string_enum, open_string_enum_schema},
     openapi::{created_json, ok_json, problem_response, ResourceIdPathDoc},
     query::{parse_collection_query, parse_filter_only_query, DeleteResourceQueryParams},
     targets::validate_uuid,
@@ -92,6 +92,20 @@ open_string_enum! {
     }
 }
 
+fn authentication_type_request_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    closed_string_enum_schema(
+        "AuthenticationTypeRequest",
+        AuthenticationType::known_values(),
+    )
+}
+
+fn authentication_type_response_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    open_string_enum_schema(
+        "AuthenticationTypeResponse",
+        AuthenticationType::known_values(),
+    )
+}
+
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 #[schemars(rename = "User")]
 struct UserResponse {
@@ -104,6 +118,7 @@ struct UserResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     hosts: Option<String>,
     #[serde(rename = "authenticationType", skip_serializing_if = "Option::is_none")]
+    #[schemars(schema_with = "authentication_type_response_schema")]
     authentication_type: Option<AuthenticationType>,
 }
 
@@ -342,6 +357,10 @@ impl JsonSchema for UserDoc {
 
     fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
         let _ = generator.subschema_for::<IdentityResourceBaseDoc>();
+        let authentication_type = open_string_enum_schema(
+            "AuthenticationTypeResponse",
+            AuthenticationType::known_values(),
+        );
         serde_json::from_value(serde_json::json!({
             "allOf": [
                 { "$ref": "#/components/schemas/IdentityResourceBase" },
@@ -358,9 +377,7 @@ impl JsonSchema for UserDoc {
                         },
                         "hostsAllow": { "type": "boolean" },
                         "hosts": { "type": "string" },
-                        "authenticationType": {
-                            "$ref": "#/components/schemas/AuthenticationType"
-                        }
+                        "authenticationType": authentication_type
                     }
                 }
             ]
@@ -526,6 +543,7 @@ struct CreateUserDoc {
     hosts: Option<String>,
     roles: Option<Vec<Uuid>>,
     #[serde(rename = "authenticationType")]
+    #[schemars(schema_with = "authentication_type_request_schema")]
     authentication_type: Option<AuthenticationType>,
 }
 
@@ -542,6 +560,7 @@ struct ModifyUserDoc {
     /// unchanged; an empty array clears all roles.
     roles: Option<Vec<Uuid>>,
     #[serde(rename = "authenticationType")]
+    #[schemars(schema_with = "authentication_type_request_schema")]
     authentication_type: Option<AuthenticationType>,
 }
 

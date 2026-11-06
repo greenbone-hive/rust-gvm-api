@@ -8,16 +8,49 @@ use serde_json::json;
 
 pub(crate) const OPEN_ENUM_DESCRIPTION: &str = "Known values are listed for documentation and client generation. This list is not exhaustive; unknown future values may also be returned verbatim, and clients must preserve them.";
 
-pub(crate) fn open_string_enum_schema(name: &str, known_values: &[&str]) -> schemars::Schema {
+pub(crate) fn closed_string_enum_schema(name: &str, known_values: &[&str]) -> schemars::Schema {
     let mut schema = json_schema!({
         "title": name,
         "type": "string",
-        "enum": known_values,
-        "description": OPEN_ENUM_DESCRIPTION
+        "enum": known_values
     });
 
     if let Some(object) = schema.as_object_mut() {
         object.insert("enum".to_string(), json!(known_values));
+    }
+
+    schema
+}
+
+pub(crate) fn open_string_enum_schema(name: &str, known_values: &[&str]) -> schemars::Schema {
+    let mut schema = json_schema!({
+        "title": name,
+        "type": "string",
+        "anyOf": [
+            {
+                "type": "string",
+                "enum": known_values
+            },
+            {
+                "type": "string"
+            }
+        ],
+        "description": OPEN_ENUM_DESCRIPTION
+    });
+
+    if let Some(object) = schema.as_object_mut() {
+        object.insert(
+            "anyOf".to_string(),
+            json!([
+                {
+                    "type": "string",
+                    "enum": known_values
+                },
+                {
+                    "type": "string"
+                }
+            ]),
+        );
     }
 
     schema
@@ -28,12 +61,35 @@ pub(crate) fn open_u32_enum_schema(name: &str, known_values: &[u32]) -> schemars
         "title": name,
         "type": "integer",
         "format": "uint32",
-        "enum": known_values,
+        "anyOf": [
+            {
+                "type": "integer",
+                "format": "uint32",
+                "enum": known_values
+            },
+            {
+                "type": "integer",
+                "format": "uint32"
+            }
+        ],
         "description": OPEN_ENUM_DESCRIPTION
     });
 
     if let Some(object) = schema.as_object_mut() {
-        object.insert("enum".to_string(), json!(known_values));
+        object.insert(
+            "anyOf".to_string(),
+            json!([
+                {
+                    "type": "integer",
+                    "format": "uint32",
+                    "enum": known_values
+                },
+                {
+                    "type": "integer",
+                    "format": "uint32"
+                }
+            ]),
+        );
     }
 
     schema

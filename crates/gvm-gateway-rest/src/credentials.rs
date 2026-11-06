@@ -27,7 +27,7 @@ use crate::{
         authenticated_resource, create_resource_with_json_error, delete_resource, gateway_error,
         get_resource, list_resource, no_content, update_resource_with_json_error, ValidateInto,
     },
-    open_enum::open_string_enum,
+    open_enum::{closed_string_enum_schema, open_string_enum, open_string_enum_schema},
     openapi::{created_json, ok_json, problem_response, ResourceIdPathDoc, TargetListQueryDoc},
     query::{CollectionListQuery, DeleteResourceQueryParams},
     router::bearer_token,
@@ -37,6 +37,14 @@ pub use gvm_gateway_domain::{
     CreateCredentialInput, Credential, CredentialPage, CredentialQuery, CredentialStore,
     CredentialStorePreferenceInput, ModifyCredentialInput, ModifyCredentialStoreInput,
 };
+
+fn credential_type_request_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    closed_string_enum_schema("CredentialTypeRequest", CredentialType::known_values())
+}
+
+fn credential_type_response_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    open_string_enum_schema("CredentialTypeResponse", CredentialType::known_values())
+}
 
 open_string_enum! {
     /// Credential type code.
@@ -66,6 +74,7 @@ pub(crate) struct CredentialResponse {
     comment: Option<String>,
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     #[schemars(required)]
+    #[schemars(schema_with = "credential_type_response_schema")]
     credential_type: Option<CredentialType>,
     #[serde(skip_serializing_if = "Option::is_none")]
     login: Option<String>,
@@ -254,6 +263,7 @@ pub(crate) struct CreateCredentialRequest {
     name: String,
     comment: Option<String>,
     #[serde(rename = "type")]
+    #[schemars(schema_with = "credential_type_request_schema")]
     credential_type: CredentialType,
     login: Option<String>,
     #[schemars(schema_with = "password_schema")]
