@@ -1220,6 +1220,7 @@ fn map_typed_server_error(
         Some(GmpServerErrorKind::InvalidInput) => GatewayError::InvalidInput(message),
         Some(GmpServerErrorKind::AuthenticationFailure) => GatewayError::Unauthorized(message),
         Some(GmpServerErrorKind::PermissionDenied) => GatewayError::Forbidden(message),
+        _ if status == 400 => GatewayError::InvalidInput(message),
         _ if status == 404 => GatewayError::NotFound(message),
         _ => GatewayError::BackendUnavailable(format!("server error (status {status}): {message}")),
     }
@@ -1234,6 +1235,7 @@ fn map_parser_server_error(
         Some(GmpServerErrorKind::InvalidInput) => GatewayError::InvalidInput(message),
         Some(GmpServerErrorKind::AuthenticationFailure) => GatewayError::Unauthorized(message),
         Some(GmpServerErrorKind::PermissionDenied) => GatewayError::Forbidden(message),
+        _ if status == 400 => GatewayError::InvalidInput(message),
         _ if status == 404 => GatewayError::NotFound(message),
         _ => GatewayError::BackendUnavailable(format!("server error {status}: {message}")),
     }
