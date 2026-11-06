@@ -1,6 +1,18 @@
 
 # cargo-vet audits file
 
+[[audits.opentelemetry]]
+who = "rust-gvm-api security review"
+criteria = "safe-to-deploy"
+delta = "0.33.0 -> 0.33.1"
+notes = "Reviewed exact 0.33.0 -> 0.33.1 source delta: ContextGuard destruction is deferred outside the thread-local mutable borrow, TraceState accepts W3C optional whitespace, and focused tests cover both fixes. The crate adds no unsafe code, build script, or runtime dependency."
+
+[[audits.opentelemetry_sdk]]
+who = "rust-gvm-api security review"
+criteria = "safe-to-deploy"
+delta = "0.33.0 -> 0.33.1"
+notes = "Reviewed exact 0.33.0 -> 0.33.1 source delta: metric aggregators reject non-finite values, PeriodicReader surfaces export failures and worker panics, ParentBasedSampler becomes fully configurable, and invalid parent contexts start a new trace. Focused tests cover the behavior; the crate adds no unsafe code, build script, or runtime dependency."
+
 [[audits.rustls-webpki]]
 who = "rust-gvm-api security review"
 criteria = "safe-to-deploy"
