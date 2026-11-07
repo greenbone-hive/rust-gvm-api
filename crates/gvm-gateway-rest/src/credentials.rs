@@ -266,6 +266,7 @@ pub(crate) struct CreateCredentialRequest {
     #[schemars(schema_with = "credential_type_request_schema")]
     credential_type: CredentialType,
     login: Option<String>,
+    #[schemars(default)]
     #[schemars(schema_with = "password_schema")]
     password: Option<String>,
     #[serde(rename = "privateKey")]
@@ -273,12 +274,15 @@ pub(crate) struct CreateCredentialRequest {
     certificate: Option<String>,
     community: Option<String>,
     #[serde(rename = "authAlgorithm")]
+    #[schemars(default)]
     #[schemars(schema_with = "auth_algorithm_schema")]
     auth_algorithm: Option<String>,
     #[serde(rename = "privacyAlgorithm")]
+    #[schemars(default)]
     #[schemars(schema_with = "privacy_algorithm_schema")]
     privacy_algorithm: Option<String>,
     #[serde(rename = "privacyPassword")]
+    #[schemars(default)]
     #[schemars(schema_with = "password_schema")]
     privacy_password: Option<String>,
     #[serde(rename = "credentialStoreId")]
@@ -390,6 +394,7 @@ pub struct ModifyCredentialRequest {
     pub name: Option<String>,
     pub comment: Option<String>,
     pub login: Option<String>,
+    #[schemars(default)]
     #[schemars(schema_with = "password_schema")]
     pub password: Option<String>,
     #[serde(rename = "privateKey")]
@@ -397,12 +402,15 @@ pub struct ModifyCredentialRequest {
     pub certificate: Option<String>,
     pub community: Option<String>,
     #[serde(rename = "authAlgorithm")]
+    #[schemars(default)]
     #[schemars(schema_with = "auth_algorithm_schema")]
     pub auth_algorithm: Option<String>,
     #[serde(rename = "privacyAlgorithm")]
+    #[schemars(default)]
     #[schemars(schema_with = "privacy_algorithm_schema")]
     pub privacy_algorithm: Option<String>,
     #[serde(rename = "privacyPassword")]
+    #[schemars(default)]
     #[schemars(schema_with = "password_schema")]
     pub privacy_password: Option<String>,
     #[serde(rename = "credentialStoreId")]

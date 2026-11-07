@@ -503,6 +503,138 @@ fn generated_openapi_preserves_key_schema_fields() {
 }
 
 #[test]
+fn optional_custom_schema_request_fields_remain_omittable() {
+    // Regression for #640: `schema_with` replaces `Option<T>` inference, so
+    // optional request fields with custom schemas must explicitly remain out
+    // of generated `required` arrays. This also audits the credential request
+    // fields that use the same derivation pattern.
+    let generated = build_openapi();
+    let generated_schemas = &generated["components"]["schemas"];
+    let root_spec_path = root_spec_path();
+    let spec_dir = root_spec_path.parent().expect("REST spec directory");
+    let identity = read_yaml(&spec_dir.join("identity.yaml"));
+    let credentials = read_yaml(&spec_dir.join("credentials.yaml"));
+
+    for (context, schema, expected) in [
+        (
+            "generated CreateUser",
+            &generated_schemas["CreateUser"],
+            BTreeSet::from(["name"]),
+        ),
+        (
+            "curated CreateUser",
+            &identity["components"]["schemas"]["CreateUser"],
+            BTreeSet::from(["name"]),
+        ),
+        (
+            "generated ModifyUser",
+            &generated_schemas["ModifyUser"],
+            BTreeSet::new(),
+        ),
+        (
+            "curated ModifyUser",
+            &identity["components"]["schemas"]["ModifyUser"],
+            BTreeSet::new(),
+        ),
+        (
+            "generated CreateCredential",
+            &generated_schemas["CreateCredential"],
+            BTreeSet::from(["name", "type"]),
+        ),
+        (
+            "curated CreateCredential",
+            &credentials["components"]["schemas"]["CreateCredential"],
+            BTreeSet::from(["name", "type"]),
+        ),
+        (
+            "generated ModifyCredential",
+            &generated_schemas["ModifyCredential"],
+            BTreeSet::new(),
+        ),
+        (
+            "curated ModifyCredential",
+            &credentials["components"]["schemas"]["ModifyCredential"],
+            BTreeSet::new(),
+        ),
+    ] {
+        assert_eq!(required_fields(schema), expected, "{context} required set");
+    }
+
+    for (context, schema, instance) in [
+        (
+            "generated CreateUser",
+            &generated_schemas["CreateUser"],
+            json!({"name": "alice"}),
+        ),
+        (
+            "curated CreateUser",
+            &identity["components"]["schemas"]["CreateUser"],
+            json!({"name": "alice"}),
+        ),
+        (
+            "generated ModifyUser",
+            &generated_schemas["ModifyUser"],
+            json!({"comment": "unchanged authentication"}),
+        ),
+        (
+            "curated ModifyUser",
+            &identity["components"]["schemas"]["ModifyUser"],
+            json!({"comment": "unchanged authentication"}),
+        ),
+        (
+            "generated CreateCredential",
+            &generated_schemas["CreateCredential"],
+            json!({"name": "scanner login", "type": "up"}),
+        ),
+        (
+            "curated CreateCredential",
+            &credentials["components"]["schemas"]["CreateCredential"],
+            json!({"name": "scanner login", "type": "up"}),
+        ),
+        (
+            "generated ModifyCredential",
+            &generated_schemas["ModifyCredential"],
+            json!({"comment": "unchanged secrets"}),
+        ),
+        (
+            "curated ModifyCredential",
+            &credentials["components"]["schemas"]["ModifyCredential"],
+            json!({"comment": "unchanged secrets"}),
+        ),
+    ] {
+        assert!(
+            schema_accepts_instance(schema, &instance),
+            "{context} rejects a valid request that omits optional custom-schema fields"
+        );
+    }
+
+    for (context, schema) in [
+        (
+            "generated CreateUser.authenticationType",
+            &generated_schemas["CreateUser"]["properties"]["authenticationType"],
+        ),
+        (
+            "generated ModifyUser.authenticationType",
+            &generated_schemas["ModifyUser"]["properties"]["authenticationType"],
+        ),
+        (
+            "curated CreateUser.authenticationType",
+            &identity["components"]["schemas"]["CreateUser"]["properties"]["authenticationType"],
+        ),
+        (
+            "curated ModifyUser.authenticationType",
+            &identity["components"]["schemas"]["ModifyUser"]["properties"]["authenticationType"],
+        ),
+    ] {
+        assert!(schema_accepts_instance(schema, &json!("file")));
+        assert!(
+            !schema_accepts_instance(schema, &json!("future_auth")),
+            "{context} must remain closed to undocumented values"
+        );
+    }
+}
+
+#[test]
 fn user_setting_modify_requires_value_allows_empty_and_exposes_no_create_or_delete() {
     // A missing value is invalid, while an explicit empty string is the
     // supported clear operation. The existing surface remains GET/GET/PUT.
@@ -1664,6 +1796,16 @@ fn assert_string_sets_match(generated: &BTreeSet<&str>, curated: &BTreeSet<&str>
         generated_only.is_empty() && curated_only.is_empty(),
         "{context}: generated_only={generated_only:?}, curated_only={curated_only:?}"
     );
+}
+
+fn required_fields(schema: &Value) -> BTreeSet<&str> {
+    schema
+        .get("required")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect()
 }
 
 fn operation_methods(path_item: &Value) -> Vec<String> {

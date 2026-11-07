@@ -538,11 +538,13 @@ enum PermissionSubjectTypeDoc {
 struct CreateUserDoc {
     name: String,
     comment: Option<String>,
+    #[schemars(default)]
     #[schemars(schema_with = "password_schema")]
     password: Option<String>,
     hosts: Option<String>,
     roles: Option<Vec<Uuid>>,
     #[serde(rename = "authenticationType")]
+    #[schemars(default)]
     #[schemars(schema_with = "authentication_type_request_schema")]
     authentication_type: Option<AuthenticationType>,
 }
@@ -553,6 +555,7 @@ struct CreateUserDoc {
 struct ModifyUserDoc {
     name: Option<String>,
     comment: Option<String>,
+    #[schemars(default)]
     #[schemars(schema_with = "password_schema")]
     password: Option<String>,
     hosts: Option<String>,
@@ -560,6 +563,7 @@ struct ModifyUserDoc {
     /// unchanged; an empty array clears all roles.
     roles: Option<Vec<Uuid>>,
     #[serde(rename = "authenticationType")]
+    #[schemars(default)]
     #[schemars(schema_with = "authentication_type_request_schema")]
     authentication_type: Option<AuthenticationType>,
 }
