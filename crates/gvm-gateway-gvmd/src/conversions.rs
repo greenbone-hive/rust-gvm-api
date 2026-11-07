@@ -269,13 +269,15 @@ pub(crate) fn port_list_from_gmp(port_list: gvm_gmp::responses::PortList) -> Por
     }
 }
 
+fn feed_sync_from_gmp(sync_state: &gvm_gmp::responses::FeedSyncState) -> (bool, Option<String>) {
+    (
+        sync_state.is_active().unwrap_or(false),
+        sync_state.timestamp().map(str::to_string),
+    )
+}
+
 pub(crate) fn feed_from_gmp(feed: gvm_gmp::responses::Feed) -> Feed {
-    let sync_timestamp = feed
-        .currently_syncing
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty() && *value != "0" && *value != "1")
-        .map(str::to_string);
+    let (currently_syncing, sync_timestamp) = feed_sync_from_gmp(&feed.sync_state);
     Feed {
         feed_type: feed.type_,
         name: feed.name,
@@ -284,10 +286,7 @@ pub(crate) fn feed_from_gmp(feed: gvm_gmp::responses::Feed) -> Feed {
         status: feed.status,
         sync_error: feed.sync_not_available,
         sync_timestamp,
-        currently_syncing: feed
-            .currently_syncing
-            .as_deref()
-            .is_some_and(|value| value != "0"),
+        currently_syncing,
     }
 }
 

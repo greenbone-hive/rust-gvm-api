@@ -7,12 +7,12 @@ operation. Completed issue #381 is the closure record for the v0.7.0 baseline;
 new upstream methods require a new, explicit disposition review.
 
 Issue #588 established the reviewed rust-gvm v0.8.0 facade inventory. Issue
-#620 advances the accepted inventory baseline to v0.9.0. Issue #632 temporarily
-pins all five workspace dependencies to immutable merge commit
-`2b406a28da4d81be15d6d81b096d62889d9ad798` for typed GMP server-error
-classification from upstream PR #803. That additive API does not change the
-reviewed async facade, so the inventory and disposition ledger remain coupled
-fail-closed to the v0.9.0 release and revision
+#620 advances the accepted inventory baseline to v0.9.0. Issues #632 and #634
+temporarily pin all five workspace dependencies to immutable merge commit
+`11d7d6f284dbb14100afbaec5762d521a45eaf56` for typed GMP server-error and
+feed-synchronization semantics from upstream PRs #803 and #804. Those additive
+APIs do not change the reviewed async facade, so the inventory and disposition
+ledger remain coupled fail-closed to the v0.9.0 release and revision
 `d57605b5d1284c36e3f4e58112a6a987baa3395b`.
 
 The complete method-level closure record is the machine-readable
@@ -23,7 +23,7 @@ exactly one of `exposed`, `mapped`, `internal`, `blocked`, `deferred`, or
 guard reconciles that ledger against the checked-in
 [`rust-gvm-v0.9.0-typed-facade.tsv`](../crates/gvm-gateway-gvmd/tests/fixtures/rust-gvm-v0.9.0-typed-facade.tsv)
 snapshot at the accepted release. A separate architecture assertion pins every
-workspace rust-gvm component to the exact PR #803 merge commit.
+workspace rust-gvm component to the later PR #804 merge commit.
 This table remains the family-level product narrative; the TSV is the
 exhaustive per-method source of truth.
 

@@ -953,7 +953,6 @@ fn remaining_open_enum_conversions_preserve_backend_values() {
                     <version>202606100000</version>
                     <status>current</status>
                     <sync_not_available><error>Feed lock unavailable</error></sync_not_available>
-                    <currently_syncing><timestamp>2026-08-30T19:00:00Z</timestamp></currently_syncing>
                 </feed>
             </get_feeds_response>"#,
     ))
@@ -962,8 +961,8 @@ fn remaining_open_enum_conversions_preserve_backend_values() {
     assert_eq!(feed.feed_type, "COMMUNITY_DATA");
     assert_eq!(feed.status.as_deref(), Some("current"));
     assert_eq!(feed.sync_error.as_deref(), Some("Feed lock unavailable"));
-    assert_eq!(feed.sync_timestamp.as_deref(), Some("2026-08-30T19:00:00Z"));
-    assert!(feed.currently_syncing);
+    assert_eq!(feed.sync_timestamp, None);
+    assert!(!feed.currently_syncing);
 
     let alerts = GetAlertsResponse::from_response(&GmpResponse::from(
         r#"<get_alerts_response status="200" status_text="OK">
@@ -980,6 +979,34 @@ fn remaining_open_enum_conversions_preserve_backend_values() {
     assert_eq!(alert.event.as_deref(), Some("future_event"));
     assert_eq!(alert.condition.as_deref(), Some("future_condition"));
     assert_eq!(alert.method.as_deref(), Some("future_method"));
+}
+
+#[test]
+fn typed_feed_sync_state_projects_activity_and_optional_timestamp() {
+    // rust-gvm owns all wire-shape and sentinel normalization. This gateway
+    // regression proves that its typed active states preserve the REST
+    // distinction between activity and an optional usable timestamp.
+    use gvm_gmp::responses::FeedSyncState;
+
+    let timestamp = "2026-08-30T19:00:00Z".to_string();
+    assert_eq!(
+        feed_sync_from_gmp(&FeedSyncState::Active {
+            timestamp: Some(timestamp.clone()),
+        }),
+        (true, Some(timestamp))
+    );
+    assert_eq!(
+        feed_sync_from_gmp(&FeedSyncState::Active { timestamp: None }),
+        (true, None)
+    );
+    assert_eq!(feed_sync_from_gmp(&FeedSyncState::Inactive), (false, None));
+    assert_eq!(feed_sync_from_gmp(&FeedSyncState::Missing), (false, None));
+    assert_eq!(
+        feed_sync_from_gmp(&FeedSyncState::UnsupportedDirectText {
+            value: "future-value".to_string(),
+        }),
+        (false, None)
+    );
 }
 
 #[test]

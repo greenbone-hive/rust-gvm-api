@@ -14,16 +14,16 @@ const RUST_GVM_COMPONENTS: &[&str] = &[
     "gvm-mock-server",
     "gvm-protocol",
 ];
-// Issue #632 consumes typed GMP server-error classification from merged
-// rust-gvm PR #803. Guard its exact immutable merge commit so all five
-// workspace components continue to share one upstream baseline.
+// Issues #632 and #634 consume typed GMP server-error and feed-sync support
+// from merged rust-gvm PRs #803 and #804. Guard the later immutable merge
+// commit so all five workspace components share one upstream baseline.
 const RUST_GVM_DEPENDENCY_VERSION: &str = "0.9.0";
-const RUST_GVM_DEPENDENCY_REVISION: &str = "2b406a28da4d81be15d6d81b096d62889d9ad798";
+const RUST_GVM_DEPENDENCY_REVISION: &str = "11d7d6f284dbb14100afbaec5762d521a45eaf56";
 // Issue #588 established the reviewed rust-gvm v0.8.0 facade inventory, and
 // issue #620 advances the accepted baseline to v0.9.0. Because that release
 // changes no production gvm-client facade source, all 267 dispositions remain.
-// PR #803 adds error classification rather than async facade methods, so the
-// reviewed product-surface baseline remains the v0.9.0 release inventory.
+// PRs #803 and #804 add typed response semantics rather than async facade
+// methods, so the reviewed product-surface baseline remains v0.9.0.
 const RUST_GVM_PIN_REFERENCE: &str = "release-tag";
 const RUST_GVM_FACADE_TAG: &str = "v0.9.0";
 const RUST_GVM_FACADE_REVISION: &str = "d57605b5d1284c36e3f4e58112a6a987baa3395b";
