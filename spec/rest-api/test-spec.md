@@ -68,6 +68,7 @@
 | `valid_session_token_allows_request` | Active token → request proceeds |
 | `request_scoped_basic_auth_allows_request` | Basic credentials on protected endpoint → request proceeds without explicit session management |
 | `request_scoped_basic_auth_cleans_up` | Request-scoped Basic execution tears down backend/session state after success or failure |
+| `report_export_job_creation_rejects_basic_before_session_creation` | Basic credentials on `POST /reports/{id}/exports` → 401 before temporary gvmd session creation or job enqueue |
 
 ### 2.4 Rate Limiting (`middleware/rate_limit.rs`)
 
@@ -162,6 +163,8 @@ in-process or through a loopback listener.
 | `create_report_export_job_csv` | `POST /api/v1/reports/{id}/exports` + CSV `reportFormatId` | Report exists + CSV report format exists | 202 + `Location: /api/v1/jobs/{jobId}` |
 | `create_report_export_job_json` | `POST /api/v1/reports/{id}/exports` + `format=json` | Report exists | 202 + `Location: /api/v1/jobs/{jobId}` |
 | `create_report_export_job_unknown_format` | `POST /api/v1/reports/{id}/exports` + bad `reportFormatId` | Report exists | 404 |
+| `create_report_export_job_rejects_basic_without_side_effects` | `POST /api/v1/reports/{id}/exports` + valid Basic auth | Report exists | 401; no temporary session, accepted job, worker, or cancellation |
+| `create_report_export_job_bearer_survives_delayed_execution` | `POST /api/v1/reports/{id}/exports` + valid Bearer auth | Report exists; execution continues asynchronously | 202 + pollable job that completes on the persistent session |
 | `get_report_export_job` | `GET /api/v1/jobs/{jobId}` | Export job exists | 200, job status |
 | `download_report_export_job_result` | `GET /api/v1/jobs/{jobId}/result` | Export job succeeded | 200, rendered artifact content type |
 
@@ -228,6 +231,7 @@ in-process or through a loopback listener.
 | `openapi_spec_valid` | `GET /api/v1/openapi.json` validates against OpenAPI 3.1 schema |
 | `all_routes_documented` | Every registered route appears in the spec |
 | `response_matches_schema` | Actual responses validate against declared schemas |
+| `report_export_job_creation_security_is_bearer_only` | Curated and generated `POST /reports/{id}/exports` operations advertise only `bearerAuth` |
 
 ### 3.8 REST Level 2 Conformance
 

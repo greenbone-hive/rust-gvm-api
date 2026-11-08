@@ -391,6 +391,9 @@ fn apply_route_auth_security(document: &mut Value) {
                 RestRouteAuthPolicy::SessionCurrent => {
                     operation.insert("security".to_string(), json!([{"bearerAuth": []}]));
                 }
+                RestRouteAuthPolicy::BearerOnly => {
+                    operation.insert("security".to_string(), json!([{"bearerAuth": []}]));
+                }
             }
         }
     }
@@ -438,7 +441,11 @@ fn operation_can_proxy_to_backend(path: &str, method_name: &str) -> bool {
     let runtime_path = runtime_path_from_openapi_path(path);
 
     match classify_runtime_route(&method, &runtime_path) {
-        Some(RestRouteAuthPolicy::Protected | RestRouteAuthPolicy::SessionCreate) => true,
+        Some(
+            RestRouteAuthPolicy::Protected
+            | RestRouteAuthPolicy::SessionCreate
+            | RestRouteAuthPolicy::BearerOnly,
+        ) => true,
         Some(RestRouteAuthPolicy::Public) => {
             matches!(runtime_path.as_str(), "/ready" | "/api/v1/version")
         }
@@ -576,7 +583,7 @@ fn add_probe_server_overrides(normalized_paths: &mut Map<String, Value>) {
 pub(crate) fn configure(api: TransformOpenApi<'_>) -> TransformOpenApi<'_> {
     api.title("GVM REST API")
         .description(
-            "Runtime-generated OpenAPI for the implemented Rust REST adapter. GMP command construction and response parsing remain behind the typed rust-gvm boundary. Protected operations accept either an existing bearer session or request-scoped HTTP Basic authentication; POST /session creates a persistent bearer session, while request-scoped Basic authentication tears its backend context down after the request.",
+            "Runtime-generated OpenAPI for the implemented Rust REST adapter. GMP command construction and response parsing remain behind the typed rust-gvm boundary. Protected operations accept either an existing bearer session or request-scoped HTTP Basic authentication unless an operation explicitly requires bearer authentication. POST /session creates a persistent bearer session, while request-scoped Basic authentication tears its backend context down after the request.",
         )
         .version(env!("CARGO_PKG_VERSION"))
         .license(License {

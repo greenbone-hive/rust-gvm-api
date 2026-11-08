@@ -7,6 +7,7 @@ use gvm_gateway_rest::{
     peer_addr::TrustedProxyCidr,
     router::{RateLimitConfig, RestSecurityConfig},
 };
+use gvm_mock_server::Resource;
 use http::StatusCode;
 
 #[tokio::test]
@@ -39,6 +40,42 @@ async fn list_targets_accepts_request_scoped_basic_auth() {
 
     let bearer_response = harness.get_targets().await;
     assert_eq!(bearer_response.status(), StatusCode::OK);
+
+    harness.shutdown().await;
+}
+
+#[tokio::test]
+async fn create_report_export_job_rejects_basic_without_side_effects() {
+    let report_id = uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
+    let harness = target_harness(move |store| {
+        store.create(Resource::with_id("report", "Basic rejection", report_id));
+    })
+    .await;
+    harness.server.clear_history();
+
+    // The bearer-only policy must run before temporary authentication and the
+    // report preflight. Otherwise the accepted worker is immediately cancelled
+    // when request-scoped Basic cleanup deletes its creating session.
+    let response = harness
+        .client
+        .post(harness.url(&format!("/api/v1/reports/{report_id}/exports")))
+        .basic_auth("admin", Some("admin"))
+        .json(&serde_json::json!({ "format": "json" }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_ne!(response.status(), StatusCode::ACCEPTED);
+    assert!(response.headers().get(reqwest::header::LOCATION).is_none());
+    let problem = response.json::<serde_json::Value>().await.unwrap();
+    assert_eq!(problem["code"], "unauthorized");
+
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    assert!(
+        harness.server.command_history().is_empty(),
+        "rejected Basic auth must not authenticate, preflight, run, or cancel an export job"
+    );
 
     harness.shutdown().await;
 }

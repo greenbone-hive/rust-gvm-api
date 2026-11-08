@@ -45,6 +45,34 @@ fn classifies_session_routes() {
 }
 
 #[test]
+fn classifies_only_report_export_job_creation_as_bearer_only() {
+    // Export workers outlive the creating HTTP request, so their route must
+    // retain a persistent bearer session instead of a request-scoped Basic
+    // session that middleware tears down as soon as the response is returned.
+    for path in [
+        "/api/v1/reports/550e8400-e29b-41d4-a716-446655440000/exports",
+        "/api/v1/reports/{id}/exports",
+    ] {
+        assert_eq!(
+            classify_runtime_route(&Method::POST, path),
+            Some(RestRouteAuthPolicy::BearerOnly)
+        );
+    }
+
+    assert_eq!(
+        classify_runtime_route(
+            &Method::GET,
+            "/api/v1/reports/550e8400-e29b-41d4-a716-446655440000/exports"
+        ),
+        Some(RestRouteAuthPolicy::Protected)
+    );
+    assert_eq!(
+        classify_runtime_route(&Method::POST, "/api/v1/reports/exports"),
+        Some(RestRouteAuthPolicy::Protected)
+    );
+}
+
+#[test]
 fn treats_non_session_api_routes_as_protected_by_default() {
     assert_eq!(
         classify_runtime_route(&Method::GET, "/api/v1/alerts"),

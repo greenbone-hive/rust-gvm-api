@@ -7,7 +7,7 @@ use axum::{
 };
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 
-use super::uses_request_scoped_basic_auth;
+use super::{rejects_request_scoped_basic_auth, uses_request_scoped_basic_auth};
 
 fn basic_request(method: &str, path: &str) -> Request<Body> {
     Request::builder()
@@ -64,4 +64,17 @@ fn request_scoped_basic_auth_applies_to_protected_routes_by_default() {
             "{path} should use request-scoped Basic auth"
         );
     }
+}
+
+#[test]
+fn request_scoped_basic_auth_is_rejected_for_report_export_job_creation() {
+    let request = basic_request(
+        "POST",
+        "/api/v1/reports/550e8400-e29b-41d4-a716-446655440000/exports",
+    );
+
+    // This policy decision happens before temporary-session creation, keeping
+    // asynchronous work from being bound to a session deleted after the 202.
+    assert!(rejects_request_scoped_basic_auth(&request));
+    assert!(!uses_request_scoped_basic_auth(&request));
 }

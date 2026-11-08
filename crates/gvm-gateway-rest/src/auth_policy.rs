@@ -14,6 +14,8 @@ pub(crate) enum RestRouteAuthPolicy {
     SessionCreate,
     /// Bearer-only current-session lifecycle endpoint.
     SessionCurrent,
+    /// Protected endpoint that requires an existing bearer session.
+    BearerOnly,
     /// Protected endpoint that accepts bearer auth or request-scoped Basic auth.
     Protected,
 }
@@ -42,11 +44,21 @@ pub(crate) fn classify_runtime_route(method: &Method, path: &str) -> Option<Rest
         return Some(RestRouteAuthPolicy::SessionCurrent);
     }
 
+    if *method == Method::POST && is_report_export_job_collection(path) {
+        return Some(RestRouteAuthPolicy::BearerOnly);
+    }
+
     if path.starts_with("/api/v1/") {
         return Some(RestRouteAuthPolicy::Protected);
     }
 
     None
+}
+
+fn is_report_export_job_collection(path: &str) -> bool {
+    path.strip_prefix("/api/v1/reports/")
+        .and_then(|path| path.strip_suffix("/exports"))
+        .is_some_and(|report_id| !report_id.is_empty() && !report_id.contains('/'))
 }
 
 /// Maps a served OpenAPI path back to the runtime path used by the router.

@@ -1743,6 +1743,13 @@ fn generated_openapi_applies_route_auth_policy_consistently() {
                     "{method_name} {path} should require Bearer auth"
                 );
             }
+            RestRouteAuthPolicy::BearerOnly => {
+                assert_eq!(
+                    operation["security"],
+                    json!([{"bearerAuth": []}]),
+                    "{method_name} {path} should require Bearer auth"
+                );
+            }
             RestRouteAuthPolicy::Protected => {
                 assert!(
                     operation.get("security").is_none(),
@@ -1751,6 +1758,29 @@ fn generated_openapi_applies_route_auth_policy_consistently() {
             }
         }
     }
+}
+
+#[test]
+fn report_export_job_creation_is_bearer_only_in_generated_and_curated_openapi() {
+    // This assertion protects both published contracts from silently falling
+    // back to the root dual-auth policy while the runtime rejects Basic.
+    let generated = build_openapi();
+    let curated = read_yaml(
+        &root_spec_path()
+            .parent()
+            .unwrap()
+            .join("report-exports.yaml"),
+    );
+    let expected = json!([{"bearerAuth": []}]);
+
+    assert_eq!(
+        generated["paths"]["/reports/{id}/exports"]["post"]["security"],
+        expected
+    );
+    assert_eq!(
+        curated["paths"]["/reports/{id}/exports"]["post"]["security"],
+        expected
+    );
 }
 
 #[test]
