@@ -294,12 +294,7 @@ pub trait IdentityPort: Send + Sync + 'static {
     ) -> Result<User, GatewayError>;
 
     /// Delete a user by identifier.
-    async fn delete_user(
-        &self,
-        session_token: &str,
-        id: &str,
-        ultimate: bool,
-    ) -> Result<(), GatewayError>;
+    async fn delete_user(&self, session_token: &str, id: &str) -> Result<(), GatewayError>;
 
     /// List groups for the session.
     async fn list_groups(

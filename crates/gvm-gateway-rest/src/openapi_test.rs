@@ -1596,6 +1596,41 @@ fn generated_and_curated_report_delete_contract_is_permanent_without_selector() 
 }
 
 #[test]
+fn generated_and_curated_user_delete_contract_has_no_permanence_selector() {
+    // Typed user deletion has one canonical command shape. Keep both OpenAPI
+    // surfaces free of a permanence control and explicit about rejecting it.
+    let generated = build_openapi();
+    let generated_delete = op(&generated, "/users/{id}", "delete");
+    assert!(generated_delete["parameters"]
+        .as_array()
+        .expect("generated user delete parameters")
+        .iter()
+        .all(|parameter| parameter["name"] != "ultimate"));
+    assert!(generated_delete["description"]
+        .as_str()
+        .is_some_and(
+            |description| description.contains("no caller-selectable permanence mode")
+                && description.contains("400 bad_request")
+        ));
+    assert!(generated_delete["responses"].get("400").is_some());
+
+    let identity_path = root_spec_path()
+        .parent()
+        .expect("root spec should have a directory")
+        .join("identity.yaml");
+    let curated = read_yaml(&identity_path);
+    let curated_delete = &curated["paths"]["/users/{id}"]["delete"];
+    assert!(curated_delete.get("parameters").is_none());
+    assert!(curated_delete["description"]
+        .as_str()
+        .is_some_and(
+            |description| description.contains("no caller-selectable permanence mode")
+                && description.contains("400 bad_request")
+        ));
+    assert!(curated_delete["responses"].get("400").is_some());
+}
+
+#[test]
 fn generated_and_curated_config_create_contracts_require_family_specific_bases() {
     // Issue #518 intentionally corrects the Technology Preview create schema;
     // keep generated docs and both curated component documents exact here.

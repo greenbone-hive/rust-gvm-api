@@ -191,6 +191,7 @@ in-process or through a loopback listener.
 | `get_user_not_found` | `GET /api/v1/users/{bad-id}` | Admin-capable principal | 404 |
 | `modify_user_as_admin` | `PUT /api/v1/users/{id}` | Existing user + admin principal | 200 |
 | `delete_user_as_admin` | `DELETE /api/v1/users/{id}` | Existing user + admin principal | 204 |
+| `delete_user_rejects_unsupported_ultimate_without_dispatch` | `DELETE /api/v1/users/{id}` with `ultimate=true`, `false`, empty, duplicate, encoded-key, or malformed values | Existing user + admin principal | 400 `bad_request`; no user-delete backend command |
 | `list_groups_as_admin` | `GET /api/v1/groups` | Admin-capable principal | 200, paginated groups |
 | `create_group_as_admin` | `POST /api/v1/groups` | Admin-capable principal | 201 + `Location` |
 | `modify_group_as_admin` | `PUT /api/v1/groups/{id}` | Existing group + admin principal | 200 |

@@ -336,6 +336,12 @@ Policy creation likewise requires an explicit active policy base in
 | `GET` | `/api/v1/user-settings/{id}` | Get one current-user setting |
 | `PUT` | `/api/v1/user-settings/{id}` | Update one current-user setting |
 
+User deletion supports only the canonical plain
+`DELETE /api/v1/users/{id}` operation. Typed gvmd user deletion has no
+caller-selectable permanence mode, so every supplied `ultimate` query form is
+rejected with the standard RFC 9457 `400 bad_request` response before backend
+dispatch.
+
 #### Sessions & Auth
 
 | Method | Path | Description |

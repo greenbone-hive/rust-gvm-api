@@ -4,8 +4,8 @@
 use serde_json::json;
 
 use super::{
-    AuthenticationType, IdentityListQuery, ModifyUserRequest, ModifyUserSettingRequest,
-    UserResponse, UserSettingResponse, UserSettingsListQuery,
+    reject_user_ultimate_query, AuthenticationType, IdentityListQuery, ModifyUserRequest,
+    ModifyUserSettingRequest, UserResponse, UserSettingResponse, UserSettingsListQuery,
 };
 use gvm_gateway_domain::{IdentityOwner, IdentityResourceMeta, User, UserSetting};
 
@@ -35,6 +35,31 @@ fn identity_queries_decode_filters_and_filter_ids() {
         user_settings.filter_id.as_deref(),
         Some("123e4567-e89b-12d3-a456-426614174000")
     );
+}
+
+#[test]
+fn user_delete_rejects_every_ultimate_query_form() {
+    // Typed user deletion has no permanence control, so decoding must catch
+    // every supplied spelling before the backend can see a delete request.
+    for query in [
+        "ultimate=true",
+        "ultimate=false",
+        "ultimate=",
+        "ultimate",
+        "ultimate=true&ultimate=false",
+        "ultimate=not-a-bool",
+        "ult%69mate=true",
+    ] {
+        assert!(matches!(
+            reject_user_ultimate_query(Some(query)),
+            Err(gvm_gateway_domain::GatewayError::InvalidInput(ref detail))
+                if detail == "ultimate is not supported for user deletion"
+        ));
+    }
+
+    reject_user_ultimate_query(None).expect("plain delete must be accepted");
+    reject_user_ultimate_query(Some("reason=cleanup"))
+        .expect("unrelated query behavior remains unchanged");
 }
 
 fn user_with_auth_type(authentication_type: &str) -> User {

@@ -30,12 +30,15 @@ use crate::{
         ResourceRefResponse,
     },
     handler::{
-        create_resource, delete_resource, get_resource, list_resource, update_resource,
-        ValidateInto,
+        create_resource, delete_resource, delete_resource_without_ultimate, get_resource,
+        list_resource, update_resource, ValidateInto,
     },
     open_enum::{closed_string_enum_schema, open_string_enum, open_string_enum_schema},
     openapi::{created_json, ok_json, problem_response, ResourceIdPathDoc},
-    query::{parse_collection_query, parse_filter_only_query, DeleteResourceQueryParams},
+    query::{
+        decoded_query_pairs, parse_collection_query, parse_filter_only_query,
+        DeleteResourceQueryParams,
+    },
     targets::validate_uuid,
 };
 
@@ -989,6 +992,20 @@ pub async fn update_user(
     .await
 }
 
+/// Reject the unsupported user-deletion permanence selector.
+fn reject_user_ultimate_query(query: Option<&str>) -> Result<(), GatewayError> {
+    if query
+        .into_iter()
+        .flat_map(decoded_query_pairs)
+        .any(|(key, _)| key == "ultimate")
+    {
+        return Err(GatewayError::InvalidInput(
+            "ultimate is not supported for user deletion".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 /// Deletes one user by ID.
 pub async fn delete_user(
     State(service): State<GatewayService>,
@@ -996,13 +1013,16 @@ pub async fn delete_user(
     Path(id): Path<String>,
     uri: OriginalUri,
 ) -> Response {
-    delete_resource(
+    if let Err(error) = reject_user_ultimate_query(uri.query()) {
+        return crate::handler::gateway_error(error, uri.path().to_string());
+    }
+    delete_resource_without_ultimate(
         service,
         headers,
         id,
         uri,
-        |service, session, resource_id, ultimate| async move {
-            service.delete_user(&session, &resource_id, ultimate).await
+        |service, session, resource_id| async move {
+            service.delete_user(&session, &resource_id).await
         },
     )
     .await
@@ -1546,9 +1566,9 @@ pub(crate) fn delete_user_docs(op: TransformOperation<'_>) -> TransformOperation
         "deleteUser",
         "Users",
         "Delete a user",
-        "Deletes a user. Pass `ultimate=true` to request permanent backend deletion instead of the default non-ultimate delete.",
+        "Deletes a user using gvmd's canonical user-delete operation. Typed gvmd user deletion has no caller-selectable permanence mode, and any supplied `ultimate` query parameter is rejected with `400 bad_request`.",
     )
-    .input::<(Path<ResourceIdPathDoc>, Query<DeleteResourceQueryParams>)>()
+    .input::<Path<ResourceIdPathDoc>>()
     .response_with::<204, (), _>(|response| response.description("User deleted"));
     let op = problem_response::<400>(op, "Invalid request");
     let op = problem_response::<401>(op, "Authentication required or session expired");

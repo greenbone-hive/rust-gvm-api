@@ -341,7 +341,7 @@ impl IdentityPort for MockIdentityPort {
         Err(GatewayError::NotFound(format!("user {id} not found")))
     }
 
-    async fn delete_user(&self, _: &str, id: &str, _: bool) -> Result<(), GatewayError> {
+    async fn delete_user(&self, _: &str, id: &str) -> Result<(), GatewayError> {
         Err(GatewayError::NotFound(format!("user {id} not found")))
     }
 
