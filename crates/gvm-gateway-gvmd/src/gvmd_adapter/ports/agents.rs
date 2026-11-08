@@ -330,6 +330,12 @@ impl AgentPort for GvmdAdapter {
         id: &str,
         input: ModifyAgentGroupInput,
     ) -> Result<AgentGroup, GatewayError> {
+        if input.agent_ids.as_ref().is_some_and(Vec::is_empty) {
+            return Err(GatewayError::InvalidInput(
+                "agentIds must contain at least one entry; clearing the agent selection is unsupported until rust-gvm issue #812"
+                    .to_string(),
+            ));
+        }
         let mut request =
             ModifyAgentGroupRequest::new(parse_entity_id(id)?, input.scheduler_cron_time);
         request.name = input.name;

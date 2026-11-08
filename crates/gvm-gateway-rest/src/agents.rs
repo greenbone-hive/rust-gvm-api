@@ -542,11 +542,20 @@ struct ModifyAgentGroupRequest {
     name: Option<String>,
     comment: Option<String>,
     #[serde(rename = "agentIds")]
+    /// Omit to preserve the current agent selection. A non-empty array replaces it;
+    /// clearing the selection is unsupported until rust-gvm issue #812 provides typed support.
+    #[schemars(length(min = 1))]
     agent_ids: Option<Vec<Uuid>>,
 }
 
 impl ValidateInto<ModifyAgentGroupInput> for ModifyAgentGroupRequest {
     fn validate_into(self) -> Result<ModifyAgentGroupInput, GatewayError> {
+        if self.agent_ids.as_ref().is_some_and(Vec::is_empty) {
+            return Err(GatewayError::InvalidInput(
+                "agentIds must contain at least one entry; clearing the agent selection is unsupported until rust-gvm issue #812"
+                    .to_string(),
+            ));
+        }
         Ok(ModifyAgentGroupInput {
             scheduler_cron_time: required_trimmed("schedulerCronTime", self.scheduler_cron_time)?,
             name: self.name,

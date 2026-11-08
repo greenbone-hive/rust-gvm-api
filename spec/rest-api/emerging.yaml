@@ -791,6 +791,11 @@ components:
         comment: { type: string }
         agentIds:
           type: array
+          minItems: 1
+          description: >-
+            Omit to preserve the current agent selection. A non-empty array
+            replaces the current selection. An empty array is rejected with
+            400 bad_request until rust-gvm issue #812 provides typed clear support.
           items: { type: string, format: uuid }
     OciImageTarget:
       type: object
