@@ -294,3 +294,70 @@ async fn web_application_target_rest_lifecycle_filter_trash_and_ultimate_delete(
         ));
     harness.shutdown().await;
 }
+
+#[tokio::test]
+async fn web_application_target_update_preserves_replaces_and_rejects_clear_exclusions() {
+    // Regression coverage for #645: omission preserves exclusions, a non-empty
+    // list replaces them, and an unsupported clear fails before any gvmd call.
+    let harness = specialized_target_harness(|_| {}).await;
+    let create = harness
+        .client
+        .post(harness.url("/api/v1/web-application-targets"))
+        .bearer_auth(&harness.token)
+        .json(&json!({
+            "name": "Exclusion semantics",
+            "urls": ["https://example.com"],
+            "excludeUrls": ["https://example.com/logout"]
+        }))
+        .send()
+        .await
+        .unwrap();
+    let id = created_id(create, "web-application-targets").await;
+
+    let omitted = harness
+        .client
+        .put(harness.url(&format!("/api/v1/web-application-targets/{id}")))
+        .bearer_auth(&harness.token)
+        .json(&json!({"name": "Renamed"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(omitted.status(), StatusCode::OK);
+    assert_eq!(
+        omitted.json::<Value>().await.unwrap()["excludeUrls"],
+        json!(["https://example.com/logout"])
+    );
+
+    let replaced = harness
+        .client
+        .put(harness.url(&format!("/api/v1/web-application-targets/{id}")))
+        .bearer_auth(&harness.token)
+        .json(&json!({"excludeUrls": ["https://example.com/private"]}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(replaced.status(), StatusCode::OK);
+    assert_eq!(
+        replaced.json::<Value>().await.unwrap()["excludeUrls"],
+        json!(["https://example.com/private"])
+    );
+
+    let commands_before_clear = harness.server.command_history().len();
+    let clear = harness
+        .client
+        .put(harness.url(&format!("/api/v1/web-application-targets/{id}")))
+        .bearer_auth(&harness.token)
+        .json(&json!({"excludeUrls": []}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(clear.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(clear.json::<Value>().await.unwrap()["code"], "bad_request");
+    assert_eq!(
+        harness.server.command_history().len(),
+        commands_before_clear,
+        "an unsupported clear must be rejected before any gvmd command"
+    );
+
+    harness.shutdown().await;
+}

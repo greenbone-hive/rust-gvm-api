@@ -73,3 +73,33 @@ fn modify_requests_preserve_omitted_collections() {
     assert_eq!(web.urls, None);
     assert_eq!(web.exclude_urls, None);
 }
+
+#[test]
+fn modify_web_application_target_accepts_only_supported_exclusion_updates() {
+    // A non-empty exclusion list is a supported replacement, while an explicit
+    // empty list must be rejected until rust-gvm can represent a typed clear.
+    let replacement = vec!["https://example.com/private".to_string()];
+    let web = ModifyWebApplicationTargetRequest {
+        name: None,
+        comment: None,
+        urls: None,
+        exclude_urls: Some(replacement.clone()),
+        credential_id: None,
+    }
+    .validate_into()
+    .expect("non-empty exclusions are a supported replacement");
+    assert_eq!(web.exclude_urls, Some(replacement));
+
+    let clear = ModifyWebApplicationTargetRequest {
+        name: None,
+        comment: None,
+        urls: None,
+        exclude_urls: Some(vec![]),
+        credential_id: None,
+    };
+    assert!(matches!(
+        clear.validate_into(),
+        Err(GatewayError::InvalidInput(detail))
+            if detail.contains("excludeUrls must contain at least one non-empty entry")
+    ));
+}

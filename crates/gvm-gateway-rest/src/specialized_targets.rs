@@ -282,6 +282,9 @@ struct ModifyWebApplicationTargetRequest {
     #[schemars(with = "Option<Vec<UrlDoc>>")]
     urls: Option<Vec<String>>,
     #[serde(rename = "excludeUrls")]
+    /// Omit to preserve current exclusions. A non-empty array replaces them;
+    /// clearing exclusions is not supported until rust-gvm provides a typed operation.
+    #[schemars(length(min = 1))]
     #[schemars(with = "Option<Vec<UrlDoc>>")]
     exclude_urls: Option<Vec<String>>,
     #[serde(rename = "credentialId")]
@@ -292,6 +295,9 @@ impl ValidateInto<ModifyWebApplicationTargetInput> for ModifyWebApplicationTarge
     fn validate_into(self) -> Result<ModifyWebApplicationTargetInput, GatewayError> {
         if let Some(values) = &self.urls {
             required_values("urls", values)?;
+        }
+        if let Some(values) = &self.exclude_urls {
+            required_values("excludeUrls", values)?;
         }
         Ok(ModifyWebApplicationTargetInput {
             name: self.name,
