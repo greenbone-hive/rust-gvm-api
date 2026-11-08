@@ -1002,8 +1002,8 @@ fn generated_and_curated_response_enums_accept_known_and_unknown_values_of_the_r
             json!("future_credential"),
             json!(1),
             json!([
-                "cc", "pw", "snmp", "snmpv3", "up", "usk", "cs_cc", "cs_pw", "cs_pgp", "cs_smime",
-                "cs_snmp", "cs_up", "cs_usk"
+                "cc", "krb5", "pw", "pgp", "smime", "snmp", "up", "usk", "cs_krb5", "cs_pw",
+                "cs_pgp", "cs_smime", "cs_snmp", "cs_up", "cs_usk"
             ]),
         ),
         (
@@ -1161,8 +1161,8 @@ fn generated_and_curated_response_enums_accept_known_and_unknown_values_of_the_r
             json!("future_credential"),
             json!(1),
             json!([
-                "cc", "pw", "snmp", "snmpv3", "up", "usk", "cs_cc", "cs_pw", "cs_pgp", "cs_smime",
-                "cs_snmp", "cs_up", "cs_usk"
+                "cc", "krb5", "pw", "pgp", "smime", "snmp", "up", "usk", "cs_krb5", "cs_pw",
+                "cs_pgp", "cs_smime", "cs_snmp", "cs_up", "cs_usk"
             ]),
         ),
         (
@@ -1382,6 +1382,22 @@ fn request_only_closed_enums_remain_restrictive() {
     let curated_feed_type = &feeds["paths"]["/feeds"]["get"]["parameters"][0]["schema"];
     let generated_task_type = &schemas["CreateTask"]["properties"]["type"];
     let curated_task_type = &tasks["components"]["schemas"]["CreateTask"]["properties"]["type"];
+    let credential_request_types = json!([
+        "cc", "pw", "smime", "snmp", "snmpv3", "up", "usk", "cs_pw", "cs_pgp", "cs_smime",
+        "cs_snmp", "cs_up", "cs_usk"
+    ]);
+
+    // Credential request types are a closed construction contract. Keep both
+    // generated and curated schemas tied to the exact typed-adapter inventory.
+    assert_eq!(
+        resolve_local_schema_ref(schemas, &schemas["CreateCredential"]["properties"]["type"])
+            ["enum"],
+        credential_request_types
+    );
+    assert_eq!(
+        common["components"]["schemas"]["CredentialType"]["enum"],
+        credential_request_types
+    );
 
     for (context, schema, known, unknown) in [
         (

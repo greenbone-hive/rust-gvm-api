@@ -39,23 +39,30 @@ pub use gvm_gateway_domain::{
 };
 
 fn credential_type_request_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
-    closed_string_enum_schema("CredentialTypeRequest", CredentialType::known_values())
+    closed_string_enum_schema("CredentialTypeRequest", CREDENTIAL_TYPE_REQUEST_VALUES)
 }
 
 fn credential_type_response_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
     open_string_enum_schema("CredentialTypeResponse", CredentialType::known_values())
 }
 
+const CREDENTIAL_TYPE_REQUEST_VALUES: &[&str] = &[
+    "cc", "pw", "smime", "snmp", "snmpv3", "up", "usk", "cs_pw", "cs_pgp", "cs_smime", "cs_snmp",
+    "cs_up", "cs_usk",
+];
+
 open_string_enum! {
     /// Credential type code.
     pub(crate) enum CredentialType {
         ClientCertificate => "cc",
+        Kerberos5 => "krb5",
         PasswordOnly => "pw",
-        SnmpV1Or2c => "snmp",
-        SnmpV3 => "snmpv3",
+        PgpEncryptionKey => "pgp",
+        SmimeCertificate => "smime",
+        Snmp => "snmp",
         UsernamePassword => "up",
         UsernameSshKey => "usk",
-        CredentialStoreClientCertificate => "cs_cc",
+        CredentialStoreKerberos5 => "cs_krb5",
         CredentialStorePasswordOnly => "cs_pw",
         CredentialStorePgpEncryptionKey => "cs_pgp",
         CredentialStoreSmimeCertificate => "cs_smime",
@@ -326,10 +333,13 @@ impl CreateCredentialRequest {
         if self.name.trim().is_empty() {
             return Err(GatewayError::InvalidInput("name is required".to_string()));
         }
-        if self.credential_type.as_str().trim().is_empty() {
-            return Err(GatewayError::InvalidInput("type is required".to_string()));
+        let credential_type = self.credential_type.as_str();
+        if !CREDENTIAL_TYPE_REQUEST_VALUES.contains(&credential_type) {
+            return Err(GatewayError::InvalidInput(format!(
+                "unsupported credential type: {credential_type}"
+            )));
         }
-        let store_backed = self.credential_type.as_str().starts_with("cs_");
+        let store_backed = credential_type.starts_with("cs_");
         let has_store_fields = self.credential_store_id.is_some()
             || self.vault_id.is_some()
             || self.host_identifier.is_some();
@@ -347,13 +357,22 @@ impl CreateCredentialRequest {
                 || self.private_key.is_some()
                 || self.certificate.is_some()
                 || self.community.is_some()
-                || self.auth_algorithm.is_some()
-                || self.privacy_algorithm.is_some()
                 || self.privacy_password.is_some()
             {
                 return Err(GatewayError::InvalidInput(
                     "credential-store references cannot be combined with local credential values"
                         .to_string(),
+                ));
+            }
+            if credential_type == "cs_snmp" {
+                if self.auth_algorithm.is_none() {
+                    return Err(GatewayError::InvalidInput(
+                        "authAlgorithm is required for cs_snmp credentials".to_string(),
+                    ));
+                }
+            } else if self.auth_algorithm.is_some() || self.privacy_algorithm.is_some() {
+                return Err(GatewayError::InvalidInput(
+                    "SNMP algorithms require the cs_snmp credential type".to_string(),
                 ));
             }
         } else if has_store_fields {
@@ -365,7 +384,7 @@ impl CreateCredentialRequest {
         Ok(CreateCredentialInput {
             name: self.name,
             comment: self.comment,
-            credential_type: self.credential_type.as_str().to_string(),
+            credential_type: credential_type.to_string(),
             login: self.login,
             password: self.password,
             private_key: self.private_key,

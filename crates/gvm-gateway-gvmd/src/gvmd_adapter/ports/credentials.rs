@@ -183,10 +183,29 @@ impl CredentialPort for GvmdAdapter {
                 input.private_key.as_ref(),
                 input.certificate.as_ref(),
                 input.community.as_ref(),
-                input.auth_algorithm.as_ref(),
-                input.privacy_algorithm.as_ref(),
                 input.privacy_password.as_ref(),
             )?;
+            let auth_algorithm = input
+                .auth_algorithm
+                .as_deref()
+                .map(parse_snmp_auth_algorithm)
+                .transpose()?;
+            let privacy_algorithm = input
+                .privacy_algorithm
+                .as_deref()
+                .map(parse_snmp_privacy_algorithm)
+                .transpose()?;
+            if credential_type == CredentialStoreCredentialType::Snmp {
+                if auth_algorithm.is_none() {
+                    return Err(GatewayError::InvalidInput(
+                        "authAlgorithm is required for cs_snmp credentials".to_string(),
+                    ));
+                }
+            } else if auth_algorithm.is_some() || privacy_algorithm.is_some() {
+                return Err(GatewayError::InvalidInput(
+                    "SNMP algorithms require the cs_snmp credential type".to_string(),
+                ));
+            }
             let vault_id = input.vault_id.as_deref().ok_or_else(|| {
                 GatewayError::InvalidInput(
                     "vaultId is required for a credential-store-backed credential".to_string(),
@@ -210,6 +229,8 @@ impl CredentialPort for GvmdAdapter {
                 .as_deref()
                 .map(parse_entity_id)
                 .transpose()?;
+            request.auth_algorithm = auth_algorithm;
+            request.privacy_algorithm = privacy_algorithm;
             let parsed = self
                 .execute_with_session_mapped(
                     session_token,
@@ -283,8 +304,6 @@ impl CredentialPort for GvmdAdapter {
                 input.private_key.as_ref(),
                 input.certificate.as_ref(),
                 input.community.as_ref(),
-                input.auth_algorithm.as_ref(),
-                input.privacy_algorithm.as_ref(),
                 input.privacy_password.as_ref(),
             )?;
             let mut request = ModifyCredentialStoreCredentialRequest::new(parse_entity_id(id)?);
@@ -297,6 +316,16 @@ impl CredentialPort for GvmdAdapter {
                 .transpose()?;
             request.vault_id = input.vault_id;
             request.host_identifier = input.host_identifier;
+            request.auth_algorithm = input
+                .auth_algorithm
+                .as_deref()
+                .map(parse_snmp_auth_algorithm)
+                .transpose()?;
+            request.privacy_algorithm = input
+                .privacy_algorithm
+                .as_deref()
+                .map(parse_snmp_privacy_algorithm)
+                .transpose()?;
             self.execute_with_session_mapped(
                 session_token,
                 "credentials.modify_store_backed",
@@ -375,7 +404,6 @@ fn map_credential_store_error(error: gvm_client::GvmError) -> GatewayError {
 
 fn parse_credential_store_type(value: &str) -> Option<CredentialStoreCredentialType> {
     match value {
-        "cs_krb5" => Some(CredentialStoreCredentialType::Kerberos5),
         "cs_pw" => Some(CredentialStoreCredentialType::PasswordOnly),
         "cs_pgp" => Some(CredentialStoreCredentialType::PgpEncryptionKey),
         "cs_smime" => Some(CredentialStoreCredentialType::SmimeCertificate),
@@ -393,8 +421,6 @@ fn ensure_no_local_secret_fields(
     private_key: Option<&String>,
     certificate: Option<&String>,
     community: Option<&String>,
-    auth_algorithm: Option<&String>,
-    privacy_algorithm: Option<&String>,
     privacy_password: Option<&String>,
 ) -> Result<(), GatewayError> {
     if login.is_some()
@@ -402,8 +428,6 @@ fn ensure_no_local_secret_fields(
         || private_key.is_some()
         || certificate.is_some()
         || community.is_some()
-        || auth_algorithm.is_some()
-        || privacy_algorithm.is_some()
         || privacy_password.is_some()
     {
         return Err(GatewayError::InvalidInput(

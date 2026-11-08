@@ -37,6 +37,47 @@ fn credential_type_deserialization_preserves_unknown_values() {
 }
 
 #[test]
+fn credential_request_validation_rejects_values_outside_the_closed_inventory() {
+    // The shared open-enum wrapper intentionally preserves unknown response
+    // strings, so create validation must explicitly reject request-only gaps.
+    for unsupported in ["cs_cc", "cs_krb5", "future_credential"] {
+        let request: CreateCredentialRequest = serde_json::from_value(json!({
+            "name": "Unsupported credential",
+            "type": unsupported,
+            "vaultId": "secret/data/service",
+            "hostIdentifier": "production"
+        }))
+        .expect("open enum should preserve the submitted string");
+
+        let error = request
+            .validate()
+            .expect_err("unadvertised request type must fail validation");
+        assert!(matches!(error, GatewayError::InvalidInput(_)));
+    }
+}
+
+#[test]
+fn credential_store_snmp_request_preserves_required_typed_algorithms() {
+    // Store-backed SNMP is advertised only because the REST/domain model can
+    // supply the auth algorithm required by rust-gvm's typed constructor.
+    let request: CreateCredentialRequest = serde_json::from_value(json!({
+        "name": "Stored SNMP credential",
+        "type": "cs_snmp",
+        "vaultId": "secret/data/snmp",
+        "hostIdentifier": "router-1",
+        "authAlgorithm": "sha1",
+        "privacyAlgorithm": "aes"
+    }))
+    .expect("advertised request should deserialize");
+
+    let input = request
+        .validate()
+        .expect("complete store-backed SNMP request should validate");
+    assert_eq!(input.auth_algorithm.as_deref(), Some("sha1"));
+    assert_eq!(input.privacy_algorithm.as_deref(), Some("aes"));
+}
+
+#[test]
 fn credential_response_preserves_known_and_unknown_types() {
     // Response conversion should expose both known rust-gvm type values and
     // future backend values without collapsing the public `type` field.
