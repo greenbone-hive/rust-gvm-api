@@ -3883,19 +3883,15 @@ async fn gvmd_adapter_operating_system_mutations_use_canonical_asset_requests() 
     // The mock rejects the mutation, but its history proves the typed shape.
     let removable_id = uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440132")
         .expect("valid operating-system id");
-    let in_use_id = uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440133")
-        .expect("valid operating-system id");
     let server = MockGmpServer::builder()
         .mode(ServerMode::Stateful)
         .version(MockVersion::V22_8)
         .seed(move |store| {
-            for (id, installs) in [(removable_id, "0"), (in_use_id, "2")] {
-                let mut operating_system = Resource::with_id("asset", "Debian", id);
-                operating_system.set_attr("type", "os");
-                operating_system.set_attr("title", "Debian GNU/Linux");
-                operating_system.set_attr("installs", installs);
-                store.create(operating_system);
-            }
+            let mut operating_system = Resource::with_id("asset", "Debian", removable_id);
+            operating_system.set_attr("type", "os");
+            operating_system.set_attr("title", "Debian GNU/Linux");
+            operating_system.set_attr("installs", "0");
+            store.create(operating_system);
         })
         .unix_socket_auto()
         .build()
@@ -3926,12 +3922,6 @@ async fn gvmd_adapter_operating_system_mutations_use_canonical_asset_requests() 
     assert!(!modify_xml.contains("<name>"));
     assert!(!modify_xml.contains("<value>"));
 
-    let conflict = adapter
-        .delete_operating_system(token, &in_use_id.to_string())
-        .await
-        .expect_err("an installed OS asset must be protected");
-    assert!(matches!(conflict, GatewayError::Conflict(_)));
-
     adapter
         .delete_operating_system(token, &removable_id.to_string())
         .await
@@ -3941,13 +3931,142 @@ async fn gvmd_adapter_operating_system_mutations_use_canonical_asset_requests() 
         .into_iter()
         .filter(|record| record.command_name() == "delete_asset")
         .collect::<Vec<_>>();
-    assert_eq!(delete_commands.len(), 2);
+    assert_eq!(delete_commands.len(), 1);
     for command in delete_commands {
         let xml = String::from_utf8(command.raw_xml().to_vec()).expect("delete XML");
         assert!(!xml.contains("ultimate="), "xml={xml}");
     }
 
     server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_operating_system_delete_preflight_blocks_in_use_without_mutation() {
+    // An affirmative typed `in_use` read is the sole conflict signal. The
+    // adapter must return Conflict without sending the mutation to gvmd.
+    let in_use_id = uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440133")
+        .expect("valid operating-system id");
+    let server = MockGmpServer::builder()
+        .mode(ServerMode::Stateful)
+        .version(MockVersion::V22_8)
+        .seed(move |store| {
+            let mut operating_system = Resource::with_id("asset", "Debian", in_use_id);
+            operating_system.set_attr("type", "os");
+            operating_system.set_attr("title", "Debian GNU/Linux");
+            operating_system.set_attr("installs", "2");
+            store.create(operating_system);
+        })
+        .unix_socket_auto()
+        .build()
+        .await
+        .unwrap();
+    let adapter = GvmdAdapter::unix_socket(server.socket_path().unwrap());
+    let token = "test-session-token";
+    adapter
+        .connect_session(token, "admin", "admin")
+        .await
+        .unwrap();
+    server.clear_history();
+
+    let error = adapter
+        .delete_operating_system(token, &in_use_id.to_string())
+        .await
+        .expect_err("an installed OS asset must be protected");
+
+    assert!(matches!(error, GatewayError::Conflict(_)));
+    let history = server.command_history();
+    assert_eq!(
+        history
+            .iter()
+            .filter(|record| record.command_name() == "get_assets")
+            .count(),
+        1,
+        "the typed preflight read must be dispatched once"
+    );
+    assert!(
+        history
+            .iter()
+            .all(|record| record.command_name() != "delete_asset"),
+        "an in-use preflight result must suppress the delete mutation"
+    );
+
+    server.shutdown().await;
+}
+
+async fn operating_system_delete_server_error(message: &str) -> GatewayError {
+    let removable_id = uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440134")
+        .expect("valid operating-system id");
+    let server = MockGmpServer::builder()
+        .mode(ServerMode::Stateful)
+        .version(MockVersion::V22_8)
+        .inject_fault(Fault::on_command(
+            "delete_asset",
+            FaultKind::ErrorStatus {
+                code: 400,
+                message: message.to_string(),
+            },
+        ))
+        .seed(move |store| {
+            let mut operating_system = Resource::with_id("asset", "Debian", removable_id);
+            operating_system.set_attr("type", "os");
+            operating_system.set_attr("title", "Debian GNU/Linux");
+            operating_system.set_attr("installs", "0");
+            store.create(operating_system);
+        })
+        .unix_socket_auto()
+        .build()
+        .await
+        .unwrap();
+    let adapter = GvmdAdapter::unix_socket(server.socket_path().unwrap());
+    let token = "test-session-token";
+    adapter
+        .connect_session(token, "admin", "admin")
+        .await
+        .unwrap();
+    server.clear_history();
+
+    let error = adapter
+        .delete_operating_system(token, &removable_id.to_string())
+        .await
+        .expect_err("the injected delete error must reach the adapter");
+
+    let history = server.command_history();
+    assert_eq!(
+        history
+            .iter()
+            .filter(|record| record.command_name() == "get_assets")
+            .count(),
+        1,
+        "a removable OS must be read before deletion"
+    );
+    assert_eq!(
+        history
+            .iter()
+            .filter(|record| record.command_name() == "delete_asset")
+            .count(),
+        1,
+        "a removable OS must reach the typed delete command"
+    );
+    server.shutdown().await;
+    error
+}
+
+#[tokio::test]
+async fn gvmd_adapter_operating_system_delete_preserves_typed_permission_denied() {
+    // A direct typed status-400 permission classification belongs to the
+    // central mapper and must remain Forbidden instead of becoming Conflict.
+    let error = operating_system_delete_server_error("Permission denied").await;
+
+    assert!(matches!(error, GatewayError::Forbidden(_)));
+}
+
+#[tokio::test]
+async fn gvmd_adapter_operating_system_delete_preserves_typed_authentication_failure() {
+    // A direct typed status-400 authentication classification belongs to the
+    // central mapper and must remain Unauthorized instead of becoming Conflict.
+    let error = operating_system_delete_server_error("Authentication failed").await;
+
+    assert!(matches!(error, GatewayError::Unauthorized(_)));
 }
 
 #[tokio::test]

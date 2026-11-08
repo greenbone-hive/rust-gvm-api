@@ -338,6 +338,52 @@ fn map_parse_error_400_permission_denied_to_forbidden() {
 }
 
 #[test]
+fn operating_system_delete_classifications_survive_direct_and_parsed_server_errors() {
+    // Regression for #646: OS deletion must delegate both client-level and
+    // parser-level server errors to the central typed mapper. Each semantic
+    // classification must retain its REST status rather than becoming 409.
+    let cases = [
+        (
+            gvm_client::GvmError::Server {
+                status: 400,
+                message: "Permission denied".to_string(),
+            },
+            axum::http::StatusCode::FORBIDDEN,
+        ),
+        (
+            gvm_client::GvmError::Parse(gvm_gmp::responses::ParseError::ServerError {
+                status: 400,
+                message: "Permission denied".to_string(),
+            }),
+            axum::http::StatusCode::FORBIDDEN,
+        ),
+        (
+            gvm_client::GvmError::Server {
+                status: 400,
+                message: "Authentication failed".to_string(),
+            },
+            axum::http::StatusCode::UNAUTHORIZED,
+        ),
+        (
+            gvm_client::GvmError::Parse(gvm_gmp::responses::ParseError::ServerError {
+                status: 400,
+                message: "Authentication failed".to_string(),
+            }),
+            axum::http::StatusCode::UNAUTHORIZED,
+        ),
+    ];
+
+    for (error, expected_status) in cases {
+        let response = RestError::from_gateway_error(
+            map_gvm_error(error),
+            "/api/v1/operating-systems/550e8400-e29b-41d4-a716-446655440134",
+        )
+        .into_response();
+        assert_eq!(response.status(), expected_status);
+    }
+}
+
+#[test]
 fn map_parse_error_403_to_forbidden() {
     let error = gvm_gmp::responses::ParseError::ServerError {
         status: 403,

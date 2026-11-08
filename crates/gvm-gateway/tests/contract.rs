@@ -8,7 +8,10 @@ use std::{
 };
 
 use async_trait::async_trait;
-use common::{spawn_server, spawn_server_with_sessions, specialized_target_harness};
+use common::{
+    spawn_server, spawn_server_with_sessions, specialized_target_harness,
+    specialized_target_harness_with_fault,
+};
 use gvm_gateway_app::{GatewayPorts, GatewayService};
 use gvm_gateway_domain::{
     Alert, AlertPage, AlertPort, AlertQuery, CreateAlertInput, CreateCredentialInput,
@@ -27,7 +30,7 @@ use gvm_gateway_rest::{
     router::build_router,
     targets::{build_gmp_filter, CreateTargetRequest, ModifyTargetRequest, TargetListQuery},
 };
-use gvm_mock_server::Resource;
+use gvm_mock_server::{Fault, FaultKind, Resource};
 use http::{Method, StatusCode};
 use reqwest::Client;
 use serde_json::Value;
@@ -245,6 +248,14 @@ async fn report_drill_down_and_operating_system_routes_expose_typed_contracts() 
         .await
         .expect("in-use OS delete response");
     assert_eq!(response.status(), StatusCode::CONFLICT);
+    assert!(
+        harness
+            .server
+            .command_history()
+            .iter()
+            .all(|record| record.command_name() != "delete_asset"),
+        "the typed in-use preflight must prevent mutation dispatch"
+    );
 
     let response = harness
         .client
@@ -256,6 +267,54 @@ async fn report_drill_down_and_operating_system_routes_expose_typed_contracts() 
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
 
     harness.shutdown().await;
+}
+
+async fn assert_operating_system_delete_server_error(message: &str, expected: StatusCode) {
+    let operating_system_id =
+        uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440135").expect("valid OS id");
+    let harness = specialized_target_harness_with_fault(
+        move |store| {
+            let mut operating_system = Resource::with_id("asset", "Debian", operating_system_id);
+            operating_system.set_attr("type", "os");
+            operating_system.set_attr("title", "Debian Linux");
+            operating_system.set_attr("installs", "0");
+            store.create(operating_system);
+        },
+        Fault::on_command(
+            "delete_asset",
+            FaultKind::ErrorStatus {
+                code: 400,
+                message: message.to_string(),
+            },
+        ),
+    )
+    .await;
+
+    let response = harness
+        .client
+        .delete(harness.url(&format!("/api/v1/operating-systems/{operating_system_id}")))
+        .bearer_auth(&harness.token)
+        .send()
+        .await
+        .expect("OS delete error response");
+
+    assert_eq!(response.status(), expected);
+    harness.shutdown().await;
+}
+
+#[tokio::test]
+async fn operating_system_delete_exposes_typed_permission_denied_as_forbidden() {
+    // A gvmd status-400 permission denial is semantically typed by rust-gvm;
+    // DELETE must preserve that classification as HTTP 403, not report 409.
+    assert_operating_system_delete_server_error("Permission denied", StatusCode::FORBIDDEN).await;
+}
+
+#[tokio::test]
+async fn operating_system_delete_exposes_typed_authentication_failure_as_unauthorized() {
+    // A gvmd status-400 authentication failure is semantically typed by
+    // rust-gvm; DELETE must preserve that classification as HTTP 401.
+    assert_operating_system_delete_server_error("Authentication failed", StatusCode::UNAUTHORIZED)
+        .await;
 }
 
 #[tokio::test]
