@@ -221,6 +221,9 @@ impl ScanConfigPort for GvmdAdapter {
         id: &str,
         input: ModifyScanConfigInput,
     ) -> Result<ScanConfig, GatewayError> {
+        // Config mutation commands are selected by id and cannot carry a
+        // usage discriminator, so verify the REST resource family first.
+        self.get_scan_config(session_token, id).await?;
         let config_id = parse_entity_id(id)?;
         let mut request = ModifyScanConfigRequest::new(config_id);
         request.name = input.name;
@@ -236,6 +239,7 @@ impl ScanConfigPort for GvmdAdapter {
         id: &str,
         ultimate: bool,
     ) -> Result<(), GatewayError> {
+        self.get_scan_config(session_token, id).await?;
         let mut request = DeleteScanConfigRequest::new(parse_entity_id(id)?);
         request.ultimate = ultimate.then_some(true);
         self.execute_with_session(session_token, "scan_configs.delete", request)
@@ -352,6 +356,7 @@ impl ScanConfigPort for GvmdAdapter {
         family: &str,
         nvt_oids: Vec<String>,
     ) -> Result<(), GatewayError> {
+        self.get_scan_config(session_token, id).await?;
         self.execute_with_session(
             session_token,
             "scan_configs.nvts.set",
@@ -367,6 +372,7 @@ impl ScanConfigPort for GvmdAdapter {
         id: &str,
         input: SetScanConfigFamilySelectionInput,
     ) -> Result<(), GatewayError> {
+        self.get_scan_config(session_token, id).await?;
         let families = input
             .families
             .into_iter()
@@ -397,6 +403,7 @@ impl ScanConfigPort for GvmdAdapter {
         nvt_oid: Option<String>,
         value: Option<String>,
     ) -> Result<(), GatewayError> {
+        self.get_scan_config(session_token, id).await?;
         let config_id = parse_entity_id(id)?;
         if let Some(nvt_oid) = nvt_oid {
             self.execute_with_session(
@@ -510,6 +517,9 @@ impl ScanConfigPort for GvmdAdapter {
         id: &str,
         input: ModifyScanConfigInput,
     ) -> Result<ScanConfig, GatewayError> {
+        // Policy mutation commands are selected by id and cannot carry a
+        // usage discriminator, so reject scan-config ids before mutating.
+        self.get_policy(session_token, id).await?;
         let config_id = parse_entity_id(id)?;
         let mut request = ModifyPolicyRequest::new(config_id);
         request.name = input.name;
@@ -520,6 +530,7 @@ impl ScanConfigPort for GvmdAdapter {
     }
 
     async fn delete_policy(&self, session_token: &str, id: &str) -> Result<(), GatewayError> {
+        self.get_policy(session_token, id).await?;
         self.execute_with_session(
             session_token,
             "policies.delete",

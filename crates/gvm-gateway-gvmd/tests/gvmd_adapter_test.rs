@@ -1061,7 +1061,7 @@ async fn gvmd_adapter_modify_scan_config_forwards_rename() {
     let result = adapter
         .modify_scan_config(
             &token,
-            "550e8400-e29b-41d4-a716-446655440123",
+            "00000000-0000-0000-0000-000000000300",
             ModifyScanConfigInput {
                 name: Some("Renamed Config".to_string()),
                 ..Default::default()
@@ -1069,10 +1069,7 @@ async fn gvmd_adapter_modify_scan_config_forwards_rename() {
         )
         .await;
 
-    assert!(
-        result.is_err(),
-        "mock backend may reject the unknown config, but the command should still be emitted"
-    );
+    assert!(result.is_ok(), "the seeded scan config should be renamed");
     let history = server.command_history();
     let command = history
         .iter()
@@ -1124,7 +1121,8 @@ async fn gvmd_adapter_scan_config_preference_reads_use_complete_requests() {
 #[tokio::test]
 async fn gvmd_adapter_scan_config_selection_uses_typed_modify_shapes() {
     let (adapter, server, token) = create_mock_adapter().await;
-    let config_id = "550e8400-e29b-41d4-a716-446655440123";
+    let config_id = "00000000-0000-0000-0000-000000000300";
+    server.clear_history();
 
     let _ = adapter
         .set_scan_config_nvt_selection(
@@ -1179,6 +1177,113 @@ async fn gvmd_adapter_scan_config_selection_uses_typed_modify_shapes() {
             && xml.contains("<nvt oid=\"1.3.6.1.4.1\"")
             && xml.contains("<value>MTA=</value>")
     }));
+    assert_eq!(
+        server
+            .command_history()
+            .iter()
+            .filter(|record| record.command_name() == "get_configs")
+            .count(),
+        3,
+        "each scan-config subresource mutation must perform typed family preflight"
+    );
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_config_family_preflight_rejects_cross_family_mutations_before_writes() {
+    // Issue #648: every ID-only config mutation must first prove that the id
+    // belongs to the route family. Cover both directions and every scan-config
+    // subresource mutation, and prove that none reaches a write command.
+    let (adapter, server, token) = create_mock_adapter().await;
+    let scan_id = "00000000-0000-0000-0000-000000000300";
+    let policy_id = "00000000-0000-0000-0000-000000000302";
+    server.clear_history();
+
+    assert!(matches!(
+        adapter
+            .modify_scan_config(
+                &token,
+                policy_id,
+                ModifyScanConfigInput {
+                    name: Some("must not be applied".to_string()),
+                    ..Default::default()
+                },
+            )
+            .await,
+        Err(GatewayError::NotFound(_))
+    ));
+    assert!(matches!(
+        adapter.delete_scan_config(&token, policy_id, false).await,
+        Err(GatewayError::NotFound(_))
+    ));
+    assert!(matches!(
+        adapter
+            .set_scan_config_nvt_selection(
+                &token,
+                policy_id,
+                "General",
+                vec!["1.3.6.1.4.1".to_string()],
+            )
+            .await,
+        Err(GatewayError::NotFound(_))
+    ));
+    assert!(matches!(
+        adapter
+            .set_scan_config_family_selection(
+                &token,
+                policy_id,
+                SetScanConfigFamilySelectionInput {
+                    families: vec![ScanConfigFamilySelection {
+                        name: "General".to_string(),
+                        growing: false,
+                        all: true,
+                    }],
+                    auto_add_new_families: false,
+                },
+            )
+            .await,
+        Err(GatewayError::NotFound(_))
+    ));
+    assert!(matches!(
+        adapter
+            .set_scan_config_preference(&token, policy_id, "Timeout", None, Some("10".to_string()),)
+            .await,
+        Err(GatewayError::NotFound(_))
+    ));
+    assert!(matches!(
+        adapter
+            .modify_policy(
+                &token,
+                scan_id,
+                ModifyScanConfigInput {
+                    name: Some("must not be applied".to_string()),
+                    ..Default::default()
+                },
+            )
+            .await,
+        Err(GatewayError::NotFound(_))
+    ));
+    assert!(matches!(
+        adapter.delete_policy(&token, scan_id).await,
+        Err(GatewayError::NotFound(_))
+    ));
+
+    let history = server.command_history();
+    assert_eq!(
+        history
+            .iter()
+            .filter(|record| record.command_name() == "get_configs")
+            .count(),
+        7,
+        "each rejected mutation must dispatch exactly one typed family read"
+    );
+    assert!(
+        history
+            .iter()
+            .all(|record| !matches!(record.command_name(), "modify_config" | "delete_config")),
+        "cross-family routes must reject ids before mutation dispatch"
+    );
+
     server.shutdown().await;
 }
 
@@ -2567,8 +2672,9 @@ async fn gvmd_adapter_config_create_requires_active_same_usage_bases() {
 
 #[tokio::test]
 async fn gvmd_adapter_config_modify_is_metadata_only_and_reads_back() {
-    // Canonical scan/policy modifies must emit metadata only and then perform
-    // the existing typed read-back without touching selectors/preferences.
+    // Canonical scan/policy modifies must perform typed family preflight,
+    // emit metadata only, and then read back without touching selectors or
+    // preferences.
     let (adapter, server, token) = create_mock_adapter().await;
     let scan_id = "00000000-0000-0000-0000-000000000300";
     let policy_id = "00000000-0000-0000-0000-000000000302";
@@ -2628,8 +2734,8 @@ async fn gvmd_adapter_config_modify_is_metadata_only_and_reads_back() {
             .iter()
             .filter(|record| record.command_name() == "get_configs")
             .count(),
-        2,
-        "each metadata update must retain read-back behavior"
+        4,
+        "each metadata update must perform family preflight and read-back"
     );
 
     server.shutdown().await;
