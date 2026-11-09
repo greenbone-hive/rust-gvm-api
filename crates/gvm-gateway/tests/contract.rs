@@ -318,6 +318,98 @@ async fn operating_system_delete_exposes_typed_authentication_failure_as_unautho
 }
 
 #[tokio::test]
+async fn config_family_mutation_routes_return_not_found_without_dispatching_writes() {
+    // Issue #648: the REST boundary must preserve the adapter's family
+    // discriminator for every ID-only config mutation. A policy sent to a
+    // scan-config route (and vice versa) is 404 and never reaches gvmd writes.
+    let scan_id =
+        uuid::Uuid::parse_str("00000000-0000-0000-0000-000000006481").expect("valid scan id");
+    let policy_id =
+        uuid::Uuid::parse_str("00000000-0000-0000-0000-000000006482").expect("valid policy id");
+    let harness = specialized_target_harness(move |store| {
+        let mut scan = Resource::with_id("config", "Issue 648 scan", scan_id);
+        scan.set_attr("usage_type", "scan");
+        store.create(scan);
+
+        let mut policy = Resource::with_id("config", "Issue 648 policy", policy_id);
+        policy.set_attr("usage_type", "policy");
+        store.create(policy);
+    })
+    .await;
+    harness.server.clear_history();
+
+    let cases = [
+        (
+            Method::PUT,
+            format!("/api/v1/scan-configs/{policy_id}"),
+            Some(serde_json::json!({ "name": "must not be applied" })),
+        ),
+        (
+            Method::DELETE,
+            format!("/api/v1/scan-configs/{policy_id}"),
+            None,
+        ),
+        (
+            Method::PUT,
+            format!("/api/v1/scan-configs/{policy_id}/families/General/nvts"),
+            Some(serde_json::json!({ "nvtOids": ["1.3.6.1.4.1"] })),
+        ),
+        (
+            Method::PUT,
+            format!("/api/v1/scan-configs/{policy_id}/family-selection"),
+            Some(serde_json::json!({
+                "families": [{ "name": "General", "growing": false, "all": true }]
+            })),
+        ),
+        (
+            Method::PUT,
+            format!("/api/v1/scan-configs/{policy_id}/preferences/Timeout"),
+            Some(serde_json::json!({ "value": "10" })),
+        ),
+        (
+            Method::PUT,
+            format!("/api/v1/policies/{scan_id}"),
+            Some(serde_json::json!({ "name": "must not be applied" })),
+        ),
+        (Method::DELETE, format!("/api/v1/policies/{scan_id}"), None),
+    ];
+
+    for (method, path, body) in cases {
+        let mut request = harness
+            .client
+            .request(method.clone(), harness.url(&path))
+            .bearer_auth(&harness.token);
+        if let Some(body) = body {
+            request = request.json(&body);
+        }
+        let response = request.send().await.expect("family mutation response");
+        assert_eq!(
+            response.status(),
+            StatusCode::NOT_FOUND,
+            "{method} {path} must hide the other config family"
+        );
+    }
+
+    let history = harness.server.command_history();
+    assert_eq!(
+        history
+            .iter()
+            .filter(|record| record.command_name() == "get_configs")
+            .count(),
+        7,
+        "every REST mutation must perform one typed family preflight"
+    );
+    assert!(
+        history
+            .iter()
+            .all(|record| !matches!(record.command_name(), "modify_config" | "delete_config")),
+        "wrong-family REST requests must not dispatch mutation commands"
+    );
+
+    harness.shutdown().await;
+}
+
+#[tokio::test]
 async fn qod_is_consistent_across_shared_result_endpoints() {
     // Issue #623 adds QoD to the one shared result representation. Prove the
     // list, detail, and report-result HTTP handlers all serialize it identically.
