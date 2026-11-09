@@ -1,7 +1,7 @@
 # REST API reference
 
 This is the human-readable map of the REST API shipped by `rust-gvm-api`
-0.5.0. It explains common behavior and shows every current route family. For
+0.6.0. It explains common behavior and shows every current route family. For
 exact request and response schemas, use the OpenAPI document shipped with the
 same release or the running gateway's `GET /api/v1/openapi.json` endpoint.
 
