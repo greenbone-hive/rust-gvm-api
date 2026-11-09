@@ -25,10 +25,10 @@ info:
     4. `DELETE /api/v1/session` ends the session.
 
     Alternatively, send `Authorization: Basic <credentials>` directly to a
-    protected operation. The gateway creates a backend execution context for
-    that request and tears it down before returning. `GET` and `DELETE`
-    `/api/v1/session` remain bearer-only because they inspect or destroy an
-    existing persistent session.
+    protected operation unless that operation explicitly requires Bearer
+    authentication. The gateway creates a backend execution context for that
+    request and tears it down before returning. `GET` and `DELETE`
+    `/api/v1/session` and `POST /api/v1/reports/{id}/exports` are bearer-only.
 
     Sessions expire after a configurable idle timeout (default 5 min).
     One active session token maps to one authenticated backend execution
@@ -399,7 +399,8 @@ components:
       description: |
         GVM username and password. Used to create a persistent session
         (`POST /api/v1/session`) or to authenticate one protected request
-        with request-scoped backend cleanup.
+        with request-scoped backend cleanup, except operations that explicitly
+        require Bearer authentication.
     bearerAuth:
       type: http
       scheme: bearer

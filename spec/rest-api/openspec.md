@@ -184,7 +184,7 @@ feeds; supporting resources; SecInfo resources; and system endpoints.
 | `GET` | `/api/v1/reports` | List reports |
 | `POST` | `/api/v1/reports?taskId={taskId}&inAssets={bool}` | Import one bounded XML report into an existing import task (`201 Created` + `Location`) |
 | `GET` | `/api/v1/reports/{id}` | Get report with an embedded result page |
-| `POST` | `/api/v1/reports/{id}/exports` | Start an asynchronous report export job (`202 Accepted` + `Location`) |
+| `POST` | `/api/v1/reports/{id}/exports` | Start a Bearer-authenticated asynchronous report export job (`202 Accepted` + `Location`) |
 | `GET` | `/api/v1/reports/{id}/results` | Get report results (paginated) |
 | `GET` | `/api/v1/reports/{id}/vulnerabilities` | Get report vulnerability findings (paginated) |
 | `GET` | `/api/v1/reports/{id}/tls-certificates` | Get TLS certificates observed in a report (paginated) |
@@ -344,7 +344,7 @@ Policy creation likewise requires an explicit active policy base in
 | `GET` | `/api/v1/session` | Inspect current session state |
 | `DELETE` | `/api/v1/session` | Close and destroy a session |
 
-Protected routes accept either an existing Bearer session token or request-scoped HTTP Basic credentials. `POST /api/v1/session` remains the persistent-session creation path.
+Protected routes accept either an existing Bearer session token or request-scoped HTTP Basic credentials unless an operation is explicitly classified as Bearer-only. `POST /api/v1/session` remains the persistent-session creation path. `POST /api/v1/reports/{id}/exports` is Bearer-only.
 
 #### Feeds
 
@@ -451,6 +451,7 @@ Current required coverage:
 
 2. **Request-scoped Basic auth** — Single-call auth model
    - Protected resource routes may use `Authorization: Basic <base64(username:password)>`
+   - `POST /api/v1/reports/{id}/exports` does not accept request-scoped Basic authentication and requires an existing Bearer session
    - The gateway authenticates those credentials, creates a backend execution context for exactly one request, then tears it down before returning
    - Bearer authentication takes precedence whenever the `Authorization` scheme is `Bearer`; malformed Basic credentials fail with `401 Unauthorized`
 

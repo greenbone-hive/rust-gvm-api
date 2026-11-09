@@ -4,7 +4,11 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
+    time::Duration,
 };
 
 use async_trait::async_trait;
@@ -741,15 +745,20 @@ async fn update_task_preserves_preferences_through_handler() {
 }
 
 #[tokio::test]
-async fn report_export_job_api_downloads_json_result() {
-    let (addr, token, handle) =
-        spawn_report_server(Arc::new(JsonExportReportPort::default())).await;
+async fn create_report_export_job_bearer_survives_delayed_execution() {
+    let session_tokens = Arc::new(Mutex::new(Vec::new()));
+    let (addr, token, handle) = spawn_report_server(Arc::new(JsonExportReportPort {
+        session_tokens: Arc::clone(&session_tokens),
+        background_delay: Some(Duration::from_millis(75)),
+        ..JsonExportReportPort::default()
+    }))
+    .await;
     let report_id = "550e8400-e29b-41d4-a716-446655440000";
     let client = Client::new();
 
-    // This covers the asynchronous export contract: creation returns 202 with a
-    // job location, job polling reaches success, and the result endpoint returns
-    // the gateway JSON report artifact.
+    // This covers the asynchronous Bearer contract: creation returns 202 with
+    // a job location, deliberately delayed work keeps using the persistent
+    // session after the response, and polling reaches a downloadable result.
     let create_response = client
         .post(format!("http://{addr}/api/v1/reports/{report_id}/exports"))
         .bearer_auth(&token)
@@ -813,6 +822,15 @@ async fn report_export_job_api_downloads_json_result() {
     let export = result_response.json::<Value>().await.unwrap();
     assert_eq!(export["report"]["id"], report_id);
     assert_eq!(export["results"].as_array().unwrap().len(), 1);
+    let observed_tokens = session_tokens.lock().unwrap();
+    assert!(
+        observed_tokens.len() >= 3,
+        "preflight and delayed report/result reads should reach the report port"
+    );
+    assert!(
+        observed_tokens.iter().all(|observed| observed == &token),
+        "background export work must remain bound to the accepted Bearer session"
+    );
 
     handle.abort();
 }
@@ -823,6 +841,7 @@ async fn report_delete_rejects_obsolete_permanence_choice_before_permanent_delet
     let report_port = Arc::new(JsonExportReportPort {
         deleted_ids: Arc::clone(&deleted_ids),
         embed_results: false,
+        ..JsonExportReportPort::default()
     });
     let (addr, token, handle) = spawn_report_server(report_port).await;
     let report_id = "550e8400-e29b-41d4-a716-446655440000";
@@ -1509,6 +1528,9 @@ async fn spawn_report_server_with_users(
 struct JsonExportReportPort {
     deleted_ids: Arc<Mutex<Vec<String>>>,
     embed_results: bool,
+    session_tokens: Arc<Mutex<Vec<String>>>,
+    get_report_calls: AtomicUsize,
+    background_delay: Option<Duration>,
 }
 
 struct AcceptingAlertPort;
@@ -1636,10 +1658,20 @@ impl ReportPort for JsonExportReportPort {
 
     async fn get_report(
         &self,
-        _: &str,
+        session_token: &str,
         id: &str,
         _: &GetReportOpts,
     ) -> Result<Report, GatewayError> {
+        self.session_tokens
+            .lock()
+            .unwrap()
+            .push(session_token.to_string());
+        let call = self.get_report_calls.fetch_add(1, Ordering::SeqCst);
+        if call > 0 {
+            if let Some(delay) = self.background_delay {
+                tokio::time::sleep(delay).await;
+            }
+        }
         let mut report = report_response(id);
         if self.embed_results {
             report.results = vec![scan_result_response(id)];
@@ -1657,10 +1689,14 @@ impl ReportPort for JsonExportReportPort {
 
     async fn get_report_results(
         &self,
-        _: &str,
+        session_token: &str,
         report_id: &str,
         query: &ResultQuery,
     ) -> Result<ResultPage, GatewayError> {
+        self.session_tokens
+            .lock()
+            .unwrap()
+            .push(session_token.to_string());
         let data = if query.page == 1 {
             vec![scan_result_response(report_id)]
         } else {

@@ -104,6 +104,15 @@ pub(crate) async fn request_scoped_basic_auth_middleware(
     mut request: Request,
     next: axum::middleware::Next,
 ) -> Response {
+    if rejects_request_scoped_basic_auth(&request) {
+        let instance = request.uri().path().to_string();
+        return RestError::from_gateway_error(
+            GatewayError::Unauthorized("bearer authentication required".to_string()),
+            instance,
+        )
+        .into_response();
+    }
+
     if !uses_request_scoped_basic_auth(&request) {
         return next.run(request).await;
     }
@@ -251,6 +260,20 @@ fn uses_request_scoped_basic_auth(request: &Request) -> bool {
     matches!(
         classify_runtime_route(request.method(), request.uri().path()),
         Some(RestRouteAuthPolicy::Protected)
+    )
+}
+
+fn rejects_request_scoped_basic_auth(request: &Request) -> bool {
+    if is_basic_auth(request.headers()).is_none() {
+        return false;
+    }
+
+    // An asynchronous worker must keep using the caller's persistent backend
+    // context after this middleware returns; tearing down a temporary Basic
+    // session here would immediately cancel that worker's job.
+    matches!(
+        classify_runtime_route(request.method(), request.uri().path()),
+        Some(RestRouteAuthPolicy::BearerOnly)
     )
 }
 

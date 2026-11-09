@@ -11,15 +11,19 @@ paths:
       operationId: createReportExportJob
       tags: [Report Exports]
       summary: Start an asynchronous report export
+      security:
+        - bearerAuth: []
       description: |
         Starts rendering a report artifact in the selected report format.
         Report exports may require gvmd to materialize the full report and run
         report-format generation scripts, so this endpoint always creates a
         job instead of returning the artifact inline. Jobs are scoped to the
-        authenticated user that created them. A running export keeps the
-        creating session active for backend work; deleting that session cancels
-        non-terminal export jobs started from it. The gateway retains at most
-        1000 jobs and removes terminal jobs 15 minutes after completion.
+        authenticated user that created them. This operation accepts only an
+        existing Bearer session; request-scoped Basic authentication is not
+        supported. A running export keeps the creating session active for
+        backend work; deleting that session cancels non-terminal export jobs
+        started from it. The gateway retains at most 1000 jobs and removes
+        terminal jobs 15 minutes after completion.
       requestBody:
         required: true
         content:
