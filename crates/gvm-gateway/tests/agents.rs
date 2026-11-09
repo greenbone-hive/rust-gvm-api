@@ -344,6 +344,96 @@ async fn agent_group_rest_lifecycle_filter_trash_and_ultimate_delete() {
 }
 
 #[tokio::test]
+async fn agent_group_update_preserves_replaces_and_rejects_empty_agent_selection() {
+    // Regression coverage for #649: omission emits no membership replacement,
+    // a non-empty list does, and unsupported clearing fails before any gvmd call.
+    let harness = specialized_target_harness(|_| {}).await;
+    let create = harness
+        .client
+        .post(harness.url("/api/v1/agent-groups"))
+        .bearer_auth(&harness.token)
+        .json(&json!({
+            "name": "Agent selection semantics",
+            "schedulerCronTime": "0 */15 * * *",
+            "agentIds": [AGENT_ID]
+        }))
+        .send()
+        .await
+        .unwrap();
+    let id = created_id(create, "agent-groups").await;
+
+    harness.server.clear_history();
+    let omitted = harness
+        .client
+        .put(harness.url(&format!("/api/v1/agent-groups/{id}")))
+        .bearer_auth(&harness.token)
+        .json(&json!({
+            "name": "Renamed without replacing agents",
+            "schedulerCronTime": "0 */30 * * *"
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(omitted.status(), StatusCode::OK);
+    let omitted_history = harness.server.command_history();
+    let omitted_modify = omitted_history
+        .iter()
+        .find(|record| record.command_name() == "modify_agent_group")
+        .expect("omitted update should dispatch a modify command");
+    assert!(
+        !String::from_utf8_lossy(omitted_modify.raw_xml()).contains("<agents>"),
+        "omission must not emit an agent replacement"
+    );
+
+    const REPLACEMENT_AGENT_ID: &str = "123e4567-e89b-12d3-a456-426614174001";
+    harness.server.clear_history();
+    let replaced = harness
+        .client
+        .put(harness.url(&format!("/api/v1/agent-groups/{id}")))
+        .bearer_auth(&harness.token)
+        .json(&json!({
+            "schedulerCronTime": "0 */45 * * *",
+            "agentIds": [REPLACEMENT_AGENT_ID]
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(replaced.status(), StatusCode::OK);
+    let replaced_history = harness.server.command_history();
+    let replaced_modify = replaced_history
+        .iter()
+        .find(|record| record.command_name() == "modify_agent_group")
+        .expect("non-empty replacement should dispatch a modify command");
+    let replaced_xml = String::from_utf8_lossy(replaced_modify.raw_xml());
+    assert!(replaced_xml.contains("<agents>"), "xml={replaced_xml}");
+    assert!(
+        replaced_xml.contains(&format!("<agent id=\"{REPLACEMENT_AGENT_ID}\"")),
+        "xml={replaced_xml}"
+    );
+
+    harness.server.clear_history();
+    let clear = harness
+        .client
+        .put(harness.url(&format!("/api/v1/agent-groups/{id}")))
+        .bearer_auth(&harness.token)
+        .json(&json!({
+            "schedulerCronTime": "0 0 * * *",
+            "agentIds": []
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(clear.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(clear.json::<Value>().await.unwrap()["code"], "bad_request");
+    assert!(
+        harness.server.command_history().is_empty(),
+        "an unsupported clear must be rejected before any gvmd command"
+    );
+
+    harness.shutdown().await;
+}
+
+#[tokio::test]
 async fn agent_routes_return_not_implemented_on_gmp_22_7() {
     // Version-limited agent routes must surface backend 501 responses once the
     // reservation handler is removed, instead of regressing to 404 or 200.

@@ -126,6 +126,45 @@ fn modify_agent_group_requires_scheduler_cron_time() {
 }
 
 #[test]
+fn modify_agent_group_validates_agent_selection_update_semantics() {
+    // Omission must preserve the current selection, a non-empty list remains a
+    // supported replacement, and an explicit empty list must fail before gvmd.
+    let omitted = ModifyAgentGroupRequest {
+        scheduler_cron_time: Some("0 */15 * * *".to_string()),
+        name: None,
+        comment: None,
+        agent_ids: None,
+    }
+    .validate_into()
+    .expect("omitted agentIds should preserve the current selection");
+    assert_eq!(omitted.agent_ids, None);
+
+    let replacement = Uuid::parse_str(RESOURCE_ID).expect("valid agent UUID");
+    let replaced = ModifyAgentGroupRequest {
+        scheduler_cron_time: Some("0 */15 * * *".to_string()),
+        name: None,
+        comment: None,
+        agent_ids: Some(vec![replacement]),
+    }
+    .validate_into()
+    .expect("a non-empty agentIds list should remain supported");
+    assert_eq!(replaced.agent_ids, Some(vec![RESOURCE_ID.to_string()]));
+
+    let clear = ModifyAgentGroupRequest {
+        scheduler_cron_time: Some("0 */15 * * *".to_string()),
+        name: None,
+        comment: None,
+        agent_ids: Some(vec![]),
+    };
+    assert!(matches!(
+        clear.validate_into(),
+        Err(GatewayError::InvalidInput(detail))
+            if detail.contains("agentIds must contain at least one entry")
+                && detail.contains("rust-gvm issue #812")
+    ));
+}
+
+#[test]
 fn attachment_filename_sanitizes_path_and_control_characters() {
     // Support-bundle downloads expose a backend-derived filename; sanitizing it
     // here prevents header injection and path-like values from leaking through.

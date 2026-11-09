@@ -376,6 +376,28 @@ fn generated_openapi_preserves_key_schema_fields() {
         .collect::<BTreeSet<_>>();
     assert!(modify_agent_group_required.contains("schedulerCronTime"));
 
+    // Clearing agent-group membership cannot be encoded by the pinned typed
+    // rust-gvm request, so both contracts must reject an explicit empty list.
+    for (name, field) in [
+        (
+            "generated",
+            &generated["components"]["schemas"]["ModifyAgentGroup"]["properties"]["agentIds"],
+        ),
+        (
+            "curated",
+            &curated_emerging["components"]["schemas"]["ModifyAgentGroup"]["properties"]
+                ["agentIds"],
+        ),
+    ] {
+        assert_eq!(field["minItems"], 1, "{name} agentIds minimum");
+        let description = field["description"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{name} agentIds update semantics"));
+        assert!(description.contains("Omit to preserve"));
+        assert!(description.contains("non-empty array replaces"));
+        assert!(description.contains("#812"));
+    }
+
     let scanner_instruction_parameters = generated["paths"]
         ["/scanners/{id}/agent-installer-instruction"]["get"]["parameters"]
         .as_array()
