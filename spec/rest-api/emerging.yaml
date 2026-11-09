@@ -859,5 +859,9 @@ components:
         name: { type: string }
         comment: { type: string }
         urls: { type: array, minItems: 1, items: { type: string, format: uri } }
-        excludeUrls: { type: array, items: { type: string, format: uri } }
+        excludeUrls:
+          type: array
+          minItems: 1
+          description: "Omit to preserve current exclusions. A non-empty array replaces all current exclusions. An empty array is rejected with 400 bad_request until rust-gvm issue #812 provides typed clear support."
+          items: { type: string, format: uri }
         credentialId: { type: string, format: uuid }

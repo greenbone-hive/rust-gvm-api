@@ -323,6 +323,31 @@ fn generated_openapi_preserves_key_schema_fields() {
     assert!(modify_target_props.get("esxiCredentialId").is_some());
     assert!(modify_target_props.get("snmpCredentialId").is_some());
 
+    // Web application exclusions cannot be cleared until rust-gvm exposes a
+    // typed clear operation, so both generated and curated contracts must
+    // distinguish omission from a supported non-empty replacement.
+    let curated_emerging = read_yaml(&root_spec_path().parent().unwrap().join("emerging.yaml"));
+    for (name, field) in [
+        (
+            "generated",
+            &generated["components"]["schemas"]["ModifyWebApplicationTarget"]["properties"]
+                ["excludeUrls"],
+        ),
+        (
+            "curated",
+            &curated_emerging["components"]["schemas"]["ModifyWebApplicationTarget"]["properties"]
+                ["excludeUrls"],
+        ),
+    ] {
+        assert_eq!(field["minItems"], 1, "{name} excludeUrls minimum");
+        let description = field["description"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{name} excludeUrls omission semantics"));
+        assert!(description.contains("Omit to preserve current exclusions"));
+        assert!(description.contains("non-empty array replaces"));
+        assert!(description.contains("not supported") || description.contains("rejected"));
+    }
+
     let modify_task_props = &generated["components"]["schemas"]["ModifyTask"]["properties"];
     assert!(modify_task_props.get("alterable").is_some());
     assert!(modify_task_props.get("preferences").is_some());
