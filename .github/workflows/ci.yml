@@ -60,8 +60,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Configure git credentials for private deps
-        run: git config --global url."https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/".insteadOf "https://github.com/"
       - name: Set up Rust
         uses: greenbone/actions/setup-rust@d6d4c9500cb4e83f8a516ec1d40b04bcc720bd22 # v3
         with:
@@ -83,8 +81,6 @@ jobs:
         rust: [stable, "1.89.0"]  # stable + MSRV
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Configure git credentials for private deps
-        run: git config --global url."https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/".insteadOf "https://github.com/"
       - name: Set up Rust
         uses: greenbone/actions/setup-rust@d6d4c9500cb4e83f8a516ec1d40b04bcc720bd22 # v3
         with:
@@ -100,8 +96,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Configure git credentials for private deps
-        run: git config --global url."https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/".insteadOf "https://github.com/"
       - name: Set up Rust
         uses: greenbone/actions/setup-rust@d6d4c9500cb4e83f8a516ec1d40b04bcc720bd22 # v3
         with:
@@ -119,8 +113,6 @@ jobs:
       RUSTDOCFLAGS: "-Dwarnings"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Configure git credentials for private deps
-        run: git config --global url."https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/".insteadOf "https://github.com/"
       - name: Set up Rust
         uses: greenbone/actions/setup-rust@d6d4c9500cb4e83f8a516ec1d40b04bcc720bd22 # v3
         with:
@@ -169,8 +161,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Configure git credentials for private deps
-        run: git config --global url."https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/".insteadOf "https://github.com/"
       - name: Set up Rust
         uses: greenbone/actions/setup-rust@d6d4c9500cb4e83f8a516ec1d40b04bcc720bd22 # v3
         with:
@@ -189,8 +179,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Configure git credentials for private deps
-        run: git config --global url."https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/".insteadOf "https://github.com/"
       - name: Set up Rust
         uses: greenbone/actions/setup-rust@d6d4c9500cb4e83f8a516ec1d40b04bcc720bd22 # v3
         with:
@@ -215,8 +203,6 @@ jobs:
       RUSTUP_TOOLCHAIN: "1.89.0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Configure git credentials for private deps
-        run: git config --global url."https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/".insteadOf "https://github.com/"
       - name: Set up Rust
         uses: greenbone/actions/setup-rust@d6d4c9500cb4e83f8a516ec1d40b04bcc720bd22 # v3
         with:
@@ -245,8 +231,6 @@ jobs:
             runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Configure git credentials for private deps
-        run: git config --global url."https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/".insteadOf "https://github.com/"
       - name: Set up Rust
         uses: greenbone/actions/setup-rust@d6d4c9500cb4e83f8a516ec1d40b04bcc720bd22 # v3
         with:

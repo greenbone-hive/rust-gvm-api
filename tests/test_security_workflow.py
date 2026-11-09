@@ -68,6 +68,22 @@ class SecurityWorkflowTests(unittest.TestCase):
             with self.subTest(job=job):
                 self.assertIn(f'test "${variable}_RESULT" = success', workflow)
 
+    def test_release_token_is_confined_to_release_write_workflows(self) -> None:
+        workflows = workflow_sources()
+        token_users = {
+            name
+            for name, workflow in workflows.items()
+            if "secrets.RELEASE_TOKEN" in workflow
+        }
+
+        self.assertEqual(token_users, {"release-prepare.yml", "release-tag.yml"})
+        for name, workflow in workflows.items():
+            with self.subTest(workflow=name):
+                self.assertNotIn(
+                    "Configure git credentials for private deps", workflow
+                )
+                self.assertNotIn("git config --global url.", workflow)
+
     def test_external_actions_and_cargo_tools_are_pinned(self) -> None:
         workflows = workflow_sources()
         all_workflows = "\n".join(workflows.values())
