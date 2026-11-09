@@ -1190,6 +1190,103 @@ async fn gvmd_adapter_scan_config_selection_uses_typed_modify_shapes() {
 }
 
 #[tokio::test]
+async fn gvmd_adapter_scan_config_soft_delete_can_be_followed_by_ultimate_delete() {
+    // Regression for PR #655: once a scan config is in trash, ultimate delete
+    // must prove its typed family from trash before dispatching the permanent
+    // delete instead of failing at the active-only preflight.
+    let (adapter, server, token) = create_mock_adapter().await;
+    let scan_id = "00000000-0000-0000-0000-000000000300";
+    server.clear_history();
+
+    adapter
+        .delete_scan_config(&token, scan_id, false)
+        .await
+        .expect("ordinary deletion should move the scan config to trash");
+    adapter
+        .delete_scan_config(&token, scan_id, true)
+        .await
+        .expect("ultimate deletion should permanently remove the trashed scan config");
+
+    let history = server.command_history();
+    assert_eq!(
+        history
+            .iter()
+            .map(|record| record.command_name())
+            .collect::<Vec<_>>(),
+        [
+            "get_configs",
+            "delete_config",
+            "get_configs",
+            "get_configs",
+            "delete_config",
+        ],
+        "ultimate deletion must perform active and trash typed lookups before deleting"
+    );
+
+    let active_lookup = String::from_utf8_lossy(history[2].raw_xml());
+    assert!(active_lookup.contains("usage_type=\"scan\""));
+    assert!(!active_lookup.contains("trash="));
+
+    let trash_lookup = String::from_utf8_lossy(history[3].raw_xml());
+    assert!(trash_lookup.contains("usage_type=\"scan\""));
+    assert!(trash_lookup.contains("trash=\"1\""));
+
+    let ultimate_delete = String::from_utf8_lossy(history[4].raw_xml());
+    assert!(ultimate_delete.contains("ultimate=\"1\""));
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_scan_config_ultimate_delete_rejects_active_and_trashed_policies() {
+    // The trash fallback must preserve the cross-family no-write contract: a
+    // policy id is never eligible for scan-config deletion in either state.
+    let (adapter, server, token) = create_mock_adapter().await;
+    let policy_id = "00000000-0000-0000-0000-000000000302";
+    server.clear_history();
+
+    assert!(matches!(
+        adapter.delete_scan_config(&token, policy_id, true).await,
+        Err(GatewayError::NotFound(_))
+    ));
+    assert!(
+        server
+            .command_history()
+            .iter()
+            .all(|record| record.command_name() != "delete_config"),
+        "an active policy must not reach the scan-config delete command"
+    );
+
+    adapter
+        .delete_policy(&token, policy_id)
+        .await
+        .expect("policy setup should move the policy to trash");
+    server.clear_history();
+
+    assert!(matches!(
+        adapter.delete_scan_config(&token, policy_id, true).await,
+        Err(GatewayError::NotFound(_))
+    ));
+    let history = server.command_history();
+    assert_eq!(
+        history
+            .iter()
+            .filter(|record| record.command_name() == "get_configs")
+            .count(),
+        2,
+        "a trashed policy must be checked in active and trash scan-config views"
+    );
+    assert!(
+        history
+            .iter()
+            .all(|record| record.command_name() != "delete_config"),
+        "a trashed policy must not reach the scan-config delete command"
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn gvmd_adapter_config_family_preflight_rejects_cross_family_mutations_before_writes() {
     // Issue #648: every ID-only config mutation must first prove that the id
     // belongs to the route family. Cover both directions and every scan-config

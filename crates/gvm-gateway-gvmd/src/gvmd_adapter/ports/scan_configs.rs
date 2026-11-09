@@ -196,23 +196,7 @@ impl ScanConfigPort for GvmdAdapter {
         session_token: &str,
         id: &str,
     ) -> Result<ScanConfig, GatewayError> {
-        let parsed = self
-            .execute_with_session(
-                session_token,
-                "scan_configs.get",
-                GetScanConfigRequest::new(parse_entity_id(id)?),
-            )
-            .await?;
-        parsed
-            .items
-            .into_iter()
-            .next()
-            // A policy shares the config resource family but must not be
-            // readable through the scan-config route; treat it as absent so the
-            // discriminator holds symmetrically with `get_policy`.
-            .filter(|item| item.usage_type.as_deref() == Some("scan"))
-            .map(scan_config_from_gmp)
-            .ok_or_else(|| GatewayError::NotFound(format!("scan config {id} not found")))
+        self.get_typed_scan_config(session_token, id, None).await
     }
 
     async fn modify_scan_config(
@@ -239,7 +223,14 @@ impl ScanConfigPort for GvmdAdapter {
         id: &str,
         ultimate: bool,
     ) -> Result<(), GatewayError> {
-        self.get_scan_config(session_token, id).await?;
+        match self.get_scan_config(session_token, id).await {
+            Ok(_) => {}
+            Err(GatewayError::NotFound(_)) if ultimate => {
+                self.get_typed_scan_config(session_token, id, Some(true))
+                    .await?;
+            }
+            Err(error) => return Err(error),
+        }
         let mut request = DeleteScanConfigRequest::new(parse_entity_id(id)?);
         request.ultimate = ultimate.then_some(true);
         self.execute_with_session(session_token, "scan_configs.delete", request)
@@ -542,6 +533,33 @@ impl ScanConfigPort for GvmdAdapter {
 }
 
 impl GvmdAdapter {
+    async fn get_typed_scan_config(
+        &self,
+        session_token: &str,
+        id: &str,
+        trash: Option<bool>,
+    ) -> Result<ScanConfig, GatewayError> {
+        let mut request = GetScanConfigRequest::new(parse_entity_id(id)?);
+        request.trash = trash;
+        if trash == Some(true) {
+            // The deletion guard needs only identity and usage metadata; avoid
+            // requesting unrelated expanded details from the trash view.
+            request.details = Some(false);
+        }
+        let parsed = self
+            .execute_with_session(session_token, "scan_configs.get", request)
+            .await?;
+        parsed
+            .items
+            .into_iter()
+            .next()
+            // Policies share the config resource family but must never be
+            // accepted through scan-config routes, whether active or trashed.
+            .filter(|item| item.usage_type.as_deref() == Some("scan"))
+            .map(scan_config_from_gmp)
+            .ok_or_else(|| GatewayError::NotFound(format!("scan config {id} not found")))
+    }
+
     async fn validate_active_scan_config_base(
         &self,
         session_token: &str,
