@@ -7,8 +7,18 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+WORKFLOW_DIR = ROOT / ".github" / "workflows"
 WORKFLOW = ROOT / ".github" / "workflows" / "security.yml"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release-publish.yml"
+SETUP_RUST_ACTION = (
+    "greenbone/actions/setup-rust@d6d4c9500cb4e83f8a516ec1d40b04bcc720bd22"
+)
+BLOCKED_ACTIONS = (
+    "dtolnay/rust-toolchain@",
+    "Swatinem/rust-cache@",
+    "EmbarkStudios/cargo-deny-action@",
+    "taiki-e/install-action@",
+)
 REQUIRED_JOBS = (
     "cargo-audit",
     "cargo-machete",
@@ -23,6 +33,13 @@ REQUIRED_JOBS = (
 
 def source() -> str:
     return WORKFLOW.read_text(encoding="utf-8")
+
+
+def workflow_sources() -> dict[str, str]:
+    return {
+        path.name: path.read_text(encoding="utf-8")
+        for path in sorted(WORKFLOW_DIR.glob("*.yml"))
+    }
 
 
 def aggregate_needs(workflow: str) -> tuple[str, ...]:
@@ -51,13 +68,51 @@ class SecurityWorkflowTests(unittest.TestCase):
             with self.subTest(job=job):
                 self.assertIn(f'test "${variable}_RESULT" = success', workflow)
 
-    def test_external_actions_and_security_tools_are_pinned(self) -> None:
-        workflow = source()
-        uses = re.findall(r"(?m)^\s+- uses: ([^\s]+)", workflow)
+    def test_external_actions_and_cargo_tools_are_pinned(self) -> None:
+        workflows = workflow_sources()
+        all_workflows = "\n".join(workflows.values())
+        uses = re.findall(r"(?m)^\s+uses: ([^\s]+)|^\s+- uses: ([^\s]+)", all_workflows)
+        uses = [direct or named for direct, named in uses]
         self.assertTrue(uses)
         for action in uses:
             with self.subTest(action=action):
                 self.assertRegex(action, r"@[0-9a-f]{40}$")
+        for blocked in BLOCKED_ACTIONS:
+            with self.subTest(blocked=blocked):
+                self.assertNotIn(blocked, all_workflows)
+
+        setup_count = all_workflows.count(f"uses: {SETUP_RUST_ACTION}")
+        cache_keys = re.findall(r"(?m)^\s+cache-key: (.+)$", all_workflows)
+        self.assertGreater(setup_count, 0)
+        self.assertEqual(len(cache_keys), setup_count)
+        self.assertEqual(len(cache_keys), len(set(cache_keys)))
+        for cache_key in cache_keys:
+            with self.subTest(cache_key=cache_key):
+                self.assertIn("${{ runner.os }}", cache_key)
+                self.assertIn("${{ runner.arch }}", cache_key)
+                self.assertIn("${{ hashFiles('**/Cargo.lock') }}", cache_key)
+
+        expected_installs = (
+            'cargo install cargo-deny --version "${CARGO_DENY_VERSION}" --locked',
+            'cargo install cargo-llvm-cov --version "${CARGO_LLVM_COV_VERSION}" --locked',
+            'cargo install cargo-audit --version "${CARGO_AUDIT_VERSION}" --locked',
+            'cargo install cargo-machete --version "${CARGO_MACHETE_VERSION}" --locked',
+            'cargo install cargo-vet --version "${CARGO_VET_VERSION}" --locked',
+            'cargo install cargo-cyclonedx --version "${CARGO_CYCLONEDX_VERSION}" --locked',
+            'cargo install cargo-geiger --version "${CARGO_GEIGER_VERSION}" --locked',
+            'cargo install cargo-geiger --version "${CARGO_GEIGER_VERSION}" --locked',
+            'cargo install cargo-cyclonedx --version "${CARGO_CYCLONEDX_VERSION}" --locked',
+        )
+        installs = re.findall(r"(?m)^\s+run: (cargo install .+)$", all_workflows)
+        self.assertCountEqual(installs, expected_installs)
+        for install in installs:
+            with self.subTest(install=install):
+                self.assertRegex(
+                    install,
+                    r'^cargo install cargo-[a-z0-9-]+ --version "\$\{CARGO_[A-Z0-9_]+_VERSION\}" --locked$',
+                )
+
+        workflow = source()
         for value in (
             'CARGO_AUDIT_VERSION: "0.22.2"',
             'CARGO_CYCLONEDX_VERSION: "0.5.9"',
@@ -68,12 +123,18 @@ class SecurityWorkflowTests(unittest.TestCase):
             "semgrep/semgrep:1.176.1@sha256:",
         ):
             self.assertIn(value, workflow)
-        self.assertNotRegex(workflow, r"cargo install [^\n]+(?!@\d)")
 
+        ci = workflows["ci.yml"]
+        self.assertIn('CARGO_DENY_VERSION: "0.20.2"', ci)
+        self.assertIn('CARGO_LLVM_COV_VERSION: "0.9.1"', ci)
+        self.assertIn("RUSTUP_TOOLCHAIN: ${{ matrix.rust }}", ci)
+        self.assertIn('RUSTUP_TOOLCHAIN: "1.89.0"', ci)
         release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
         self.assertIn('CARGO_CYCLONEDX_VERSION: "0.5.9"', release)
-        self.assertIn("tool: cargo-cyclonedx@${{ env.CARGO_CYCLONEDX_VERSION }}", release)
-        self.assertNotIn("cargo install cargo-cyclonedx", release)
+        self.assertIn(
+            'cargo install cargo-cyclonedx --version "${CARGO_CYCLONEDX_VERSION}" --locked',
+            release,
+        )
 
     def test_networked_jobs_use_hardened_runner_and_evidence_is_retained(self) -> None:
         workflow = source()
