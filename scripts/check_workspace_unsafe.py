@@ -55,6 +55,7 @@ def generate_report(package: WorkspacePackage, report_dir: Path) -> int:
         [
             "cargo",
             "geiger",
+            "--locked",
             "--manifest-path",
             str(ROOT / package.manifest),
             "--all-features",

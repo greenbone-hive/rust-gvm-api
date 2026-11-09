@@ -5,8 +5,9 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from scripts.check_workspace_unsafe import first_party_unsafe, unsafe_total
+from scripts.check_workspace_unsafe import first_party_unsafe, generate_report, unsafe_total
 from scripts.workspace_inventory import (
     WorkspacePackage,
     load_inventory,
@@ -83,6 +84,33 @@ class WorkspaceSecurityTests(unittest.TestCase):
         }
         self.assertEqual(first_party_unsafe(payload, package), 3)
         self.assertEqual(unsafe_total({"functions": {"unsafe_": 0}}), 0)
+
+    def test_geiger_report_uses_the_committed_lockfile(self) -> None:
+        # Release evidence must analyze the dependency graph qualified by the
+        # other locked build gates, not resolve a newer registry snapshot.
+        directory = tempfile.TemporaryDirectory(prefix="cargo-geiger-report-")
+        self.addCleanup(directory.cleanup)
+        package = WorkspacePackage("gateway", Path("gateway/Cargo.toml"))
+        payload = {
+            "packages": [
+                {
+                    "package": {"id": {"name": "gateway"}},
+                    "unsafety": {"used": {"functions": {"unsafe_": 0}}},
+                }
+            ]
+        }
+        completed = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=json.dumps(payload), stderr=""
+        )
+
+        with patch(
+            "scripts.check_workspace_unsafe.subprocess.run", return_value=completed
+        ) as run:
+            self.assertEqual(generate_report(package, Path(directory.name)), 0)
+
+        command = run.call_args.args[0]
+        self.assertIn("--locked", command)
+        self.assertLess(command.index("--locked"), command.index("--manifest-path"))
 
     def test_inventory_rejects_parent_paths(self) -> None:
         directory = tempfile.TemporaryDirectory(prefix="workspace-inventory-")
