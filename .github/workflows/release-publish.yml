@@ -250,8 +250,10 @@ jobs:
           cargo cyclonedx --format json --all --all-features --target all --spec-version 1.5
           cargo cyclonedx --format xml --all --all-features --target all --spec-version 1.5
           mkdir -p sbom-artifacts
-          find . -name '*.cdx.json' -not -path '*/target/*' -not -path '*/sbom-artifacts/*' -exec cp {} sbom-artifacts/ \;
-          find . -name '*.cdx.xml' -not -path '*/target/*' -not -path '*/sbom-artifacts/*' -exec cp {} sbom-artifacts/ \;
+          python3 scripts/collect_workspace_sboms.py \
+            --format json \
+            --format xml \
+            sbom-artifacts
           cd sbom-artifacts && tar czf ../rust-gvm-api-sbom.tar.gz -- *.cdx.* && cd ..
           sha256sum rust-gvm-api-sbom.tar.gz > rust-gvm-api-sbom.tar.gz.sha256
           gh release upload "${RELEASE_TAG}" rust-gvm-api-sbom.tar.gz rust-gvm-api-sbom.tar.gz.sha256 --clobber
