@@ -62,8 +62,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Configure git credentials for private deps
         run: git config --global url."https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/".insteadOf "https://github.com/"
-      - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - name: Set up Rust
+        uses: greenbone/actions/setup-rust@d6d4c9500cb4e83f8a516ec1d40b04bcc720bd22 # v3
+        with:
+          rust-version: stable
+          components: rustfmt
+          cache-key: cargo-e2e-rest-discovery-${{ runner.os }}-${{ runner.arch }}-stable-${{ hashFiles('**/Cargo.lock') }}
       - name: Start compose-backed runtime
         run: ./scripts/compose-dev.sh up -d --build
       - name: Run REST discovery-scan E2E suite

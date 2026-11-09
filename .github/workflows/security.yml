@@ -41,10 +41,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
-      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2
+      - name: Set up Rust
+        uses: greenbone/actions/setup-rust@d6d4c9500cb4e83f8a516ec1d40b04bcc720bd22 # v3
         with:
-          tool: cargo-audit@${{ env.CARGO_AUDIT_VERSION }}
+          rust-version: stable
+          components: rustfmt
+          cache-key: cargo-security-audit-${{ runner.os }}-${{ runner.arch }}-stable-${{ env.CARGO_AUDIT_VERSION }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install pinned cargo-audit
+        run: cargo install cargo-audit --version "${CARGO_AUDIT_VERSION}" --locked
       - name: Run cargo-audit
         run: cargo audit
 
@@ -58,10 +62,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
-      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2
+      - name: Set up Rust
+        uses: greenbone/actions/setup-rust@d6d4c9500cb4e83f8a516ec1d40b04bcc720bd22 # v3
         with:
-          tool: cargo-machete@${{ env.CARGO_MACHETE_VERSION }}
+          rust-version: stable
+          components: rustfmt
+          cache-key: cargo-security-machete-${{ runner.os }}-${{ runner.arch }}-stable-${{ env.CARGO_MACHETE_VERSION }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install pinned cargo-machete
+        run: cargo install cargo-machete --version "${CARGO_MACHETE_VERSION}" --locked
       - name: Run cargo-machete
         run: cargo machete
 
@@ -75,10 +83,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
-      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2
+      - name: Set up Rust
+        uses: greenbone/actions/setup-rust@d6d4c9500cb4e83f8a516ec1d40b04bcc720bd22 # v3
         with:
-          tool: cargo-vet@${{ env.CARGO_VET_VERSION }}
+          rust-version: stable
+          components: rustfmt
+          cache-key: cargo-security-vet-${{ runner.os }}-${{ runner.arch }}-stable-${{ env.CARGO_VET_VERSION }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install pinned cargo-vet
+        run: cargo install cargo-vet --version "${CARGO_VET_VERSION}" --locked
       - name: Require committed dependency review evidence
         run: cargo vet --locked
 
@@ -92,7 +104,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
+      - name: Set up Rust
+        uses: greenbone/actions/setup-rust@d6d4c9500cb4e83f8a516ec1d40b04bcc720bd22 # v3
+        with:
+          rust-version: stable
+          components: rustfmt
+          cache-key: cargo-security-policy-${{ runner.os }}-${{ runner.arch }}-stable-${{ hashFiles('**/Cargo.lock') }}
       - name: Test fail-closed security helpers and workflow policy
         run: >-
           python3 -B -m unittest
@@ -112,11 +129,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
-      - uses: Swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31 # v2
-      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2
+      - name: Set up Rust
+        uses: greenbone/actions/setup-rust@d6d4c9500cb4e83f8a516ec1d40b04bcc720bd22 # v3
         with:
-          tool: cargo-cyclonedx@${{ env.CARGO_CYCLONEDX_VERSION }}
+          rust-version: stable
+          components: rustfmt
+          cache-key: cargo-security-sbom-${{ runner.os }}-${{ runner.arch }}-stable-${{ env.CARGO_CYCLONEDX_VERSION }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install pinned cargo-cyclonedx
+        run: cargo install cargo-cyclonedx --version "${CARGO_CYCLONEDX_VERSION}" --locked
       - name: Verify the locked all-feature workspace
         run: cargo metadata --locked --all-features --format-version 1 > /dev/null
       - name: Generate complete workspace CycloneDX JSON
@@ -164,13 +184,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
-      - uses: Swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31 # v2
-      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2
+      - name: Set up Rust
+        uses: greenbone/actions/setup-rust@d6d4c9500cb4e83f8a516ec1d40b04bcc720bd22 # v3
         with:
-          tool: cargo-geiger@${{ env.CARGO_GEIGER_VERSION }}
+          rust-version: stable
+          components: rustfmt
+          cache-key: cargo-security-geiger-report-${{ runner.os }}-${{ runner.arch }}-stable-${{ env.CARGO_GEIGER_VERSION }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install pinned cargo-geiger
+        run: cargo install cargo-geiger --version "${CARGO_GEIGER_VERSION}" --locked
       - name: Generate every first-party package report
-        # The installer and fallback cache share the default Cargo home. Use
+        # The pinned install and setup-rust cache share the default Cargo home. Use
         # clean scan-local state so partial registry trees cannot poison Geiger.
         env:
           CARGO_HOME: ${{ runner.temp }}/cargo-geiger-scan-home
@@ -195,11 +218,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
-      - uses: Swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31 # v2
-      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2
+      - name: Set up Rust
+        uses: greenbone/actions/setup-rust@d6d4c9500cb4e83f8a516ec1d40b04bcc720bd22 # v3
         with:
-          tool: cargo-geiger@${{ env.CARGO_GEIGER_VERSION }}
+          rust-version: stable
+          components: rustfmt
+          cache-key: cargo-security-geiger-gate-${{ runner.os }}-${{ runner.arch }}-stable-${{ env.CARGO_GEIGER_VERSION }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install pinned cargo-geiger
+        run: cargo install cargo-geiger --version "${CARGO_GEIGER_VERSION}" --locked
       - name: Reject unsafe Rust in first-party workspace packages
         env:
           CARGO_HOME: ${{ runner.temp }}/cargo-geiger-scan-home

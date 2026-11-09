@@ -45,7 +45,12 @@ jobs:
 
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
 
-      - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
+      - name: Set up Rust
+        uses: greenbone/actions/setup-rust@d6d4c9500cb4e83f8a516ec1d40b04bcc720bd22 # v3
+        with:
+          rust-version: stable
+          components: rustfmt
+          cache-key: cargo-release-prepare-${{ runner.os }}-${{ runner.arch }}-stable-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Configure git credentials for private deps
         env:

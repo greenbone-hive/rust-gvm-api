@@ -9,13 +9,25 @@ context name.
 
 ## Deterministic tooling and workflow actions
 
-External actions are pinned by full commit SHA. Security tools are installed at
-the versions declared in `.github/workflows/security.yml`; do not replace those
-versions with tags such as `latest`. Networked jobs use least-privilege
-permissions and StepSecurity Harden-Runner in audited-egress mode. Move to an
-egress allowlist only after observed Cargo, crates.io, GitHub, Go, Semgrep, and
-SARIF endpoints have been reviewed across scheduled, pull-request, and
-merge-queue runs.
+External actions are pinned by full commit SHA. Rust jobs use Greenbone's
+`greenbone/actions/setup-rust` action with cache keys that separate the job,
+toolchain, runner OS and architecture, relevant Cargo tool versions, and
+`Cargo.lock` content. Keep those dimensions when adding or changing a cache;
+sharing target output across jobs, architectures, or toolchains is unsupported.
+
+Cargo-based CI and security tools are installed with an exact version and
+`--locked`. The versions live in the workflow `env` blocks; do not replace them
+with tags such as `latest`, version ranges, or unpinned installs. The setup
+action caches Cargo binaries, so the first run for a new tool version compiles
+the tool while subsequent runs can restore the pinned binary. Cargo Geiger is
+the exception for scan state: its command retains an isolated `CARGO_HOME` and
+`CARGO_TARGET_DIR` so cached installer or registry state cannot affect unsafe
+code evidence.
+
+Networked jobs use least-privilege permissions and StepSecurity Harden-Runner
+in audited-egress mode. Move to an egress allowlist only after observed Cargo,
+crates.io, GitHub, Go, Semgrep, and SARIF endpoints have been reviewed across
+scheduled, pull-request, and merge-queue runs.
 
 ## Updating Cargo Vet evidence
 
