@@ -78,6 +78,50 @@ fn credential_store_snmp_request_preserves_required_typed_algorithms() {
 }
 
 #[test]
+fn credential_store_snmp_create_rejects_complete_request_without_auth_algorithm() {
+    // Regression coverage for the store-backed SNMP constructor contract:
+    // complete vault references and a privacy algorithm cannot compensate for
+    // the required authentication algorithm being absent.
+    let request: CreateCredentialRequest = serde_json::from_value(json!({
+        "name": "Stored SNMP credential",
+        "type": "cs_snmp",
+        "credentialStoreId": "123e4567-e89b-12d3-a456-426614174000",
+        "vaultId": "secret/data/snmp",
+        "hostIdentifier": "router-1",
+        "privacyAlgorithm": "aes"
+    }))
+    .expect("complete store-backed request should deserialize");
+
+    assert!(matches!(
+        request.validate(),
+        Err(GatewayError::InvalidInput(_))
+    ));
+}
+
+#[test]
+fn non_snmp_store_backed_create_rejects_each_snmp_algorithm_field() {
+    // Regression coverage for type-specific store-backed fields: neither SNMP
+    // algorithm is valid on another advertised store-backed type such as cs_up.
+    for (field, value) in [("authAlgorithm", "sha1"), ("privacyAlgorithm", "aes")] {
+        let mut request = json!({
+            "name": "Stored username credential",
+            "type": "cs_up",
+            "credentialStoreId": "123e4567-e89b-12d3-a456-426614174000",
+            "vaultId": "secret/data/service",
+            "hostIdentifier": "production"
+        });
+        request[field] = json!(value);
+        let request: CreateCredentialRequest = serde_json::from_value(request)
+            .expect("store-backed request should deserialize before semantic validation");
+
+        assert!(
+            matches!(request.validate(), Err(GatewayError::InvalidInput(_))),
+            "cs_up must reject {field}"
+        );
+    }
+}
+
+#[test]
 fn credential_response_preserves_known_and_unknown_types() {
     // Response conversion should expose both known rust-gvm type values and
     // future backend values without collapsing the public `type` field.
