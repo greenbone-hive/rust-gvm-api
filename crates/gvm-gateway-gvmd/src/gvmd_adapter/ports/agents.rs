@@ -345,6 +345,7 @@ impl AgentPort for GvmdAdapter {
             .as_deref()
             .map(parse_entity_ids)
             .transpose()?
+            .map(CollectionUpdate::Replace)
             .unwrap_or_default();
         self.execute_with_session(session_token, "agent_groups.modify", request)
             .await?;

@@ -1,7 +1,7 @@
 # Developer guide
 
 This guide is the practical code map for contributors to `rust-gvm-api`. It
-describes the current 0.5.0 workspace on `main`, where behavior belongs, and
+describes the current 0.6.0 workspace on `main`, where behavior belongs, and
 the shortest reliable validation path for each kind of change.
 
 ## What this repository owns

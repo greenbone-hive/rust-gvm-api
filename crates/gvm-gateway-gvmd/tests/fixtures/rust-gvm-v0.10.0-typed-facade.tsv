@@ -1,6 +1,6 @@
 # rust-gvm-reference	release-tag
-# rust-gvm-tag	v0.9.0
-# rust-gvm-revision	d57605b5d1284c36e3f4e58112a6a987baa3395b
+# rust-gvm-tag	v0.10.0
+# rust-gvm-revision	75d5c376b106977561c912d97d72776bb801ec67
 module	method
 agents	clone_agent_group
 agents	create_agent_group

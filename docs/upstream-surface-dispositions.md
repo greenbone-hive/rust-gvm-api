@@ -6,14 +6,13 @@ availability does not by itself authorize a REST route, domain port, or OpenAPI
 operation. Completed issue #381 is the closure record for the v0.7.0 baseline;
 new upstream methods require a new, explicit disposition review.
 
-Issue #588 established the reviewed rust-gvm v0.8.0 facade inventory. Issue
-#620 advances the accepted inventory baseline to v0.9.0. Issues #632 and #634
-temporarily pin all five workspace dependencies to immutable merge commit
-`11d7d6f284dbb14100afbaec5762d521a45eaf56` for typed GMP server-error and
-feed-synchronization semantics from upstream PRs #803 and #804. Those additive
-APIs do not change the reviewed async facade, so the inventory and disposition
-ledger remain coupled fail-closed to the v0.9.0 release and revision
-`d57605b5d1284c36e3f4e58112a6a987baa3395b`.
+Issue #588 established the reviewed rust-gvm v0.8.0 facade inventory, and issue
+#620 advanced the accepted inventory baseline to v0.9.0. The v0.10.0 release
+includes the typed GMP server-error and feed-synchronization semantics consumed
+by issues #632 and #634 while retaining the same 267 public async helpers. The
+inventory and disposition ledger therefore advance atomically, with unchanged
+method dispositions, to v0.10.0 release revision
+`75d5c376b106977561c912d97d72776bb801ec67`.
 
 The complete method-level closure record is the machine-readable
 [`upstream-surface-dispositions.tsv`](upstream-surface-dispositions.tsv). It
@@ -21,9 +20,9 @@ classifies every public async method in the pinned `rust-gvm` typed facade as
 exactly one of `exposed`, `mapped`, `internal`, `blocked`, `deferred`, or
 `omitted`, with a review rationale and repository evidence. The offline drift
 guard reconciles that ledger against the checked-in
-[`rust-gvm-v0.9.0-typed-facade.tsv`](../crates/gvm-gateway-gvmd/tests/fixtures/rust-gvm-v0.9.0-typed-facade.tsv)
+[`rust-gvm-v0.10.0-typed-facade.tsv`](../crates/gvm-gateway-gvmd/tests/fixtures/rust-gvm-v0.10.0-typed-facade.tsv)
 snapshot at the accepted release. A separate architecture assertion pins every
-workspace rust-gvm component to the later PR #804 merge commit.
+workspace rust-gvm component to the same immutable v0.10.0 release commit.
 This table remains the family-level product narrative; the TSV is the
 exhaustive per-method source of truth.
 

@@ -11,7 +11,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 rust-version = "1.89.0"
 license = "AGPL-3.0-or-later"
@@ -23,15 +23,13 @@ async-trait = "0.1.89"
 base64 = "0.23.0"
 axum = "0.8.9"
 clap = { version = "4.6.1", features = ["derive"] }
-# Issues #632 and #634 consume typed GMP server-error and feed-sync support
-# from merged rust-gvm PRs #803 and #804. Keep all five workspace components
-# on the later immutable merge commit until the support is available in a
-# release newer than v0.9.0.
-gvm-client = { git = "https://github.com/greenbone-hive/rust-gvm", rev = "11d7d6f284dbb14100afbaec5762d521a45eaf56" }
-gvm-connection = { git = "https://github.com/greenbone-hive/rust-gvm", rev = "11d7d6f284dbb14100afbaec5762d521a45eaf56" }
-gvm-gmp = { git = "https://github.com/greenbone-hive/rust-gvm", rev = "11d7d6f284dbb14100afbaec5762d521a45eaf56", features = ["serde"] }
-gvm-mock-server = { git = "https://github.com/greenbone-hive/rust-gvm", rev = "11d7d6f284dbb14100afbaec5762d521a45eaf56" }
-gvm-protocol = { git = "https://github.com/greenbone-hive/rust-gvm", rev = "11d7d6f284dbb14100afbaec5762d521a45eaf56" }
+# Keep all five workspace components on the immutable rust-gvm v0.10.0
+# release commit so Cargo resolves one coherent upstream snapshot.
+gvm-client = { git = "https://github.com/greenbone-hive/rust-gvm", rev = "75d5c376b106977561c912d97d72776bb801ec67" }
+gvm-connection = { git = "https://github.com/greenbone-hive/rust-gvm", rev = "75d5c376b106977561c912d97d72776bb801ec67" }
+gvm-gmp = { git = "https://github.com/greenbone-hive/rust-gvm", rev = "75d5c376b106977561c912d97d72776bb801ec67", features = ["serde"] }
+gvm-mock-server = { git = "https://github.com/greenbone-hive/rust-gvm", rev = "75d5c376b106977561c912d97d72776bb801ec67" }
+gvm-protocol = { git = "https://github.com/greenbone-hive/rust-gvm", rev = "75d5c376b106977561c912d97d72776bb801ec67" }
 http = "1.4.1"
 opentelemetry = { version = "0.33.0", features = ["trace"] }
 opentelemetry-otlp = { version = "0.33.0", features = ["grpc-tonic", "trace"] }

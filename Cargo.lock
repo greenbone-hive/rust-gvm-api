@@ -512,7 +512,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -661,8 +661,8 @@ dependencies = [
 
 [[package]]
 name = "gvm-client"
-version = "0.9.0"
-source = "git+https://github.com/greenbone-hive/rust-gvm?rev=11d7d6f284dbb14100afbaec5762d521a45eaf56#11d7d6f284dbb14100afbaec5762d521a45eaf56"
+version = "0.10.0"
+source = "git+https://github.com/greenbone-hive/rust-gvm?rev=75d5c376b106977561c912d97d72776bb801ec67#75d5c376b106977561c912d97d72776bb801ec67"
 dependencies = [
  "async-trait",
  "gvm-connection",
@@ -675,8 +675,8 @@ dependencies = [
 
 [[package]]
 name = "gvm-connection"
-version = "0.9.0"
-source = "git+https://github.com/greenbone-hive/rust-gvm?rev=11d7d6f284dbb14100afbaec5762d521a45eaf56#11d7d6f284dbb14100afbaec5762d521a45eaf56"
+version = "0.10.0"
+source = "git+https://github.com/greenbone-hive/rust-gvm?rev=75d5c376b106977561c912d97d72776bb801ec67#75d5c376b106977561c912d97d72776bb801ec67"
 dependencies = [
  "async-trait",
  "gvm-protocol",
@@ -687,7 +687,7 @@ dependencies = [
 
 [[package]]
 name = "gvm-gateway"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "async-trait",
  "axum",
@@ -720,7 +720,7 @@ dependencies = [
 
 [[package]]
 name = "gvm-gateway-app"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "async-trait",
  "gvm-gateway-domain",
@@ -733,7 +733,7 @@ dependencies = [
 
 [[package]]
 name = "gvm-gateway-domain"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "async-trait",
  "serde",
@@ -744,7 +744,7 @@ dependencies = [
 
 [[package]]
 name = "gvm-gateway-e2e"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "form_urlencoded",
@@ -756,7 +756,7 @@ dependencies = [
 
 [[package]]
 name = "gvm-gateway-gvmd"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "async-trait",
  "axum",
@@ -775,7 +775,7 @@ dependencies = [
 
 [[package]]
 name = "gvm-gateway-performance"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "gvm-gateway-e2e",
@@ -786,7 +786,7 @@ dependencies = [
 
 [[package]]
 name = "gvm-gateway-rest"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "aide",
  "async-trait",
@@ -813,8 +813,8 @@ dependencies = [
 
 [[package]]
 name = "gvm-gmp"
-version = "0.9.0"
-source = "git+https://github.com/greenbone-hive/rust-gvm?rev=11d7d6f284dbb14100afbaec5762d521a45eaf56#11d7d6f284dbb14100afbaec5762d521a45eaf56"
+version = "0.10.0"
+source = "git+https://github.com/greenbone-hive/rust-gvm?rev=75d5c376b106977561c912d97d72776bb801ec67#75d5c376b106977561c912d97d72776bb801ec67"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -827,8 +827,8 @@ dependencies = [
 
 [[package]]
 name = "gvm-mock-server"
-version = "0.9.0"
-source = "git+https://github.com/greenbone-hive/rust-gvm?rev=11d7d6f284dbb14100afbaec5762d521a45eaf56#11d7d6f284dbb14100afbaec5762d521a45eaf56"
+version = "0.10.0"
+source = "git+https://github.com/greenbone-hive/rust-gvm?rev=75d5c376b106977561c912d97d72776bb801ec67#75d5c376b106977561c912d97d72776bb801ec67"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -847,8 +847,8 @@ dependencies = [
 
 [[package]]
 name = "gvm-protocol"
-version = "0.9.0"
-source = "git+https://github.com/greenbone-hive/rust-gvm?rev=11d7d6f284dbb14100afbaec5762d521a45eaf56#11d7d6f284dbb14100afbaec5762d521a45eaf56"
+version = "0.10.0"
+source = "git+https://github.com/greenbone-hive/rust-gvm?rev=75d5c376b106977561c912d97d72776bb801ec67#75d5c376b106977561c912d97d72776bb801ec67"
 dependencies = [
  "quick-xml",
  "thiserror",
@@ -1951,7 +1951,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2009,7 +2009,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2381,7 +2381,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2947,7 +2947,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

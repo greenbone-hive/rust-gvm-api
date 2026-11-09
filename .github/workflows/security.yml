@@ -170,6 +170,11 @@ jobs:
         with:
           tool: cargo-geiger@${{ env.CARGO_GEIGER_VERSION }}
       - name: Generate every first-party package report
+        # The installer and fallback cache share the default Cargo home. Use
+        # clean scan-local state so partial registry trees cannot poison Geiger.
+        env:
+          CARGO_HOME: ${{ runner.temp }}/cargo-geiger-scan-home
+          CARGO_TARGET_DIR: ${{ runner.temp }}/cargo-geiger-scan-target
         run: python3 scripts/check_workspace_unsafe.py --report-only
       - name: Upload Cargo Geiger evidence
         if: always()
@@ -196,6 +201,9 @@ jobs:
         with:
           tool: cargo-geiger@${{ env.CARGO_GEIGER_VERSION }}
       - name: Reject unsafe Rust in first-party workspace packages
+        env:
+          CARGO_HOME: ${{ runner.temp }}/cargo-geiger-scan-home
+          CARGO_TARGET_DIR: ${{ runner.temp }}/cargo-geiger-scan-target
         run: python3 scripts/check_workspace_unsafe.py
 
   semgrep:

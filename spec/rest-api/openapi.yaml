@@ -46,7 +46,7 @@ info:
     Responses return `traceparent` and, when present, `tracestate` for correlation.
     `baggage` is accepted as parent context input but is not echoed back in responses.
 
-  version: 0.5.0
+  version: 0.6.0
   license:
     name: AGPL-3.0-or-later
     identifier: AGPL-3.0-or-later
