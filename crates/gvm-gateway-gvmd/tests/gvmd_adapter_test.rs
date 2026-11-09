@@ -3165,6 +3165,8 @@ async fn gvmd_adapter_store_backed_credential_create_and_update_forward_vault_re
             ModifyCredentialInput {
                 vault_id: Some("secret/data/service-v2".to_string()),
                 host_identifier: Some("staging".to_string()),
+                auth_algorithm: Some("sha1".to_string()),
+                privacy_algorithm: Some("aes".to_string()),
                 ..Default::default()
             },
         )
@@ -3187,6 +3189,181 @@ async fn gvmd_adapter_store_backed_credential_create_and_update_forward_vault_re
     let modify_xml = String::from_utf8(modify.raw_xml().to_vec()).expect("xml command");
     assert!(modify_xml.contains("<vault_id>secret/data/service-v2</vault_id>"));
     assert!(modify_xml.contains("<host_identifier>staging</host_identifier>"));
+    assert!(modify_xml.contains("<auth_algorithm>sha1</auth_algorithm>"));
+    assert!(modify_xml.contains("<algorithm>aes</algorithm>"));
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_constructs_every_advertised_credential_request_type() {
+    let (adapter, server, token) = create_mock_adapter_v22_8().await;
+    server.clear_history();
+
+    // This is the adapter half of the closed request-type contract: every
+    // value advertised by REST must produce a rust-gvm typed request that
+    // passes its constructor validation and reaches the mock backend.
+    for credential_type in [
+        "cc", "pw", "smime", "snmp", "snmpv3", "up", "usk", "cs_pw", "cs_pgp", "cs_smime",
+        "cs_snmp", "cs_up", "cs_usk",
+    ] {
+        let mut input = CreateCredentialInput {
+            name: format!("Credential {credential_type}"),
+            credential_type: credential_type.to_string(),
+            ..Default::default()
+        };
+        match credential_type {
+            "cc" => {
+                input.private_key = Some("PRIVATE KEY".to_string());
+                input.certificate = Some("CERTIFICATE".to_string());
+            }
+            "smime" => input.certificate = Some("CERTIFICATE".to_string()),
+            "snmp" => input.community = Some("public".to_string()),
+            "snmpv3" => {
+                input.login = Some("snmp-user".to_string());
+                input.password = Some("auth-secret".to_string());
+                input.auth_algorithm = Some("sha1".to_string());
+            }
+            "up" => input.login = Some("user".to_string()),
+            "usk" => {
+                input.login = Some("user".to_string());
+                input.private_key = Some("PRIVATE KEY".to_string());
+            }
+            value if value.starts_with("cs_") => {
+                input.vault_id = Some(format!("secret/data/{value}"));
+                input.host_identifier = Some("production".to_string());
+                if value == "cs_snmp" {
+                    input.auth_algorithm = Some("sha1".to_string());
+                    input.privacy_algorithm = Some("aes".to_string());
+                }
+            }
+            _ => {}
+        }
+
+        adapter
+            .create_credential(&token, input)
+            .await
+            .unwrap_or_else(|error| panic!("{credential_type} must be constructible: {error:?}"));
+    }
+
+    let create_commands = server
+        .command_history()
+        .into_iter()
+        .filter(|record| record.command_name() == "create_credential")
+        .collect::<Vec<_>>();
+    assert_eq!(create_commands.len(), 13);
+    let stored_snmp = create_commands
+        .iter()
+        .map(|record| String::from_utf8(record.raw_xml().to_vec()).expect("XML command"))
+        .find(|xml| xml.contains("<type>cs_snmp</type>"))
+        .expect("cs_snmp command should be recorded");
+    assert!(stored_snmp.contains("<auth_algorithm>sha1</auth_algorithm>"));
+    assert!(stored_snmp.contains("<algorithm>aes</algorithm>"));
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_rejects_complete_store_backed_snmp_create_without_auth_algorithm() {
+    let (adapter, server, token) = create_mock_adapter_v22_8().await;
+    server.clear_history();
+
+    // Regression coverage for the typed store-backed SNMP boundary: reject a
+    // request with all vault references before any GMP create command is sent
+    // when its mandatory authentication algorithm is missing.
+    let result = adapter
+        .create_credential(
+            &token,
+            CreateCredentialInput {
+                name: "Stored SNMP credential".to_string(),
+                credential_type: "cs_snmp".to_string(),
+                credential_store_id: Some("123e4567-e89b-12d3-a456-426614174000".to_string()),
+                vault_id: Some("secret/data/snmp".to_string()),
+                host_identifier: Some("router-1".to_string()),
+                privacy_algorithm: Some("aes".to_string()),
+                ..Default::default()
+            },
+        )
+        .await;
+
+    assert!(matches!(result, Err(GatewayError::InvalidInput(_))));
+    assert!(server
+        .command_history()
+        .into_iter()
+        .all(|record| record.command_name() != "create_credential"));
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_rejects_snmp_algorithms_on_non_snmp_store_backed_create() {
+    let (adapter, server, token) = create_mock_adapter_v22_8().await;
+    server.clear_history();
+
+    // Regression coverage for typed store-backed credential variants: both
+    // SNMP-only algorithm fields must fail locally for cs_up, without sending
+    // a create_credential command to the mock backend.
+    for (auth_algorithm, privacy_algorithm, field) in [
+        (Some("sha1".to_string()), None, "authAlgorithm"),
+        (None, Some("aes".to_string()), "privacyAlgorithm"),
+    ] {
+        let result = adapter
+            .create_credential(
+                &token,
+                CreateCredentialInput {
+                    name: "Stored username credential".to_string(),
+                    credential_type: "cs_up".to_string(),
+                    credential_store_id: Some("123e4567-e89b-12d3-a456-426614174000".to_string()),
+                    vault_id: Some("secret/data/service".to_string()),
+                    host_identifier: Some("production".to_string()),
+                    auth_algorithm,
+                    privacy_algorithm,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+        assert!(
+            matches!(result, Err(GatewayError::InvalidInput(_))),
+            "cs_up must reject {field}: {result:?}"
+        );
+    }
+    assert!(server
+        .command_history()
+        .into_iter()
+        .all(|record| record.command_name() != "create_credential"));
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn gvmd_adapter_rejects_undocumented_credential_request_types() {
+    let (adapter, server, token) = create_mock_adapter_v22_8().await;
+    server.clear_history();
+
+    // `cs_cc` has no typed rust-gvm request type, `cs_krb5` cannot be built
+    // from this API's missing KDC/realm fields, and future strings are not a
+    // valid input contract even though responses preserve them.
+    for credential_type in ["cs_cc", "cs_krb5", "future_credential"] {
+        let result = adapter
+            .create_credential(
+                &token,
+                CreateCredentialInput {
+                    name: "Unsupported credential".to_string(),
+                    credential_type: credential_type.to_string(),
+                    ..Default::default()
+                },
+            )
+            .await;
+        assert!(
+            matches!(result, Err(GatewayError::InvalidInput(_))),
+            "{credential_type} must be rejected: {result:?}"
+        );
+    }
+    assert!(server
+        .command_history()
+        .into_iter()
+        .all(|record| record.command_name() != "create_credential"));
 
     server.shutdown().await;
 }

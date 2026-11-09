@@ -335,14 +335,14 @@ components:
 
     CredentialType:
       type: string
-      enum: &credentialTypeValues
+      enum:
         - cc
         - pw
+        - smime
         - snmp
         - snmpv3
         - up
         - usk
-        - cs_cc
         - cs_pw
         - cs_pgp
         - cs_smime
@@ -353,11 +353,11 @@ components:
         Credential type:
         - `cc` — Client certificate
         - `pw` — Password only
+        - `smime` — S/MIME certificate
         - `snmp` — SNMP v1/v2c
         - `snmpv3` — SNMP v3
         - `up` — Username + password
         - `usk` — Username + SSH key
-        - `cs_cc` — Credential-store client certificate
         - `cs_pw` — Credential-store password only
         - `cs_pgp` — Credential-store PGP encryption key
         - `cs_smime` — Credential-store S/MIME certificate
@@ -369,7 +369,22 @@ components:
       type: string
       anyOf:
         - type: string
-          enum: *credentialTypeValues
+          enum:
+            - cc
+            - krb5
+            - pw
+            - pgp
+            - smime
+            - snmp
+            - up
+            - usk
+            - cs_krb5
+            - cs_pw
+            - cs_pgp
+            - cs_smime
+            - cs_snmp
+            - cs_up
+            - cs_usk
         - type: string
       description: |
         Known values are listed for documentation and client generation. This
@@ -378,12 +393,14 @@ components:
 
         Known credential types:
         - `cc` — Client certificate
+        - `krb5` — Kerberos 5
         - `pw` — Password only
-        - `snmp` — SNMP v1/v2c
-        - `snmpv3` — SNMP v3
+        - `pgp` — PGP encryption key
+        - `smime` — S/MIME certificate
+        - `snmp` — SNMP credential
         - `up` — Username + password
         - `usk` — Username + SSH key
-        - `cs_cc` — Credential-store client certificate
+        - `cs_krb5` — Credential-store Kerberos 5
         - `cs_pw` — Credential-store password only
         - `cs_pgp` — Credential-store PGP encryption key
         - `cs_smime` — Credential-store S/MIME certificate
