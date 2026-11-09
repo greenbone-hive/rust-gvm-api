@@ -113,9 +113,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
-      # Cargo Geiger reads registry source directly. A fallback cache restored
-      # across lockfile changes can contain partial source trees, so keep this
-      # evidence job on a clean runner cache.
+      - uses: Swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31 # v2
       - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2
         with:
           tool: cargo-cyclonedx@${{ env.CARGO_CYCLONEDX_VERSION }}
@@ -167,12 +165,16 @@ jobs:
         with:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
-      # Keep the blocking scan on the same clean-source contract as the report
-      # job above; it must never depend on a fallback cache's completeness.
+      - uses: Swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31 # v2
       - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2
         with:
           tool: cargo-geiger@${{ env.CARGO_GEIGER_VERSION }}
       - name: Generate every first-party package report
+        # The installer and fallback cache share the default Cargo home. Use
+        # clean scan-local state so partial registry trees cannot poison Geiger.
+        env:
+          CARGO_HOME: ${{ runner.temp }}/cargo-geiger-scan-home
+          CARGO_TARGET_DIR: ${{ runner.temp }}/cargo-geiger-scan-target
         run: python3 scripts/check_workspace_unsafe.py --report-only
       - name: Upload Cargo Geiger evidence
         if: always()
@@ -199,6 +201,9 @@ jobs:
         with:
           tool: cargo-geiger@${{ env.CARGO_GEIGER_VERSION }}
       - name: Reject unsafe Rust in first-party workspace packages
+        env:
+          CARGO_HOME: ${{ runner.temp }}/cargo-geiger-scan-home
+          CARGO_TARGET_DIR: ${{ runner.temp }}/cargo-geiger-scan-target
         run: python3 scripts/check_workspace_unsafe.py
 
   semgrep:
