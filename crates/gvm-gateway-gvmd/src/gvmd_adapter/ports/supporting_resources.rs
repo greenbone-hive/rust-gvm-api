@@ -449,25 +449,17 @@ impl SupportingResourcePort for GvmdAdapter {
         session_token: &str,
         id: &str,
     ) -> Result<(), GatewayError> {
-        self.execute_with_session_mapped(
+        let operating_system = self.get_operating_system(session_token, id).await?;
+        if operating_system.meta.in_use {
+            return Err(GatewayError::Conflict(format!(
+                "operating system {id} is in use"
+            )));
+        }
+
+        self.execute_with_session(
             session_token,
             "operating_systems.delete",
             DeleteOperatingSystemAssetRequest::new(parse_entity_id(id)?),
-            |error| match error {
-                // The typed OS delete command has no client-controlled option
-                // beyond its already validated ID. gvmd uses status 400 when
-                // the asset is still in use, which is a resource conflict at
-                // the REST/domain boundary rather than malformed input.
-                gvm_client::GvmError::Server {
-                    status: 400,
-                    message,
-                }
-                | gvm_client::GvmError::Parse(gvm_gmp::responses::ParseError::ServerError {
-                    status: 400,
-                    message,
-                }) => GatewayError::Conflict(message),
-                other => map_gvm_error(other),
-            },
         )
         .await?;
         Ok(())

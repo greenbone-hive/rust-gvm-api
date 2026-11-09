@@ -18,7 +18,7 @@ use gvm_gateway_rest::router::{
     RestSecurityConfig,
 };
 use gvm_gateway_rest::shutdown::ShutdownRuntime;
-use gvm_mock_server::{GmpVersion as MockVersion, MockGmpServer, ResourceStore, ServerMode};
+use gvm_mock_server::{Fault, GmpVersion as MockVersion, MockGmpServer, ResourceStore, ServerMode};
 use http::StatusCode;
 use reqwest::{Client, Response};
 use serde_json::Value;
@@ -401,6 +401,27 @@ pub async fn specialized_target_harness(
         .await
         .unwrap();
 
+    specialized_target_harness_from_server(server).await
+}
+
+pub async fn specialized_target_harness_with_fault(
+    seed: impl FnOnce(&ResourceStore) + Send + 'static,
+    fault: Fault,
+) -> TargetHarness {
+    let server = MockGmpServer::builder()
+        .mode(ServerMode::Stateful)
+        .version(MockVersion::V22_8)
+        .inject_fault(fault)
+        .unix_socket_auto()
+        .seed(seed)
+        .build()
+        .await
+        .unwrap();
+
+    specialized_target_harness_from_server(server).await
+}
+
+async fn specialized_target_harness_from_server(server: MockGmpServer) -> TargetHarness {
     let target_adapter = GvmdAdapter::unix_socket(server.socket_path().unwrap());
     let sessions = Arc::new(SessionManager::default());
     let service = live_gateway_service(target_adapter.clone(), Arc::clone(&sessions));

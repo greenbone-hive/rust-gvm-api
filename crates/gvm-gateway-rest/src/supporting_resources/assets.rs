@@ -612,6 +612,7 @@ pub(crate) fn delete_operating_system_docs(op: TransformOperation<'_>) -> Transf
         .response_with::<204, (), _>(|response| response.description("Operating-system deleted"));
     let op = problem_response::<400>(op, "Invalid request");
     let op = problem_response::<401>(op, "Authentication required or session expired");
+    let op = problem_response::<403>(op, "Permission denied");
     let op = problem_response::<404>(op, "Resource not found");
     problem_response::<409>(op, "Operating-system asset is in use")
 }

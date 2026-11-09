@@ -220,6 +220,8 @@ paths:
           $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
         "502":
           $ref: "./common.yaml#/components/responses/BadGateway"
         "404":
