@@ -2127,6 +2127,37 @@ async fn gvmd_adapter_rejects_empty_agent_group_selection_before_dispatch() {
 }
 
 #[tokio::test]
+async fn gvmd_adapter_rejects_empty_web_target_exclusions_before_dispatch() {
+    // Direct port callers bypass REST validation. Preserve the published
+    // non-empty excludeUrls contract when mapping v0.10.0 collection updates.
+    let (adapter, server, token) = create_mock_adapter_v22_8().await;
+    server.clear_history();
+
+    let result = adapter
+        .modify_web_application_target(
+            &token,
+            "123e4567-e89b-12d3-a456-426614174000",
+            ModifyWebApplicationTargetInput {
+                name: None,
+                comment: None,
+                urls: None,
+                exclude_urls: Some(vec![]),
+                credential_id: None,
+            },
+        )
+        .await;
+
+    assert!(matches!(
+        result,
+        Err(GatewayError::InvalidInput(detail))
+            if detail.contains("excludeUrls must contain at least one non-empty entry")
+    ));
+    assert!(server.command_history().is_empty());
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn gvmd_adapter_agent_download_helpers_map_typed_payloads() {
     // The agent download endpoints are the most shape-sensitive part of issue
     // #341 because they are not plain JSON CRUD resources.

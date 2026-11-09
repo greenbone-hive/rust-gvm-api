@@ -562,6 +562,11 @@ impl TargetPort for GvmdAdapter {
         id: &str,
         input: ModifyWebApplicationTargetInput,
     ) -> Result<WebApplicationTarget, GatewayError> {
+        if input.exclude_urls.as_ref().is_some_and(Vec::is_empty) {
+            return Err(GatewayError::InvalidInput(
+                "excludeUrls must contain at least one non-empty entry".to_string(),
+            ));
+        }
         let target_id = parse_entity_id(id)?;
         let credential_id = input
             .credential_id
@@ -572,7 +577,10 @@ impl TargetPort for GvmdAdapter {
         request.name = input.name;
         request.comment = input.comment;
         request.urls = input.urls.unwrap_or_default();
-        request.exclude_urls = input.exclude_urls.unwrap_or_default();
+        request.exclude_urls = input
+            .exclude_urls
+            .map(CollectionUpdate::Replace)
+            .unwrap_or_default();
         request.credential_id = credential_id;
         self.execute_with_session(session_token, "web_application_targets.modify", request)
             .await?;

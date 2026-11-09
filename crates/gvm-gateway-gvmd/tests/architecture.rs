@@ -15,20 +15,19 @@ const RUST_GVM_COMPONENTS: &[&str] = &[
     "gvm-protocol",
 ];
 // Issues #632 and #634 consume typed GMP server-error and feed-sync support
-// from merged rust-gvm PRs #803 and #804. Guard the later immutable merge
-// commit so all five workspace components share one upstream baseline.
-const RUST_GVM_DEPENDENCY_VERSION: &str = "0.9.0";
-const RUST_GVM_DEPENDENCY_REVISION: &str = "11d7d6f284dbb14100afbaec5762d521a45eaf56";
+// included in rust-gvm v0.10.0. Guard its immutable release commit so all five
+// workspace components share one upstream baseline.
+const RUST_GVM_DEPENDENCY_VERSION: &str = "0.10.0";
+const RUST_GVM_DEPENDENCY_REVISION: &str = "75d5c376b106977561c912d97d72776bb801ec67";
 // Issue #588 established the reviewed rust-gvm v0.8.0 facade inventory, and
-// issue #620 advances the accepted baseline to v0.9.0. Because that release
-// changes no production gvm-client facade source, all 267 dispositions remain.
-// PRs #803 and #804 add typed response semantics rather than async facade
-// methods, so the reviewed product-surface baseline remains v0.9.0.
+// issue #620 advanced the accepted baseline to v0.9.0. The v0.10.0 release
+// retains the same 267 public async helpers, so all reviewed dispositions
+// remain valid while the release metadata advances atomically.
 const RUST_GVM_PIN_REFERENCE: &str = "release-tag";
-const RUST_GVM_FACADE_TAG: &str = "v0.9.0";
-const RUST_GVM_FACADE_REVISION: &str = "d57605b5d1284c36e3f4e58112a6a987baa3395b";
+const RUST_GVM_FACADE_TAG: &str = "v0.10.0";
+const RUST_GVM_FACADE_REVISION: &str = "75d5c376b106977561c912d97d72776bb801ec67";
 const RUST_GVM_TYPED_FACADE_METHOD_COUNT: usize = 267;
-const RUST_GVM_TYPED_FACADE_SNAPSHOT: &str = "tests/fixtures/rust-gvm-v0.9.0-typed-facade.tsv";
+const RUST_GVM_TYPED_FACADE_SNAPSHOT: &str = "tests/fixtures/rust-gvm-v0.10.0-typed-facade.tsv";
 const RUST_GVM_DISPOSITION_LEDGER: &str = "../../docs/upstream-surface-dispositions.tsv";
 const ALLOWED_DISPOSITIONS: &[&str] = &[
     "exposed", "mapped", "internal", "blocked", "deferred", "omitted",
@@ -308,7 +307,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
         );
         assert_eq!(
             *source, expected_source,
-            "{component} must resolve to rust-gvm merge commit {RUST_GVM_DEPENDENCY_REVISION}"
+            "{component} must resolve to rust-gvm release commit {RUST_GVM_DEPENDENCY_REVISION}"
         );
     }
 
@@ -321,7 +320,7 @@ fn rust_gvm_components_resolve_to_one_revision() {
             .unwrap_or_else(|| panic!("{component} must be declared in workspace dependencies"));
         assert!(
             dependency.contains(&format!("rev = \"{RUST_GVM_DEPENDENCY_REVISION}\"")),
-            "{component} must pin rust-gvm merge commit {RUST_GVM_DEPENDENCY_REVISION} in Cargo.toml: {dependency}"
+            "{component} must pin rust-gvm release commit {RUST_GVM_DEPENDENCY_REVISION} in Cargo.toml: {dependency}"
         );
         assert!(
             !dependency.contains("branch =") && !dependency.contains("tag ="),
