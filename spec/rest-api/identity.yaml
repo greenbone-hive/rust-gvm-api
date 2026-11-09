@@ -122,9 +122,7 @@ paths:
       operationId: deleteUser
       tags: [Users]
       summary: Delete a user
-      description: Deletes a user. Pass `ultimate=true` to request permanent backend deletion instead of the default non-ultimate delete.
-      parameters:
-        - $ref: "./common.yaml#/components/parameters/UltimateDelete"
+      description: Deletes a user using gvmd's canonical user-delete operation. Typed gvmd user deletion has no caller-selectable permanence mode, and any supplied `ultimate` query parameter is rejected with `400 bad_request`.
       responses:
         "204":
           description: User deleted

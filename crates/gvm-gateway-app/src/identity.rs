@@ -79,23 +79,14 @@ impl GatewayService {
     }
 
     /// Deletes a user for an authenticated session.
-    pub async fn delete_user(
-        &self,
-        session_token: &str,
-        id: &str,
-        ultimate: bool,
-    ) -> Result<(), GatewayError> {
+    pub async fn delete_user(&self, session_token: &str, id: &str) -> Result<(), GatewayError> {
         self.execute_with_resource(
             "users.delete",
             session_token,
             "delete",
             "user",
             Some(id),
-            |session| async move {
-                self.identity
-                    .delete_user(&session.token, id, ultimate)
-                    .await
-            },
+            |session| async move { self.identity.delete_user(&session.token, id).await },
         )
         .await
     }

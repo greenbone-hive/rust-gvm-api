@@ -1052,6 +1052,48 @@ async fn gvmd_adapter_modify_user_forwards_rename_and_explicit_role_clear() {
 }
 
 #[tokio::test]
+async fn gvmd_adapter_delete_user_dispatches_the_canonical_typed_request() {
+    // Typed rust-gvm user deletion has no permanence field. This protects the
+    // adapter boundary from reintroducing an invented GMP option.
+    let user_id =
+        uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440123").expect("valid user id");
+    let server = MockGmpServer::builder()
+        .mode(ServerMode::Stateful)
+        .version(MockVersion::V22_7)
+        .seed(move |store| {
+            store.create(Resource::with_id("user", "delete-me", user_id));
+        })
+        .unix_socket_auto()
+        .build()
+        .await
+        .unwrap();
+    let adapter = GvmdAdapter::unix_socket(server.socket_path().unwrap());
+    let token = "test-session-token";
+    adapter
+        .connect_session(token, "admin", "admin")
+        .await
+        .unwrap();
+    server.clear_history();
+
+    adapter
+        .delete_user(token, &user_id.to_string())
+        .await
+        .expect("typed user delete should succeed");
+
+    let history = server.command_history();
+    let commands = history
+        .iter()
+        .filter(|record| record.command_name() == "delete_user")
+        .collect::<Vec<_>>();
+    assert_eq!(commands.len(), 1);
+    let xml = String::from_utf8(commands[0].raw_xml().to_vec()).expect("delete XML");
+    assert!(xml.contains(&format!("user_id=\"{user_id}\"")), "xml={xml}");
+    assert!(!xml.contains("ultimate"), "xml={xml}");
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn gvmd_adapter_modify_scan_config_forwards_rename() {
     let (adapter, server, token) = create_mock_adapter().await;
     server.clear_history();

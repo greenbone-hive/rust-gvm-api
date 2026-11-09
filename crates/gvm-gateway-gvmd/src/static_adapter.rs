@@ -293,7 +293,7 @@ impl IdentityPort for StaticGvmdAdapter {
         unsupported!("static adapter does not support identity resources")
     }
 
-    async fn delete_user(&self, _: &str, _: &str, _: bool) -> Result<(), GatewayError> {
+    async fn delete_user(&self, _: &str, _: &str) -> Result<(), GatewayError> {
         unsupported!("static adapter does not support identity resources")
     }
 

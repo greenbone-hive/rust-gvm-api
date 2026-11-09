@@ -128,12 +128,7 @@ impl IdentityPort for GvmdAdapter {
         self.get_user(session_token, id).await
     }
 
-    async fn delete_user(
-        &self,
-        session_token: &str,
-        id: &str,
-        _ultimate: bool,
-    ) -> Result<(), GatewayError> {
+    async fn delete_user(&self, session_token: &str, id: &str) -> Result<(), GatewayError> {
         self.execute_with_session(
             session_token,
             "users.delete",
