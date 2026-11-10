@@ -152,6 +152,18 @@ class SecurityWorkflowTests(unittest.TestCase):
             release,
         )
 
+    def test_release_sbom_collection_is_scoped_to_workspace_inventory(self) -> None:
+        # Release evidence must be selected from the committed package inventory;
+        # repository-wide discovery can accidentally publish test fixtures.
+        release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn(
+            "python3 scripts/collect_workspace_sboms.py \\",
+            release,
+        )
+        self.assertIn("--format json", release)
+        self.assertIn("--format xml", release)
+        self.assertNotIn("find . -name '*.cdx.", release)
+
     def test_networked_jobs_use_hardened_runner_and_evidence_is_retained(self) -> None:
         workflow = source()
         self.assertEqual(workflow.count("step-security/harden-runner@"), len(REQUIRED_JOBS))
