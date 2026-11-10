@@ -68,6 +68,12 @@ jobs:
           cache-key: cargo-e2e-rest-discovery-${{ runner.os }}-${{ runner.arch }}-stable-${{ hashFiles('**/Cargo.lock') }}
       - name: Start compose-backed runtime
         run: ./scripts/compose-dev.sh up -d --build
+      - name: Capture exact E2E runtime provenance
+        if: always()
+        run: |
+          mkdir -p dist/e2e
+          python3 scripts/capture-e2e-provenance.py --output dist/e2e/provenance.json \
+            2>&1 | tee dist/e2e/provenance-capture.log
       - name: Run REST discovery-scan E2E suite
         run: ./scripts/run-e2e-tests.sh
       - name: Capture compose diagnostics

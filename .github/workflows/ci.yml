@@ -102,6 +102,8 @@ jobs:
           rust-version: stable
           components: rustfmt
           cache-key: cargo-ci-test-features-${{ runner.os }}-${{ runner.arch }}-stable-${{ hashFiles('**/Cargo.lock') }}
+      - name: Validate E2E evidence contracts
+        run: make e2e-evidence-check
       - run: cargo test --workspace --all-features
 
   doc:

@@ -1,0 +1,958 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-11-10T23:22:00Z",
+  "repository": "greenbone/rust-gvm-api",
+  "workflow": ".github/workflows/nightly-e2e.yml",
+  "job": "REST Discovery Scan E2E",
+  "eligibility": {
+    "requiredRuns": 30,
+    "selection": "most recent completed runs with one executed OSP job and required timing steps",
+    "includedConclusions": [
+      "failure",
+      "success",
+      "timed_out"
+    ],
+    "excluded": [
+      "docs-only or policy-skipped jobs",
+      "concurrency or manually cancelled jobs",
+      "runs without the REST Discovery Scan E2E job",
+      "jobs without required timestamps or named steps",
+      "unsupported non-terminal conclusions"
+    ],
+    "window": {
+      "oldestCreatedAt": "2026-11-09T03:06:23Z",
+      "newestCreatedAt": "2026-11-10T18:28:30Z"
+    }
+  },
+  "summary": {
+    "eligibleRuns": 30,
+    "passedRuns": 30,
+    "failedRuns": 0,
+    "timedOutRuns": 0,
+    "passRate": 1.0,
+    "failureRate": 0.0,
+    "retryRate": 0.0,
+    "unexplainedFlakeRate": 0.0,
+    "artifactCompletenessRate": 1.0,
+    "startupSeconds": {
+      "p50": 529.5,
+      "p95": 805,
+      "min": 330,
+      "max": 808
+    },
+    "testSeconds": {
+      "p50": 129.0,
+      "p95": 160,
+      "min": 117,
+      "max": 186
+    },
+    "totalSeconds": {
+      "p50": 710.0,
+      "p95": 978,
+      "min": 515,
+      "max": 997
+    }
+  },
+  "runs": [
+    {
+      "runId": 42875549485,
+      "runAttempt": 1,
+      "runNumber": 1101,
+      "event": "push",
+      "headBranch": "main",
+      "headSha": "76f6e799cf5764ea825a2c497431c9eee9c39fc4",
+      "createdAt": "2026-11-10T18:28:30Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42875549485",
+      "jobId": 130037854168,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42875549485/job/130037854168",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 348,
+        "tests": 145,
+        "total": 537
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42873686955,
+      "runAttempt": 1,
+      "runNumber": 1100,
+      "event": "merge_group",
+      "headBranch": "gh-readonly-queue/main/pr-663-963f984371e7043899e54db3f3f7f31b72d06f35",
+      "headSha": "76f6e799cf5764ea825a2c497431c9eee9c39fc4",
+      "createdAt": "2026-11-10T18:17:29Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42873686955",
+      "jobId": 130031317767,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42873686955/job/130031317767",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 421,
+        "tests": 147,
+        "total": 616
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42873681616,
+      "runAttempt": 1,
+      "runNumber": 1099,
+      "event": "push",
+      "headBranch": "main",
+      "headSha": "963f984371e7043899e54db3f3f7f31b72d06f35",
+      "createdAt": "2026-11-10T18:17:27Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42873681616",
+      "jobId": 130031307654,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42873681616/job/130031307654",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 342,
+        "tests": 141,
+        "total": 533
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42872066539,
+      "runAttempt": 1,
+      "runNumber": 1098,
+      "event": "merge_group",
+      "headBranch": "gh-readonly-queue/main/pr-671-7c2a490d9c54c57331e062a57d72d205488d3ae9",
+      "headSha": "963f984371e7043899e54db3f3f7f31b72d06f35",
+      "createdAt": "2026-11-10T18:08:07Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42872066539",
+      "jobId": 130025646878,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42872066539/job/130025646878",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 330,
+        "tests": 138,
+        "total": 515
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42819193682,
+      "runAttempt": 1,
+      "runNumber": 1097,
+      "event": "push",
+      "headBranch": "main",
+      "headSha": "7c2a490d9c54c57331e062a57d72d205488d3ae9",
+      "createdAt": "2026-11-10T12:50:34Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42819193682",
+      "jobId": 129840344243,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42819193682/job/129840344243",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 360,
+        "tests": 120,
+        "total": 524
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42817804179,
+      "runAttempt": 1,
+      "runNumber": 1096,
+      "event": "merge_group",
+      "headBranch": "gh-readonly-queue/main/pr-665-556ce2e0e8c8319ab79c4366ab1a21279d6d4da0",
+      "headSha": "7c2a490d9c54c57331e062a57d72d205488d3ae9",
+      "createdAt": "2026-11-10T12:40:46Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42817804179",
+      "jobId": 129835329726,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42817804179/job/129835329726",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 352,
+        "tests": 146,
+        "total": 544
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42815934092,
+      "runAttempt": 1,
+      "runNumber": 1094,
+      "event": "merge_group",
+      "headBranch": "gh-readonly-queue/main/pr-669-54e88b14432065f03d23e95bb4947cc6442ce62b",
+      "headSha": "556ce2e0e8c8319ab79c4366ab1a21279d6d4da0",
+      "createdAt": "2026-11-10T12:27:40Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42815934092",
+      "jobId": 129828959569,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42815934092/job/129828959569",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 571,
+        "tests": 120,
+        "total": 742
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42815301416,
+      "runAttempt": 1,
+      "runNumber": 1093,
+      "event": "merge_group",
+      "headBranch": "gh-readonly-queue/main/pr-671-54e88b14432065f03d23e95bb4947cc6442ce62b",
+      "headSha": "8d9f6350ade0e771da9e855abc78cf7b5689cd0e",
+      "createdAt": "2026-11-10T12:23:12Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42815301416",
+      "jobId": 129826818824,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42815301416/job/129826818824",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 358,
+        "tests": 131,
+        "total": 532
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42789701510,
+      "runAttempt": 1,
+      "runNumber": 1092,
+      "event": "pull_request",
+      "headBranch": "chore/issue-670-codeowner-y0urself",
+      "headSha": "dbabe3fad8a0294392ebe9f4a35686e42e2171cb",
+      "createdAt": "2026-11-10T09:19:11Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42789701510",
+      "jobId": 129739750692,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42789701510/job/129739750692",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 634,
+        "tests": 119,
+        "total": 804
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42775548298,
+      "runAttempt": 1,
+      "runNumber": 1091,
+      "event": "pull_request",
+      "headBranch": "chore/issue-670-codeowner-y0urself",
+      "headSha": "75ac4cd8fd0eaec1910e85431b3700164657533e",
+      "createdAt": "2026-11-10T07:28:40Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42775548298",
+      "jobId": 129693185792,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42775548298/job/129693185792",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 461,
+        "tests": 123,
+        "total": 630
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42772958108,
+      "runAttempt": 1,
+      "runNumber": 1089,
+      "event": "pull_request",
+      "headBranch": "chore/issue-670-codeowner-y0urself",
+      "headSha": "f1b4e75663e19269f7908f36965e0399c6b21134",
+      "createdAt": "2026-11-10T07:06:17Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42772958108",
+      "jobId": 129684825660,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42772958108/job/129684825660",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 519,
+        "tests": 129,
+        "total": 694
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42772396177,
+      "runAttempt": 1,
+      "runNumber": 1088,
+      "event": "pull_request",
+      "headBranch": "ci/issue-668-public-deps-no-release-token",
+      "headSha": "d61b067d482b78d4c75a7308df9f872cbc169e17",
+      "createdAt": "2026-11-10T07:01:27Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42772396177",
+      "jobId": 129683037718,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42772396177/job/129683037718",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 515,
+        "tests": 139,
+        "total": 707
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42748023175,
+      "runAttempt": 1,
+      "runNumber": 1087,
+      "event": "schedule",
+      "headBranch": "main",
+      "headSha": "54e88b14432065f03d23e95bb4947cc6442ce62b",
+      "createdAt": "2026-11-10T03:13:33Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42748023175",
+      "jobId": 129604755717,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42748023175/job/129604755717",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 540,
+        "tests": 120,
+        "total": 709
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42718427936,
+      "runAttempt": 1,
+      "runNumber": 1086,
+      "event": "pull_request",
+      "headBranch": "dependabot/github_actions/actions-73021e8b26",
+      "headSha": "af2fb7cbb93b8edc054e55a300273871964b7192",
+      "createdAt": "2026-11-09T23:11:39Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42718427936",
+      "jobId": 129505927038,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42718427936/job/129505927038",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 378,
+        "tests": 151,
+        "total": 575
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42718038518,
+      "runAttempt": 1,
+      "runNumber": 1085,
+      "event": "push",
+      "headBranch": "main",
+      "headSha": "54e88b14432065f03d23e95bb4947cc6442ce62b",
+      "createdAt": "2026-11-09T23:08:55Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42718038518",
+      "jobId": 129504608156,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42718038518/job/129504608156",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 363,
+        "tests": 186,
+        "total": 598
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42716528439,
+      "runAttempt": 1,
+      "runNumber": 1084,
+      "event": "merge_group",
+      "headBranch": "gh-readonly-queue/main/pr-667-6ba59f4d7e5ad34a175a05b19d90dc2b2cbe6718",
+      "headSha": "54e88b14432065f03d23e95bb4947cc6442ce62b",
+      "createdAt": "2026-11-09T22:58:22Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42716528439",
+      "jobId": 129499472185,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42716528439/job/129499472185",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 385,
+        "tests": 160,
+        "total": 592
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42677865857,
+      "runAttempt": 1,
+      "runNumber": 1083,
+      "event": "pull_request",
+      "headBranch": "ci/issue-666-greenbone-actions",
+      "headSha": "8315874352511b53ef16dd39a8c28686e17b8992",
+      "createdAt": "2026-11-09T18:52:03Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42677865857",
+      "jobId": 129364115150,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42677865857/job/129364115150",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 510,
+        "tests": 155,
+        "total": 711
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42611541031,
+      "runAttempt": 1,
+      "runNumber": 1081,
+      "event": "pull_request",
+      "headBranch": "fix/issue-664-release-sbom-scope",
+      "headSha": "9b6504b07ec4fa63c23611df514738dc072123df",
+      "createdAt": "2026-11-09T11:45:29Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42611541031",
+      "jobId": 129140967064,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42611541031/job/129140967064",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 651,
+        "tests": 121,
+        "total": 819
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42609306609,
+      "runAttempt": 1,
+      "runNumber": 1080,
+      "event": "pull_request",
+      "headBranch": "dependabot/cargo/opentelemetry-fd7961c0ac",
+      "headSha": "ec69f1641812731668be1ba7e330d72da66b57e1",
+      "createdAt": "2026-11-09T11:28:22Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42609306609",
+      "jobId": 129133355917,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42609306609/job/129133355917",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 808,
+        "tests": 138,
+        "total": 997
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42608994940,
+      "runAttempt": 1,
+      "runNumber": 1079,
+      "event": "push",
+      "headBranch": "main",
+      "headSha": "6ba59f4d7e5ad34a175a05b19d90dc2b2cbe6718",
+      "createdAt": "2026-11-09T11:25:57Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42608994940",
+      "jobId": 129132241456,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42608994940/job/129132241456",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 731,
+        "tests": 142,
+        "total": 922
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42606839101,
+      "runAttempt": 1,
+      "runNumber": 1078,
+      "event": "merge_group",
+      "headBranch": "gh-readonly-queue/main/pr-660-92d219397a417c7cacd582454dd057cd68bc43eb",
+      "headSha": "6ba59f4d7e5ad34a175a05b19d90dc2b2cbe6718",
+      "createdAt": "2026-11-09T11:10:19Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42606839101",
+      "jobId": 129124941249,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42606839101/job/129124941249",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 722,
+        "tests": 131,
+        "total": 911
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42587082576,
+      "runAttempt": 1,
+      "runNumber": 1077,
+      "event": "pull_request",
+      "headBranch": "dependabot/github_actions/actions-73021e8b26",
+      "headSha": "ab42a9d5c10e7462f8b18121c93e94aff398dc33",
+      "createdAt": "2026-11-09T08:35:41Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42587082576",
+      "jobId": 129059397700,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42587082576/job/129059397700",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 805,
+        "tests": 118,
+        "total": 967
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42587017675,
+      "runAttempt": 1,
+      "runNumber": 1076,
+      "event": "pull_request",
+      "headBranch": "dependabot/cargo/opentelemetry-fd7961c0ac",
+      "headSha": "9711f90abddf10ec610700681c94a552bbe27abb",
+      "createdAt": "2026-11-09T08:35:11Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42587017675",
+      "jobId": 129059222475,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42587017675/job/129059222475",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 723,
+        "tests": 117,
+        "total": 886
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42569628086,
+      "runAttempt": 1,
+      "runNumber": 1075,
+      "event": "pull_request",
+      "headBranch": "release/v0.6.0",
+      "headSha": "90605a1a515c47ac58bddb00555ca508e1d9da7a",
+      "createdAt": "2026-11-09T05:51:00Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42569628086",
+      "jobId": 129003904467,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42569628086/job/129003904467",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 800,
+        "tests": 129,
+        "total": 978
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42562369704,
+      "runAttempt": 1,
+      "runNumber": 1071,
+      "event": "pull_request",
+      "headBranch": "release/v0.6.0",
+      "headSha": "f1e532c3ca853418e3ae08b7456ac4dde3b60bf6",
+      "createdAt": "2026-11-09T04:32:09Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42562369704",
+      "jobId": 128981508790,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42562369704/job/128981508790",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 763,
+        "tests": 119,
+        "total": 929
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42558933522,
+      "runAttempt": 1,
+      "runNumber": 1068,
+      "event": "push",
+      "headBranch": "main",
+      "headSha": "92d219397a417c7cacd582454dd057cd68bc43eb",
+      "createdAt": "2026-11-09T03:55:00Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42558933522",
+      "jobId": 128970863767,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42558933522/job/128970863767",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 495,
+        "tests": 129,
+        "total": 667
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42557494191,
+      "runAttempt": 1,
+      "runNumber": 1067,
+      "event": "merge_group",
+      "headBranch": "gh-readonly-queue/main/pr-658-43112e528dd9cd01f63589318cfe896bd7f5d66d",
+      "headSha": "92d219397a417c7cacd582454dd057cd68bc43eb",
+      "createdAt": "2026-11-09T03:38:15Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42557494191",
+      "jobId": 128966407272,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42557494191/job/128966407272",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 795,
+        "tests": 117,
+        "total": 959
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42555982053,
+      "runAttempt": 1,
+      "runNumber": 1066,
+      "event": "pull_request",
+      "headBranch": "fix/issue-651",
+      "headSha": "e98239fc5d4b684861d399986991296543d3ae66",
+      "createdAt": "2026-11-09T03:21:46Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42555982053",
+      "jobId": 128961797502,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42555982053/job/128961797502",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 739,
+        "tests": 129,
+        "total": 915
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42555975448,
+      "runAttempt": 1,
+      "runNumber": 1065,
+      "event": "push",
+      "headBranch": "main",
+      "headSha": "43112e528dd9cd01f63589318cfe896bd7f5d66d",
+      "createdAt": "2026-11-09T03:21:42Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42555975448",
+      "jobId": 128961784817,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42555975448/job/128961784817",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 635,
+        "tests": 129,
+        "total": 808
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    },
+    {
+      "runId": 42554515333,
+      "runAttempt": 1,
+      "runNumber": 1062,
+      "event": "merge_group",
+      "headBranch": "gh-readonly-queue/main/pr-657-8074cadf52185b0b4ab45c206945baa497ff957a",
+      "headSha": "43112e528dd9cd01f63589318cfe896bd7f5d66d",
+      "createdAt": "2026-11-09T03:06:23Z",
+      "runUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42554515333",
+      "jobId": 128957171032,
+      "jobUrl": "https://github.com/greenbone/rust-gvm-api/actions/runs/42554515333/job/128957171032",
+      "conclusion": "success",
+      "timingsSeconds": {
+        "startup": 697,
+        "tests": 128,
+        "total": 875
+      },
+      "retried": false,
+      "artifacts": {
+        "expected": [
+          "e2e-compose-diagnostics"
+        ],
+        "present": [
+          "e2e-compose-diagnostics"
+        ],
+        "complete": true
+      },
+      "failureClassification": null,
+      "failureOwnerRole": null
+    }
+  ]
+}
