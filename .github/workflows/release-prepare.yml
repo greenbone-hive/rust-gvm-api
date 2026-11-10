@@ -52,17 +52,6 @@ jobs:
           components: rustfmt
           cache-key: cargo-release-prepare-${{ runner.os }}-${{ runner.arch }}-stable-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Configure git credentials for private deps
-        env:
-          RELEASE_AUTH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-        run: |
-          if [[ -z "${RELEASE_AUTH_TOKEN}" ]]; then
-            echo "RELEASE_TOKEN is required for release preparation" >&2
-            exit 1
-          fi
-
-          git config --global url."https://x-access-token:${RELEASE_AUTH_TOKEN}@github.com/".insteadOf "https://github.com/"
-
       - name: Update workspace version
         env:
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
