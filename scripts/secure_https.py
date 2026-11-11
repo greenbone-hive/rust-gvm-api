@@ -94,6 +94,7 @@ def https_get(url: str, headers: Mapping[str, str]) -> tuple[int, dict[str, str]
             "--silent",
             "--show-error",
             "--no-location",
+            "--globoff",
             "--request",
             "GET",
             "--proto",

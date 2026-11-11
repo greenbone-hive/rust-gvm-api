@@ -303,7 +303,7 @@ class E2eEvidenceTests(unittest.TestCase):
 
         with patch.object(SECURE_HTTPS.subprocess, "run", side_effect=fake_run):
             status, headers, body = SECURE_HTTPS.https_get(
-                "https://raw.githubusercontent.com/greenbone/example",
+                "https://raw.githubusercontent.com/greenbone/examples/openvasd/{id}.json",
                 {"Authorization": "Bearer secret-token"},
             )
 
@@ -311,6 +311,11 @@ class E2eEvidenceTests(unittest.TestCase):
         self.assertNotIn("secret-token", command)
         self.assertIn('header = "Authorization: Bearer secret-token"', seen["config"])
         self.assertIn("--no-location", command)
+        self.assertIn("--globoff", command)
+        self.assertEqual(
+            command[-1],
+            "https://raw.githubusercontent.com/greenbone/examples/openvasd/{id}.json",
+        )
         self.assertEqual(command[command.index("--proto") + 1], "=https")
         self.assertEqual(
             command[command.index("--connect-timeout") + 1],
