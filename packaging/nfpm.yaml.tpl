@@ -5,11 +5,11 @@ version: __VERSION__
 release: "__RELEASE__"
 section: net
 priority: optional
-maintainer: clawosiris <clawosiris@users.noreply.github.com>
+maintainer: Greenbone AG <info@greenbone.net>
 description: |
   REST gateway for Greenbone Vulnerability Management.
-vendor: clawosiris
-homepage: https://github.com/greenbone-hive/rust-gvm-api
+vendor: Greenbone AG
+homepage: https://github.com/greenbone/rust-gvm-api
 license: AGPL-3.0-or-later
 contents:
   - src: ./dist/package-root/usr/bin/gvm-gateway
