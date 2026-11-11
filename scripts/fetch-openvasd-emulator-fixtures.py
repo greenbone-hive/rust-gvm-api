@@ -5,12 +5,18 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import http.client
 import json
-import ssl
+import sys
 from pathlib import Path, PurePosixPath
 from typing import Callable
 from urllib.parse import urlsplit
+
+
+SCRIPT_DIRECTORY = Path(__file__).resolve().parent
+if str(SCRIPT_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIRECTORY))
+
+from secure_https import HttpsTransportError, https_get
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -98,19 +104,15 @@ def download(url: str) -> bytes:
     target = parsed.path
     if parsed.query:
         target += f"?{parsed.query}"
-    # The host is fixed above and the explicit default context requires normal
-    # certificate and hostname verification on every supported Python version.
-    connection = http.client.HTTPSConnection(  # nosemgrep: python.lang.security.audit.httpsconnection-detected.httpsconnection-detected
-        RAW_GITHUB_HOST, timeout=30, context=ssl.create_default_context()
-    )
     try:
-        connection.request("GET", target, headers={"User-Agent": "rust-gvm-api-e2e"})
-        response = connection.getresponse()
-        content = response.read()
-    finally:
-        connection.close()
-    if response.status != 200:
-        raise FixtureError(f"fixture download failed with HTTP {response.status}")
+        status, _headers, content = https_get(
+            f"https://{RAW_GITHUB_HOST}{target}",
+            {"User-Agent": "rust-gvm-api-e2e"},
+        )
+    except HttpsTransportError as error:
+        raise FixtureError(str(error)) from error
+    if status != 200:
+        raise FixtureError(f"fixture download failed with HTTP {status}")
     return content
 
 

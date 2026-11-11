@@ -6,6 +6,7 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -32,6 +33,7 @@ PROVENANCE = load_script("capture_e2e_provenance", "scripts/capture-e2e-provenan
 FINALIZER = load_script("finalize_openvasd_evidence", "scripts/finalize-openvasd-evidence.py")
 FIXTURES = load_script("fetch_openvasd_fixtures", "scripts/fetch-openvasd-emulator-fixtures.py")
 OBSERVATIONS = load_script("collect_shadow_observations", "scripts/collect-shadow-observations.py")
+SECURE_HTTPS = sys.modules["secure_https"]
 
 
 class E2eEvidenceTests(unittest.TestCase):
@@ -269,10 +271,76 @@ class E2eEvidenceTests(unittest.TestCase):
             FIXTURES.fetch_fixtures(pins, lambda _url: b"changed")
 
     def test_fixture_download_rejects_non_github_transport(self) -> None:
-        """Pinned fixture retrieval must not permit urllib-style local file access."""
+        """Pinned fixture retrieval must reject local files before any transport runs."""
 
         with self.assertRaisesRegex(FIXTURES.FixtureError, "untrusted fixture URL"):
             FIXTURES.download("file:///etc/passwd")
+
+    def test_fixture_download_rejects_an_untrusted_https_host(self) -> None:
+        """A valid HTTPS scheme alone must not bypass the pinned GitHub host boundary."""
+
+        with self.assertRaisesRegex(FIXTURES.FixtureError, "untrusted fixture URL"):
+            FIXTURES.download("https://example.invalid/openvasd/swagger.json")
+
+    def test_curl_transport_uses_bounded_https_without_exposing_headers_in_argv(self) -> None:
+        """Evidence transport keeps TLS, timeout, redirect, and bearer-token controls explicit."""
+
+        seen: dict[str, object] = {}
+
+        def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            seen["command"] = command
+            seen["kwargs"] = kwargs
+            config_path = Path(command[command.index("--config") + 1])
+            header_path = Path(command[command.index("--dump-header") + 1])
+            body_path = Path(command[command.index("--output") + 1])
+            seen["config"] = config_path.read_text(encoding="utf-8")
+            header_path.write_text(
+                "HTTP/2 200\r\nX-Request-Id: fixture\r\n\r\n",
+                encoding="iso-8859-1",
+            )
+            body_path.write_bytes(b"fixture")
+            return subprocess.CompletedProcess(command, 0, "200", "")
+
+        with patch.object(SECURE_HTTPS.subprocess, "run", side_effect=fake_run):
+            status, headers, body = SECURE_HTTPS.https_get(
+                "https://raw.githubusercontent.com/greenbone/example",
+                {"Authorization": "Bearer secret-token"},
+            )
+
+        command = seen["command"]
+        self.assertNotIn("secret-token", command)
+        self.assertIn('header = "Authorization: Bearer secret-token"', seen["config"])
+        self.assertIn("--no-location", command)
+        self.assertEqual(command[command.index("--proto") + 1], "=https")
+        self.assertEqual(
+            command[command.index("--connect-timeout") + 1],
+            str(SECURE_HTTPS.CONNECT_TIMEOUT_SECONDS),
+        )
+        self.assertEqual(
+            command[command.index("--max-time") + 1],
+            str(SECURE_HTTPS.REQUEST_TIMEOUT_SECONDS),
+        )
+        self.assertNotIn("--insecure", command)
+        self.assertFalse(seen["kwargs"]["shell"])
+        self.assertEqual(status, 200)
+        self.assertEqual(headers, {"x-request-id": "fixture"})
+        self.assertEqual(body, b"fixture")
+
+    def test_curl_transport_rejects_plain_http_before_starting_a_process(self) -> None:
+        """The shared transport must never downgrade a caller to cleartext HTTP."""
+
+        with patch.object(SECURE_HTTPS.subprocess, "run") as request:
+            with self.assertRaisesRegex(SECURE_HTTPS.HttpsTransportError, "non-HTTPS"):
+                SECURE_HTTPS.https_get("http://api.github.com/repos/example", {})
+        request.assert_not_called()
+
+    def test_github_api_helpers_reject_paths_outside_repositories(self) -> None:
+        """The evidence token must only be used against the constrained repository API surface."""
+
+        with patch.object(FINALIZER, "https_response") as request:
+            with self.assertRaisesRegex(FINALIZER.FinalizationError, "outside /repos"):
+                FINALIZER.github_json("/user", "secret-token")
+        request.assert_not_called()
 
     def test_job_log_redirect_drops_github_authorization(self) -> None:
         """Actions signed log redirects must not receive the GitHub bearer token."""
@@ -297,6 +365,31 @@ class E2eEvidenceTests(unittest.TestCase):
         self.assertIn("portable_contract", output)
         self.assertIn("Authorization", request.call_args_list[0].args[2])
         self.assertNotIn("Authorization", request.call_args_list[1].args[2])
+
+    def test_redirect_host_rejects_github_authorization_before_transport(self) -> None:
+        """A future caller cannot accidentally send the GitHub token to signed-log storage."""
+
+        with self.assertRaisesRegex(FINALIZER.FinalizationError, "authorization"):
+            FINALIZER.https_response(
+                "results.blob.core.windows.net",
+                "/actions-results/job.log?sig=signed",
+                {"Authorization": "Bearer secret-token"},
+            )
+
+    def test_job_log_redirect_rejects_an_unallowlisted_host_without_a_second_request(self) -> None:
+        """A GitHub log redirect cannot turn the evidence fetch into an arbitrary HTTPS request."""
+
+        with patch.object(
+            FINALIZER,
+            "https_response",
+            return_value=(302, {"location": "https://example.invalid/job.log"}, b""),
+        ) as request:
+            with self.assertRaisesRegex(FINALIZER.FinalizationError, "untrusted URL"):
+                FINALIZER.github_text(
+                    "/repos/greenbone/rust-gvm-api/actions/jobs/42/logs",
+                    "secret-token",
+                )
+        self.assertEqual(request.call_count, 1)
 
     def test_direct_manifest_rejects_a_missing_runtime_pin(self) -> None:
         """Every service in the shadow/real topology must retain an immutable image input."""

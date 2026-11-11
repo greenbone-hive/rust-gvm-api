@@ -5,14 +5,20 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import http.client
 import json
 import os
 import re
-import ssl
+import sys
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
+
+
+SCRIPT_DIRECTORY = Path(__file__).resolve().parent
+if str(SCRIPT_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIRECTORY))
+
+from secure_https import HttpsTransportError, https_get
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -176,19 +182,17 @@ def https_response(
 ) -> tuple[int, dict[str, str], bytes]:
     if not target.startswith("/") or "\r" in target or "\n" in target:
         raise FinalizationError("refusing an invalid HTTPS request target")
-    # Callers constrain the API host and signed-log redirect hosts. The
-    # explicit default context requires certificate and hostname validation.
-    connection = http.client.HTTPSConnection(  # nosemgrep: python.lang.security.audit.httpsconnection-detected.httpsconnection-detected
-        host, timeout=30, context=ssl.create_default_context()
-    )
+    trusted_log_host = any(host.endswith(suffix) for suffix in LOG_REDIRECT_HOST_SUFFIXES)
+    if host != GITHUB_API_HOST and not trusted_log_host:
+        raise FinalizationError("refusing an HTTPS request to an untrusted host")
+    if host == GITHUB_API_HOST and not target.startswith("/repos/"):
+        raise FinalizationError("refusing a GitHub API path outside /repos")
+    if host != GITHUB_API_HOST and any(name.lower() == "authorization" for name in headers):
+        raise FinalizationError("refusing to forward GitHub authorization to a redirect host")
     try:
-        connection.request("GET", target, headers=headers)
-        response = connection.getresponse()
-        body = response.read()
-        response_headers = {name.lower(): value for name, value in response.getheaders()}
-        return response.status, response_headers, body
-    finally:
-        connection.close()
+        return https_get(f"https://{host}{target}", headers)
+    except HttpsTransportError as error:
+        raise FinalizationError(str(error)) from error
 
 
 def github_headers(token: str) -> dict[str, str]:
