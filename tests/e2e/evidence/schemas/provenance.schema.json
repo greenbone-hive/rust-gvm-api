@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://greenbone.github.io/rust-gvm-api/e2e/provenance.schema.json",
+  "title": "rust-gvm-api E2E component provenance",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "gateway", "gvmd", "scanner", "feedData", "fixtures", "apiContract", "composeSha256", "runner", "harnessRevision"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "gateway": {"$ref": "#/$defs/component"},
+    "gvmd": {"$ref": "#/$defs/component"},
+    "scanner": {"$ref": "#/$defs/component"},
+    "feedData": {"$ref": "#/$defs/revisions"},
+    "fixtures": {"$ref": "#/$defs/revisions"},
+    "apiContract": {"$ref": "#/$defs/revision"},
+    "composeSha256": {"type": "string", "minLength": 1},
+    "runner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["os", "architecture", "image"],
+      "properties": {
+        "os": {"type": "string", "minLength": 1},
+        "architecture": {"type": "string", "minLength": 1},
+        "image": {"type": "string", "minLength": 1}
+      }
+    },
+    "harnessRevision": {"type": "string", "minLength": 1}
+  },
+  "$defs": {
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceRevision", "image", "imageDigest"],
+      "properties": {
+        "sourceRevision": {"type": "string", "minLength": 1},
+        "image": {"type": "string", "minLength": 1},
+        "imageDigest": {"type": "string", "minLength": 1}
+      }
+    },
+    "revision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "revision"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "revision": {"type": "string", "minLength": 1}
+      }
+    },
+    "revisions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/revision"}
+    }
+  }
+}

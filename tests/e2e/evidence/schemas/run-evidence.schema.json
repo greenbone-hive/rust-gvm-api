@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://greenbone.github.io/rust-gvm-api/e2e/run-evidence.schema.json",
+  "title": "rust-gvm-api E2E run timing, retry, artifact, and failure evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["runId", "runAttempt", "runNumber", "event", "headBranch", "headSha", "createdAt", "runUrl", "jobId", "jobUrl", "conclusion", "timingsSeconds", "retried", "artifacts", "failureClassification", "failureOwnerRole"],
+  "properties": {
+    "runId": {"type": "integer", "minimum": 1},
+    "runAttempt": {"type": "integer", "minimum": 1},
+    "runNumber": {"type": "integer", "minimum": 1},
+    "event": {"type": "string", "minLength": 1},
+    "headBranch": {"type": "string", "minLength": 1},
+    "headSha": {"type": "string", "minLength": 1},
+    "createdAt": {"type": "string", "format": "date-time"},
+    "runUrl": {"type": "string", "format": "uri"},
+    "jobId": {"type": "integer", "minimum": 1},
+    "jobUrl": {"type": "string", "format": "uri"},
+    "conclusion": {"enum": ["success", "failure", "timed_out"]},
+    "timingsSeconds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["startup", "tests", "total"],
+      "properties": {
+        "startup": {"type": "number", "minimum": 0},
+        "tests": {"type": "number", "minimum": 0},
+        "total": {"type": "number", "minimum": 0}
+      }
+    },
+    "retried": {"type": "boolean"},
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected", "present", "complete"],
+      "properties": {
+        "expected": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+        "present": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "complete": {"type": "boolean"}
+      }
+    },
+    "failureClassification": {
+      "oneOf": [
+        {"type": "null"},
+        {"enum": ["setup", "readiness", "application", "assertion", "cleanup", "runner", "unexplained-flake", "unclassified"]}
+      ]
+    },
+    "failureOwnerRole": {
+      "oneOf": [
+        {"type": "null"},
+        {"enum": ["community-contract-lane", "promotion-rollback-incident"]}
+      ]
+    }
+  }
+}

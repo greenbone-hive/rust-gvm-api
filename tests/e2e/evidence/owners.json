@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "roles": {
+    "community-contract-lane": {
+      "accountable": "@greenbone/rust-gvm",
+      "consulted": ["@greenbone/gea"],
+      "responsibilities": [
+        "Maintain the required rust-gvm-api E2E contract and gate policy",
+        "Own contract inventory, provenance, diagnostics, and migration evidence"
+      ],
+      "escalation": "Open or escalate a rust-gvm-api issue and notify the rust-gvm team"
+    },
+    "emulator-contract-parity": {
+      "accountable": "@greenbone/gea",
+      "consulted": ["@greenbone/rust-gvm"],
+      "responsibilities": [
+        "Maintain gvm-openapi-emulator OpenVASD fixtures and server behavior",
+        "Review pinned OpenAPI and fixture revision changes"
+      ],
+      "escalation": "Use greenbone/gvm-openapi-emulator#41 and notify the gea team"
+    },
+    "real-openvasd-compatibility": {
+      "accountable": "@greenbone/rust-gvm",
+      "consulted": ["@greenbone/gea", "@greenbone/scanner-maintainers"],
+      "responsibilities": [
+        "Run and classify the direct-HTTP compatibility contract",
+        "Block release inputs with unresolved compatibility drift"
+      ],
+      "escalation": "Escalate drift in rust-gvm-api and notify gea or scanner-maintainers for backend ownership"
+    },
+    "enterprise-feature-coverage": {
+      "accountable": "@greenbone/rust-gvm",
+      "consulted": ["@greenbone/gea"],
+      "responsibilities": [
+        "Maintain feature preflight and Agent Control gateway coverage",
+        "Keep enterprise tests on the promoted community scanner substrate"
+      ],
+      "escalation": "Open or escalate a rust-gvm-api issue and notify the rust-gvm team"
+    },
+    "product-qualification": {
+      "accountable": "@greenbone/product-department-developers",
+      "consulted": ["@greenbone/rust-gvm", "@greenbone/gea", "@greenbone/scanner-maintainers"],
+      "responsibilities": [
+        "Qualify the packaged enterprise topology and release inputs",
+        "Own real enrollment, mTLS, feeds, upgrade, and rollback behavior"
+      ],
+      "escalation": "Escalate through the product qualification release process"
+    },
+    "promotion-rollback-incident": {
+      "accountable": "@greenbone/rust-gvm",
+      "consulted": ["@greenbone/gea", "@greenbone/scanner-maintainers"],
+      "responsibilities": [
+        "Approve direct-HTTP lane promotion against the recorded thresholds",
+        "Restore the OSP gate and classify incidents during the rollback window"
+      ],
+      "escalation": "Open a release-blocking rust-gvm-api issue and notify the rust-gvm team"
+    }
+  }
+}

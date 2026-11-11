@@ -1,4 +1,4 @@
-.PHONY: all build check test test-all fmt clippy doc docs-check deny clean setup-hooks coverage
+.PHONY: all build check test test-all fmt clippy doc docs-check e2e-evidence-check deny clean setup-hooks coverage
 
 # Default: full check cycle
 all: fmt clippy test doc
@@ -42,6 +42,11 @@ doc-open:
 # Validate documentation links and the human-readable REST route inventory
 docs-check:
 	python3 scripts/check-docs.py
+
+# Validate the E2E contract inventory, ownership, schemas, and OSP baseline.
+e2e-evidence-check:
+	python3 scripts/check-e2e-evidence.py
+	python3 tests/test_e2e_evidence.py
 
 # License/advisory check
 deny:
@@ -90,5 +95,5 @@ clean:
 	cargo clean
 
 # Full CI simulation locally
-ci: fmt-check clippy test-all doc deny
+ci: fmt-check e2e-evidence-check clippy test-all doc deny
 	@echo "All CI checks passed."

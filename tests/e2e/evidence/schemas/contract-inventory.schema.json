@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://greenbone.github.io/rust-gvm-api/e2e/contract-inventory.schema.json",
+  "title": "rust-gvm-api E2E contract inventory",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "generatedFrom", "ownerRoles", "contractOwners", "dependencyOwners", "dependencyKinds", "tests"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "generatedFrom": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["crate", "sourceRoots", "discovery"],
+      "properties": {
+        "crate": {"const": "gvm-gateway-e2e"},
+        "sourceRoots": {"type": "array", "minItems": 2, "uniqueItems": true, "items": {"type": "string"}},
+        "discovery": {"type": "string", "minLength": 1}
+      }
+    },
+    "ownerRoles": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+    "contractOwners": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"type": "string", "minLength": 1}
+    },
+    "dependencyOwners": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"type": "string", "minLength": 1}
+    },
+    "dependencyKinds": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"enum": ["component", "data-feed", "fixture", "environment", "feature-flag"]}
+    },
+    "tests": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "source", "kind", "ignored", "contracts", "dependencies", "featureFlags", "scannerPortability", "ospDisposition", "state", "artifacts", "ownerRole"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "source": {"type": "string", "minLength": 1},
+          "kind": {"enum": ["helper", "live"]},
+          "ignored": {"type": "boolean"},
+          "contracts": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+          "dependencies": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+          "featureFlags": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+          "scannerPortability": {"enum": ["scanner-independent", "direct-openvasd-compatible", "osp-specific"]},
+          "ospDisposition": {"enum": ["keep", "migrate", "replace", "retire", "not-applicable"]},
+          "state": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["setup", "isolation", "cleanup"],
+            "properties": {
+              "setup": {"enum": ["fixture-only", "public-readiness", "authenticated-session", "mutable-resources", "completed-scan"]},
+              "isolation": {"enum": ["process-local", "serial-shared-gvmd", "global-lock-shared-gvmd"]},
+              "cleanup": {"enum": ["none", "session", "reverse-delete", "best-effort-reverse-delete"]}
+            }
+          },
+          "artifacts": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+          "ownerRole": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

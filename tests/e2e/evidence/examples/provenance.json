@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "gateway": {
+    "sourceRevision": "76f6e799cf5764ea825a2c497431c9eee9c39fc4",
+    "image": "local/gvm-gateway:dev",
+    "imageDigest": "local-build:record-digest-at-runtime"
+  },
+  "gvmd": {
+    "sourceRevision": "image-release:26.43.0",
+    "image": "ghcr.io/greenbone/gvmd:all-features-26.43.0",
+    "imageDigest": "sha256:ad4428c3a6270065a5f7a5a4c189fe2834920fc4b281bda5bfce42fbf7457aee"
+  },
+  "scanner": {
+    "sourceRevision": "unresolved:mutable-stable-tag",
+    "image": "registry.community.greenbone.net/community/ospd-openvas:stable",
+    "imageDigest": "unresolved:record-resolved-digest-at-runtime"
+  },
+  "feedData": [
+    {"name": "vulnerability-tests", "revision": "unresolved:record-resolved-digest-at-runtime"},
+    {"name": "data-objects", "revision": "unresolved:record-resolved-digest-at-runtime"},
+    {"name": "report-formats", "revision": "unresolved:record-resolved-digest-at-runtime"},
+    {"name": "gpg-data", "revision": "unresolved:record-resolved-digest-at-runtime"}
+  ],
+  "fixtures": [
+    {"name": "compose.yaml", "revision": "sha256:56930cfd5d599f1b5869d46c691e9a5aac3dfa169c872e5f4dba23fc5e778261"},
+    {"name": "GVM_GATEWAY_E2E_TARGET_HOST", "revision": "openvasd"}
+  ],
+  "apiContract": {
+    "name": "spec/rest-api/openapi.yaml",
+    "revision": "sha256:4d20388ff95e67450d56c203bd99f5933632924719d8a22bc49cc870022e2701"
+  },
+  "composeSha256": "56930cfd5d599f1b5869d46c691e9a5aac3dfa169c872e5f4dba23fc5e778261",
+  "runner": {
+    "os": "Linux",
+    "architecture": "X64",
+    "image": "ubuntu-latest:record-image-version-at-runtime"
+  },
+  "harnessRevision": "76f6e799cf5764ea825a2c497431c9eee9c39fc4"
+}

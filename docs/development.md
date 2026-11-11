@@ -60,7 +60,7 @@ add a regression test.
 | `crates/gvm-gateway-gvmd` | Domain-to-typed-GMP mapping, typed response projection, session-bound backend execution | `src/gvmd_adapter/mod.rs`, `src/gvmd_adapter/ports/`, `src/conversions.rs` |
 | `crates/gvm-gateway` | Composition root, config, listener/TLS, telemetry, shutdown | `src/main.rs`, `src/config.rs`, `src/server.rs` |
 | `spec/rest-api` | Curated OpenAPI and behavioral design/test specifications | `openapi.yaml`, `openspec.md`, the resource-family YAML file |
-| `tests/e2e` | Live HTTP client and compose-backed REST lifecycles | `tests/rest_discovery_scan.rs` and other `rest_*.rs` files |
+| `tests/e2e` | Live HTTP client, compose-backed REST lifecycles, and E2E contract/evidence inventory | `tests/rest_discovery_scan.rs`, other `rest_*.rs` files, and `evidence/README.md` |
 | `tests/performance` | Ignored performance scenarios run by the weekly wrapper | `tests/` and `README.md` |
 | `packaging`, `compose.yaml`, `Containerfile` | Package/container runtime contract | matching example config and build scripts |
 | `docs/user` | Release-shipped user guidance and examples | `index.md` |
@@ -95,6 +95,18 @@ The local compose stack requires Docker Compose or Podman Compose:
 ./scripts/run-e2e-tests.sh
 ./scripts/compose-dev.sh down
 ```
+
+Validate the checked-in E2E contract inventory, ownership, evidence schemas,
+and current OSP baseline without starting Compose:
+
+```bash
+make e2e-evidence-check
+```
+
+The inventory is fail-closed against Rust test discovery: adding or removing a
+test requires an explicit contract/dependency/owner entry. See
+[`tests/e2e/evidence/README.md`](../tests/e2e/evidence/README.md) for baseline
+eligibility, reproduction, and Phase 2 comparison rules.
 
 The first start can take several minutes while Greenbone data is initialized.
 Readiness of the TCP/GMP process alone does not mean scan configurations,

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "baselineLane": "community-osp",
+  "candidateLane": "community-direct-openvasd-shadow",
+  "contracts": [
+    {
+      "contract": "rest.discovery.scan-lifecycle",
+      "baseline": "pass",
+      "candidate": "not-run",
+      "disposition": "gap",
+      "ownerRole": "community-contract-lane"
+    }
+  ]
+}
