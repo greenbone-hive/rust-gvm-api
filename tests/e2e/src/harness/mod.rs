@@ -15,6 +15,8 @@ mod polling;
 mod resources;
 
 #[cfg(test)]
+mod config_test;
+#[cfg(test)]
 mod dto_test;
 
 pub use assertions::{

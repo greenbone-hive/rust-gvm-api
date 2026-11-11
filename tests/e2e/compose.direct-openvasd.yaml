@@ -1,0 +1,170 @@
+name: rust-gvm-api-direct-openvasd
+
+x-direct-profile: &direct-profile
+  profiles: [direct-openvasd]
+
+services:
+  vulnerability-tests:
+    <<: *direct-profile
+    image: registry.community.greenbone.net/community/vulnerability-tests:latest@sha256:98a85feca8249f9ebc25e3c8bca43a440c13e9873aef8e533b005f9365f5645b
+    command: /bin/sh -c 'mkdir -p /mnt/24.10/vt-data/nasl/; for f in byte_func.inc global_settings.nasl host_alive_detection.nasl host_details.inc http_func.inc list_array_func.inc mac_prefix.inc misc_func.inc network_func.inc os_func.inc plugin_feed_info.inc revisions-lib.inc smb_nt.inc traversal_func.inc version_func.inc; do cp -- "$${STORAGE_PATH}/24.10/vt-data/nasl/$${f}" "/mnt/"; done'
+    volumes:
+      - vt_data_vol:/mnt
+
+  data-objects:
+    <<: *direct-profile
+    image: registry.community.greenbone.net/community/data-objects:latest@sha256:eac40dbdb92a0980b97b3b74fed4c581206d6a4ef01650dc9c30260bea707bff
+    environment:
+      FEED_RELEASE: "24.10"
+      KEEP_ALIVE: "1"
+    volumes:
+      - data_objects_vol:/mnt
+
+  report-formats:
+    <<: *direct-profile
+    image: registry.community.greenbone.net/community/report-formats:latest@sha256:2f9e5d818539d4b0fa93dcda2cec2f7e922c67cd018d001d4607ba4fb153a664
+    environment:
+      FEED_RELEASE: "24.10"
+      KEEP_ALIVE: "1"
+    volumes:
+      - data_objects_vol:/mnt
+    depends_on:
+      data-objects:
+        condition: service_healthy
+
+  gpg-data:
+    <<: *direct-profile
+    image: registry.community.greenbone.net/community/gpg-data:latest@sha256:1fe6303bd47671737d2d3325f025cee36d4f8c4107dae7e85f0cb7ec4caac01f
+    volumes:
+      - gpg_data_vol:/mnt
+
+  notus-data:
+    <<: *direct-profile
+    image: registry.community.greenbone.net/community/notus-data:latest@sha256:fb82fce7e0662bf9eb2630b28e7731ed1d4072d99ad20f32463f33fa5d3368ad
+    volumes:
+      - notus_data_vol:/mnt
+
+  pg-gvm-migrator:
+    <<: *direct-profile
+    image: registry.community.greenbone.net/community/pg-gvm-migrator:stable@sha256:8fc1cc11cac0481674527e01ec7610a8195110cf117d700bd47fe3af7012b34d
+    volumes:
+      - psql_data_vol:/var/lib/postgresql
+      - psql_socket_vol:/var/run/postgresql
+
+  pg-gvm:
+    <<: *direct-profile
+    image: registry.community.greenbone.net/community/pg-gvm:stable@sha256:a18d9e2f0cbba7839e65547a2331ce8f984500e8c4fbe91d08f9a48036d03fa2
+    volumes:
+      - psql_data_vol:/var/lib/postgresql
+      - psql_socket_vol:/var/run/postgresql
+    depends_on:
+      pg-gvm-migrator:
+        condition: service_completed_successfully
+
+  openvasd-backend:
+    <<: *direct-profile
+    image: ghcr.io/greenbone/gvm-openapi-emulator:edge@sha256:b7d6c99c6444a51f76dc2dc9e9e54a019f96c78bcaab9a12c79833cfcd66e244
+    environment:
+      SERVER_PORT: "8086"
+      SPEC_PATH: /work/swagger.json
+      SAMPLES_DIR: /work/sample
+      PROFILE: openvasd
+      FALLBACK_MODE: none
+      VALIDATION_MODE: required
+      OPENVASD_RESET_TOKEN: issue-678-shadow-reset
+      OPENVASD_TIMEOUT_DELAY: 11s
+    ports:
+      - 127.0.0.1:8086:8086
+    volumes:
+      - ../../dist/e2e-openvasd/fixtures:/work:ro
+    healthcheck:
+      test: [CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1:8086/health/ready"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  openvasd-scenario-proxy:
+    <<: *direct-profile
+    image: docker.io/library/nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
+    volumes:
+      - ./openvasd-scenario-proxy.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      openvasd-backend:
+        condition: service_healthy
+
+  e2e-target:
+    <<: *direct-profile
+    image: docker.io/library/nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
+
+  gvmd:
+    <<: *direct-profile
+    image: ghcr.io/greenbone/gvmd:all-features-26.43.0@sha256:ad4428c3a6270065a5f7a5a4c189fe2834920fc4b281bda5bfce42fbf7457aee
+    environment:
+      GVMD_ENABLE_OPENVASD: "true"
+    volumes:
+      - gvmd_data_vol:/var/lib/gvm
+      - data_objects_vol:/var/lib/gvm/data-objects/gvmd
+      - psql_data_vol:/var/lib/postgresql
+      - psql_socket_vol:/var/run/postgresql
+      - gvmd_socket_vol:/run/gvmd
+    depends_on:
+      pg-gvm:
+        condition: service_started
+      data-objects:
+        condition: service_healthy
+      report-formats:
+        condition: service_healthy
+      openvasd-backend:
+        condition: service_healthy
+
+  configure-direct-openvasd:
+    <<: *direct-profile
+    image: ghcr.io/greenbone/gvmd:all-features-26.43.0@sha256:ad4428c3a6270065a5f7a5a4c189fe2834920fc4b281bda5bfce42fbf7457aee
+    environment:
+      GVMD_ENABLE_OPENVASD: "true"
+    command:
+      - gvmd
+      - --modify-scanner=08b69003-5fc2-4037-a479-93b440211c73
+      - --scanner-host=openvasd-backend
+      - --scanner-port=8086
+      - --scanner-type=openvasd
+    volumes:
+      - gvmd_data_vol:/var/lib/gvm
+      - psql_data_vol:/var/lib/postgresql
+      - psql_socket_vol:/var/run/postgresql
+    depends_on:
+      gvmd:
+        condition: service_healthy
+
+  gvm-gateway:
+    <<: *direct-profile
+    image: local/gvm-gateway:direct-openvasd
+    build:
+      context: ../..
+      dockerfile: Containerfile
+      args:
+        GVM_GATEWAY_VERSION: issue-678-shadow
+        GVM_GATEWAY_VCS_REF: ${GITHUB_SHA:-local}
+        GVM_GATEWAY_UID: "65532"
+        GVM_GATEWAY_GID: "65532"
+    user: "65532:65532"
+    group_add: ["65532"]
+    ports:
+      - 127.0.0.1:8080:8080
+    volumes:
+      - gvmd_socket_vol:/run/gvmd
+    depends_on:
+      configure-direct-openvasd:
+        condition: service_completed_successfully
+
+volumes:
+  gpg_data_vol:
+  notus_data_vol:
+  data_objects_vol:
+  vt_data_vol:
+  gvmd_data_vol:
+  psql_data_vol:
+  psql_socket_vol:
+  gvmd_socket_vol:
+  openvas_data_vol:
+  openvas_log_data_vol:

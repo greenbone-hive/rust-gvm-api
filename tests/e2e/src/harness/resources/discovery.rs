@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Greenbone AG
 
 use super::super::*;
+use serde::Deserialize;
+use std::time::Instant;
 
 impl E2eHarness {
     pub async fn create_import_task(&self, token: &str, name: &str) -> Result<CreatedResource> {
@@ -228,16 +230,35 @@ impl E2eHarness {
     }
 
     pub async fn start_task(&self, token: &str, task_id: &str) -> Result<TaskAction> {
-        self.send_json(
-            self.authed(
-                Method::POST,
-                &format!("/api/v1/tasks/{task_id}/start"),
-                token,
-            ),
-            StatusCode::OK,
-            "start task",
+        let action: TaskAction = self
+            .send_json(
+                self.authed(
+                    Method::POST,
+                    &format!("/api/v1/tasks/{task_id}/start"),
+                    token,
+                ),
+                StatusCode::OK,
+                "start task",
+            )
+            .await?;
+        self.assert_direct_openvasd_correlation(&action.report_id)
+            .await?;
+        Ok(action)
+    }
+
+    pub async fn start_task_response(
+        &self,
+        token: &str,
+        task_id: &str,
+    ) -> Result<reqwest::Response> {
+        self.authed(
+            Method::POST,
+            &format!("/api/v1/tasks/{task_id}/start"),
+            token,
         )
+        .send()
         .await
+        .context("start task for scanner fault mapping")
     }
 
     pub async fn update_task_name(&self, token: &str, task_id: &str, name: &str) -> Result<Task> {
@@ -343,16 +364,113 @@ impl E2eHarness {
     }
 
     pub async fn start_audit(&self, token: &str, audit_id: &str) -> Result<TaskAction> {
-        self.send_json(
-            self.authed(
-                Method::POST,
-                &format!("/api/v1/audits/{audit_id}/start"),
-                token,
-            ),
-            StatusCode::OK,
-            "start audit",
+        let action: TaskAction = self
+            .send_json(
+                self.authed(
+                    Method::POST,
+                    &format!("/api/v1/audits/{audit_id}/start"),
+                    token,
+                ),
+                StatusCode::OK,
+                "start audit",
+            )
+            .await?;
+        self.assert_direct_openvasd_correlation(&action.report_id)
+            .await?;
+        Ok(action)
+    }
+
+    async fn assert_direct_openvasd_correlation(&self, scan_id: &str) -> Result<()> {
+        let Some(base_url) = self.config.scanner_backend_url.as_deref() else {
+            return Ok(());
+        };
+        let expected_scenario = self
+            .config
+            .expected_scanner_scenario
+            .as_deref()
+            .context("direct OpenVASD scenario must accompany its backend URL")?;
+        let deadline = Instant::now() + Duration::from_secs(20);
+        let scan_url = format!("{}/scans/{scan_id}", base_url.trim_end_matches('/'));
+        let results_url = format!("{scan_url}/results");
+        let mut scan_observed = false;
+        let mut last_observation = String::from("scanner request has not been observed");
+
+        while Instant::now() < deadline {
+            let response =
+                self.client.get(&scan_url).send().await.with_context(|| {
+                    format!("query direct OpenVASD scan correlation for {scan_id}")
+                })?;
+            if response.status() == StatusCode::OK {
+                let scan: OpenvasdScanFixture = response
+                    .json()
+                    .await
+                    .context("parse direct OpenVASD scan fixture")?;
+                if scan.scan_id != scan_id {
+                    bail!(
+                        "direct OpenVASD scan id {} did not match report {scan_id}",
+                        scan.scan_id
+                    );
+                }
+                if scan.target.hosts != [self.config.target_host.as_str()] {
+                    bail!(
+                        "direct OpenVASD scan {scan_id} targeted {:?}, expected only {:?}",
+                        scan.target.hosts,
+                        self.config.target_host
+                    );
+                }
+                scan_observed = true;
+
+                let results_response = self
+                    .client
+                    .get(&results_url)
+                    .send()
+                    .await
+                    .with_context(|| format!("query direct OpenVASD results for {scan_id}"))?;
+                if results_response.status() == StatusCode::OK {
+                    let results: Vec<OpenvasdResultFixture> = results_response
+                        .json()
+                        .await
+                        .context("parse direct OpenVASD result fixtures")?;
+                    if !results.is_empty() {
+                        for result in results {
+                            if result.ip_address != self.config.target_host {
+                                bail!(
+                                    "direct OpenVASD result {} correlated to {}, expected {}",
+                                    result.id,
+                                    result.ip_address,
+                                    self.config.target_host
+                                );
+                            }
+                            if !result.message.contains(expected_scenario) {
+                                bail!(
+                                    "direct OpenVASD result {} did not identify scenario {expected_scenario:?}",
+                                    result.id
+                                );
+                            }
+                        }
+                        eprintln!(
+                            "correlated direct OpenVASD scan {scan_id} to target {} and scenario {}",
+                            self.config.target_host, expected_scenario
+                        );
+                        return Ok(());
+                    }
+                }
+                last_observation =
+                    "scan exists but correlated results are not available yet".into();
+            } else {
+                last_observation = format!("scanner returned {} for {scan_url}", response.status());
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+
+        if scan_observed {
+            bail!(
+                "direct OpenVASD scan {scan_id} never exposed correlated scenario results: {last_observation}"
+            );
+        }
+        bail!(
+            "direct OpenVASD scan {scan_id} was not correlated to its gateway report: {last_observation}"
         )
-        .await
     }
 
     pub async fn delete_audit(&self, token: &str, audit_id: &str) -> Result<()> {
@@ -481,4 +599,22 @@ impl E2eHarness {
             .or_else(|| port_lists.first())
             .with_context(|| "no port lists returned from REST API".to_string())
     }
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenvasdScanFixture {
+    scan_id: String,
+    target: OpenvasdTargetFixture,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenvasdTargetFixture {
+    hosts: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenvasdResultFixture {
+    id: u64,
+    ip_address: String,
+    message: String,
 }

@@ -1,0 +1,51 @@
+services:
+  configure-openvas:
+    profiles: [direct-openvasd]
+    image: registry.community.greenbone.net/community/openvas-scanner:stable@sha256:5b2043df8abed6acff7cd4c08636ea87c57f73b95cd406c88dc2adcec24426dd
+    command:
+      - /bin/sh
+      - -c
+      - |
+        printf "table_driven_lsc = yes\n" > /mnt/openvas.conf
+        sed "s/127/128/" /etc/openvas/openvas_log.conf | sed 's/gvm/openvas/' > /mnt/openvas_log.conf
+        chmod 644 /mnt/openvas.conf /mnt/openvas_log.conf
+        touch /var/log/openvas/openvas.log
+        chmod 666 /var/log/openvas/openvas.log
+    volumes:
+      - openvas_data_vol:/mnt
+      - openvas_log_data_vol:/var/log/openvas
+    depends_on:
+      vulnerability-tests:
+        condition: service_completed_successfully
+
+  openvasd-backend:
+    image: registry.community.greenbone.net/community/openvas-scanner:stable@sha256:5b2043df8abed6acff7cd4c08636ea87c57f73b95cd406c88dc2adcec24426dd
+    environment:
+      SERVER_PORT: null
+      SPEC_PATH: null
+      SAMPLES_DIR: null
+      PROFILE: null
+      FALLBACK_MODE: null
+      VALIDATION_MODE: null
+      OPENVASD_RESET_TOKEN: null
+      OPENVASD_TIMEOUT_DELAY: null
+      GNUPGHOME: /etc/openvas/gnupg
+      LISTENING: 0.0.0.0:8086
+    volumes:
+      - openvas_data_vol:/etc/openvas
+      - openvas_log_data_vol:/var/log/openvas
+      - gpg_data_vol:/etc/openvas/gnupg
+      - notus_data_vol:/var/lib/notus
+      - vt_data_vol:/var/lib/openvas/plugins
+    depends_on:
+      configure-openvas:
+        condition: service_completed_successfully
+      gpg-data:
+        condition: service_completed_successfully
+      notus-data:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD-SHELL, "curl -fsS http://127.0.0.1:8086/health/ready >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 60

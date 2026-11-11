@@ -60,12 +60,16 @@
     "rest.tracing.w3c": "community-contract-lane",
     "rest.triage.filtered-read": "community-contract-lane",
     "rest.triage.note-override-lifecycle": "community-contract-lane",
+    "scanner.direct-openvasd-error-mapping": "community-contract-lane",
+    "scanner.identity-separation": "community-contract-lane",
     "scanner.osp-scan-execution": "community-contract-lane"
   },
   "dependencyOwners": {
     "community-compose": "community-contract-lane",
     "gateway-rest": "community-contract-lane",
     "gvmd": "community-contract-lane",
+    "openvasd-emulator": "emulator-contract-parity",
+    "direct-openvasd-path": "community-contract-lane",
     "osp-scanner-path": "community-contract-lane",
     "seeded-feed": "community-contract-lane",
     "serde-json-fixture": "community-contract-lane",
@@ -75,12 +79,16 @@
     "community-compose": "environment",
     "gateway-rest": "component",
     "gvmd": "component",
+    "openvasd-emulator": "fixture",
+    "direct-openvasd-path": "component",
     "osp-scanner-path": "component",
     "seeded-feed": "data-feed",
     "serde-json-fixture": "fixture",
     "synthetic-target": "fixture"
   },
   "tests": [
+    {"id": "tests/e2e/src/harness/config_test.rs::shadow_identity_guard_rejects_backend_target_conflation", "source": "tests/e2e/src/harness/config_test.rs", "kind": "helper", "ignored": false, "contracts": ["scanner.identity-separation"], "dependencies": ["direct-openvasd-path", "openvasd-emulator", "synthetic-target"], "featureFlags": [], "scannerPortability": "direct-openvasd-compatible", "ospDisposition": "replace", "state": {"setup": "fixture-only", "isolation": "process-local", "cleanup": "none"}, "artifacts": ["cargo-test-output"], "ownerRole": "community-contract-lane"},
+    {"id": "tests/e2e/src/harness/config_test.rs::shadow_identity_guard_accepts_separate_services_and_the_osp_default", "source": "tests/e2e/src/harness/config_test.rs", "kind": "helper", "ignored": false, "contracts": ["scanner.identity-separation"], "dependencies": ["direct-openvasd-path", "openvasd-emulator", "synthetic-target"], "featureFlags": [], "scannerPortability": "direct-openvasd-compatible", "ospDisposition": "replace", "state": {"setup": "fixture-only", "isolation": "process-local", "cleanup": "none"}, "artifacts": ["cargo-test-output"], "ownerRole": "community-contract-lane"},
     {"id": "tests/e2e/src/harness/dto_test.rs::report_operating_system_summary_deserializes_the_live_gvmd_shape", "source": "tests/e2e/src/harness/dto_test.rs", "kind": "helper", "ignored": false, "contracts": ["rest.dto.report-operating-system-summary"], "dependencies": ["serde-json-fixture"], "featureFlags": [], "scannerPortability": "scanner-independent", "ospDisposition": "not-applicable", "state": {"setup": "fixture-only", "isolation": "process-local", "cleanup": "none"}, "artifacts": ["cargo-test-output"], "ownerRole": "community-contract-lane"},
     {"id": "tests/e2e/src/harness/dto_test.rs::identity_meta_deserializes_name_only_owner_shape", "source": "tests/e2e/src/harness/dto_test.rs", "kind": "helper", "ignored": false, "contracts": ["rest.dto.identity-meta"], "dependencies": ["serde-json-fixture"], "featureFlags": [], "scannerPortability": "scanner-independent", "ospDisposition": "not-applicable", "state": {"setup": "fixture-only", "isolation": "process-local", "cleanup": "none"}, "artifacts": ["cargo-test-output"], "ownerRole": "community-contract-lane"},
     {"id": "tests/e2e/src/harness/dto_test.rs::identity_owner_remains_distinct_from_generic_resource_refs", "source": "tests/e2e/src/harness/dto_test.rs", "kind": "helper", "ignored": false, "contracts": ["rest.dto.identity-owner"], "dependencies": ["serde-json-fixture"], "featureFlags": [], "scannerPortability": "scanner-independent", "ospDisposition": "not-applicable", "state": {"setup": "fixture-only", "isolation": "process-local", "cleanup": "none"}, "artifacts": ["cargo-test-output"], "ownerRole": "community-contract-lane"},
@@ -120,6 +128,7 @@
     {"id": "tests/e2e/tests/rest_supporting_resources.rs::rest_supporting_scan_config_lifecycle_copies_updates_and_deletes", "source": "tests/e2e/tests/rest_supporting_resources.rs", "kind": "live", "ignored": true, "contracts": ["rest.supporting.scan-config-lifecycle", "gmp.typed-gvmd-api"], "dependencies": ["gateway-rest", "gvmd", "community-compose", "seeded-feed"], "featureFlags": [], "scannerPortability": "scanner-independent", "ospDisposition": "not-applicable", "state": {"setup": "mutable-resources", "isolation": "serial-shared-gvmd", "cleanup": "best-effort-reverse-delete"}, "artifacts": ["cargo-test-output", "compose-diagnostics"], "ownerRole": "community-contract-lane"},
     {"id": "tests/e2e/tests/rest_supporting_resources.rs::rest_supporting_port_list_lifecycle_creates_reads_lists_and_deletes", "source": "tests/e2e/tests/rest_supporting_resources.rs", "kind": "live", "ignored": true, "contracts": ["rest.supporting.port-list-lifecycle", "gmp.typed-gvmd-api"], "dependencies": ["gateway-rest", "gvmd", "community-compose"], "featureFlags": [], "scannerPortability": "scanner-independent", "ospDisposition": "not-applicable", "state": {"setup": "mutable-resources", "isolation": "serial-shared-gvmd", "cleanup": "best-effort-reverse-delete"}, "artifacts": ["cargo-test-output", "compose-diagnostics"], "ownerRole": "community-contract-lane"},
     {"id": "tests/e2e/tests/rest_supporting_resources.rs::rest_supporting_credential_lifecycle_creates_reads_lists_and_deletes", "source": "tests/e2e/tests/rest_supporting_resources.rs", "kind": "live", "ignored": true, "contracts": ["rest.supporting.credential-lifecycle", "gmp.typed-gvmd-api"], "dependencies": ["gateway-rest", "gvmd", "community-compose"], "featureFlags": [], "scannerPortability": "scanner-independent", "ospDisposition": "not-applicable", "state": {"setup": "mutable-resources", "isolation": "serial-shared-gvmd", "cleanup": "best-effort-reverse-delete"}, "artifacts": ["cargo-test-output", "compose-diagnostics"], "ownerRole": "community-contract-lane"},
-    {"id": "tests/e2e/tests/rest_update_resources.rs::rest_update_resource_lifecycles_preserve_ids_and_changed_fields", "source": "tests/e2e/tests/rest_update_resources.rs", "kind": "live", "ignored": true, "contracts": ["rest.resources.put-id-stability", "gmp.typed-gvmd-api"], "dependencies": ["gateway-rest", "gvmd", "community-compose"], "featureFlags": [], "scannerPortability": "scanner-independent", "ospDisposition": "not-applicable", "state": {"setup": "mutable-resources", "isolation": "serial-shared-gvmd", "cleanup": "best-effort-reverse-delete"}, "artifacts": ["cargo-test-output", "compose-diagnostics"], "ownerRole": "community-contract-lane"}
+    {"id": "tests/e2e/tests/rest_update_resources.rs::rest_update_resource_lifecycles_preserve_ids_and_changed_fields", "source": "tests/e2e/tests/rest_update_resources.rs", "kind": "live", "ignored": true, "contracts": ["rest.resources.put-id-stability", "gmp.typed-gvmd-api"], "dependencies": ["gateway-rest", "gvmd", "community-compose"], "featureFlags": [], "scannerPortability": "scanner-independent", "ospDisposition": "not-applicable", "state": {"setup": "mutable-resources", "isolation": "serial-shared-gvmd", "cleanup": "best-effort-reverse-delete"}, "artifacts": ["cargo-test-output", "compose-diagnostics"], "ownerRole": "community-contract-lane"},
+    {"id": "tests/e2e/tests/rest_openvasd_fault_mapping.rs::rest_openvasd_faults_have_bounded_gateway_mappings", "source": "tests/e2e/tests/rest_openvasd_fault_mapping.rs", "kind": "live", "ignored": true, "contracts": ["scanner.direct-openvasd-error-mapping", "gmp.typed-gvmd-api"], "dependencies": ["gateway-rest", "gvmd", "community-compose", "direct-openvasd-path", "openvasd-emulator", "synthetic-target"], "featureFlags": [], "scannerPortability": "direct-openvasd-compatible", "ospDisposition": "replace", "state": {"setup": "mutable-resources", "isolation": "serial-shared-gvmd", "cleanup": "best-effort-reverse-delete"}, "artifacts": ["cargo-test-output", "compose-diagnostics", "fault-mapping-evidence"], "ownerRole": "community-contract-lane"}
   ]
 }

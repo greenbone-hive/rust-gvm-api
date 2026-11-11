@@ -6,11 +6,11 @@ does not change the current required OSP job or authorize promotion.
 
 ## Inventory and ownership
 
-[`contract-inventory.json`](contract-inventory.json) covers all 39 Rust tests
+[`contract-inventory.json`](contract-inventory.json) covers all 42 Rust tests
 in the `gvm-gateway-e2e` package:
 
-- 11 local helper/fixture tests;
-- 28 ignored compose-backed live tests;
+- 13 local helper/fixture tests;
+- 29 ignored compose-backed live tests;
 - 31 scanner-independent tests; and
 - 8 contracts that currently use the OSP scanner path but are expected to
   migrate to the direct-OpenVASD lane.
@@ -21,8 +21,8 @@ explicit `migrate` disposition. The validator compares Rust test attributes
 with inventory IDs, source paths, ignored state, and kind. A new or removed
 test makes validation fail until the inventory changes with it.
 
-The inventory also contains closed owner registries for all 47 named contracts
-and all 7 named dependencies. Validation rejects an unowned reference and a
+The inventory also contains closed owner registries for all 49 named contracts
+and all 9 named dependencies. Validation rejects an unowned reference and a
 stale registry entry, so ownership cannot drift independently from the test
 matrix. REST, typed-GMP, and scanner contracts are first-class names; dependency
 kinds distinguish components, feed/data, fixtures, and environment inputs.
@@ -61,6 +61,102 @@ because a later run passed. `unexplained-flake` requires explicit evidence from
 attempt history; otherwise the collector records `unclassified`. Failed and
 timed-out rows also require a triage owner role; successful rows require both
 failure fields to be null.
+
+[`direct-openvasd-pins.json`](direct-openvasd-pins.json) is the fail-closed
+input manifest for the advisory lanes. It pins emulator source/image, its
+OpenAPI and every mounted fixture, gvmd, feed/data images, the target, the
+test-only fault proxy, real OpenVASD, runner label, and Rust toolchain.
+`scripts/fetch-openvasd-emulator-fixtures.py` downloads only listed files from
+the full source commit and rejects any hash mismatch.
+
+## Advisory direct-OpenVASD shadow lane
+
+The required `REST Discovery Scan E2E` job and its main/devel gate jobs remain
+unchanged. `Direct OpenVASD Shadow E2E (advisory)` uses the same change
+classification and triggers, read-only permissions, and no secrets. It is
+deliberately absent from both required gate jobs.
+
+The test-owned [`../compose.direct-openvasd.yaml`](../compose.direct-openvasd.yaml)
+connects gateway to gvmd to the pinned emulator over direct OpenVASD HTTP. A
+separate pinned `e2e-target` container is the requested scan host. Configuration
+loading and runtime provenance reject equal backend/target names, containers,
+or network addresses. While each happy-path scan is active, the Rust harness
+also proves report/scan ID, requested target, result host, and emulator scenario
+correlation.
+
+All inventoried tests run with Cargo `--no-fail-fast`, so one failure cannot
+hide later contract outcomes. The finalizer emits one comparison row for every
+named contract and reads the completed required job's log through the
+read-only Actions API for actual per-contract OSP outcomes. A pre-test OSP
+failure is therefore `not-run`, not an inferred pass or failure. Any future
+`osp-specific` entry remains an owned
+`approved-exclusion` with its explicit inventory disposition.
+
+The happy path connects gvmd straight to the emulator. During fault coverage,
+gvmd temporarily selects a pinned test-only proxy port which injects one of the
+upstream emulator's `http-400`, `http-500`, `malformed-body`,
+`malformed-header`, or `timeout` scenario headers. Each case starts a task via
+the public gateway and requires its 502/504 or terminal gvmd task mapping. A
+trap restores the direct scanner and resets emulator state.
+
+Every shadow execution uploads a 30-day raw artifact containing exact
+provenance, Cargo/fault output, Compose state, runtime details, and logs bounded
+to 2 MiB and 2,000 lines per service. An always-running evidence job resolves
+exact job/artifact identity through GitHub's read-only API and records timings,
+retry state, artifact completeness, comparisons, faults, and failure class. A
+runtime-health marker separates application from assertion failures; named
+steps distinguish setup, readiness, cleanup, and runner failures.
+
+Local reproduction uses a run-scoped Compose project:
+
+```bash
+export GVM_GATEWAY_E2E_RUN_SCOPE="local-$(id -u)"
+export GVM_GATEWAY_E2E_TARGET_HOST=e2e-target
+export GVM_GATEWAY_E2E_SCANNER_BACKEND_IDENTITY=openvasd-backend
+export GVM_GATEWAY_E2E_SCANNER_BACKEND_URL=http://127.0.0.1:8086
+export GVM_GATEWAY_E2E_EXPECTED_SCANNER_SCENARIO=success
+python3 scripts/fetch-openvasd-emulator-fixtures.py
+./scripts/compose-direct-openvasd.sh up -d --build
+./scripts/run-e2e-tests.sh --wait-only
+./scripts/run-direct-openvasd-contracts.sh
+./scripts/run-openvasd-fault-mappings.sh
+./scripts/compose-direct-openvasd.sh down -v
+```
+
+## Real-OpenVASD compatibility
+
+`Real OpenVASD Compatibility` runs weekly or manually, never on ordinary PRs.
+Manual `release_ref` selects the exact release commit/tag, so the stable
+`Real OpenVASD Direct-HTTP Compatibility (advisory)` result and 90-day artifact
+can be cited as a release prerequisite. The override
+[`../compose.real-openvasd.yaml`](../compose.real-openvasd.yaml) swaps only the
+backend implementation and scanner/feed mounts; gvmd, gateway, direct-HTTP
+happy path, and distinct target remain the same. Its provenance records exact
+scanner/feed/image, gateway, gvmd, target, Compose, harness, and runner inputs.
+
+Automating release policy or branch protection remains outside this phase.
+
+## Shadow observation gate
+
+Phase 3 requires at least 30 comparable finalized shadow runs spanning at
+least 14 days. No elapsed shadow evidence is checked in by this implementation.
+After runs exist, collect the auditable window with:
+
+```bash
+python3 scripts/collect-shadow-observations.py \
+  --repository greenbone/rust-gvm-api \
+  --required-runs 30 \
+  --required-days 14 \
+  --output shadow-observations.json
+```
+
+Only executed jobs with a non-expired finalized evidence artifact and valid
+direct-lane provenance qualify. The collector fingerprints the pinned
+gvmd/scanner/feed images, Compose, OpenAPI, fixtures, runner, target identity,
+and test-harness input; it counts only runs matching the newest qualifying
+fingerprint. It records exact run/job/artifact/provenance identities and fails
+until both thresholds are observed. `--allow-incomplete` writes an explicitly
+unsatisfied progress snapshot; it does not waive the gate.
 
 ## OSP baseline
 
@@ -138,3 +234,7 @@ public workflow artifacts.
   with runs containing `provenance.json`.
 - The current stack uses mutable community feed/scanner tags. The new manifest
   records their resolved image IDs but does not turn them into source revisions.
+- The advisory profiles use digest pins; the existing required OSP stack is
+  intentionally unchanged.
+- The direct shadow 30-run/14-day window begins only after this workflow lands
+  and remains outstanding at implementation handoff.

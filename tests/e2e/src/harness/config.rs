@@ -21,6 +21,9 @@ pub struct E2eConfig {
     pub username: String,
     pub password: String,
     pub target_host: String,
+    pub scanner_backend_identity: Option<String>,
+    pub scanner_backend_url: Option<String>,
+    pub expected_scanner_scenario: Option<String>,
     pub ready_timeout: Duration,
     pub scan_timeout: Duration,
     pub poll_interval: Duration,
@@ -76,11 +79,28 @@ impl fmt::Debug for CredentialStoreFixture {
 
 impl E2eConfig {
     pub fn from_env() -> Result<Self> {
+        let target_host = env_or_default("GVM_GATEWAY_E2E_TARGET_HOST", DEFAULT_TARGET_HOST);
+        let scanner_backend_identity =
+            optional_non_empty_env("GVM_GATEWAY_E2E_SCANNER_BACKEND_IDENTITY");
+        validate_shadow_identities(&target_host, scanner_backend_identity.as_deref())?;
+        let scanner_backend_url = optional_non_empty_env("GVM_GATEWAY_E2E_SCANNER_BACKEND_URL");
+        let expected_scanner_scenario =
+            optional_non_empty_env("GVM_GATEWAY_E2E_EXPECTED_SCANNER_SCENARIO");
+        if scanner_backend_url.is_some() != expected_scanner_scenario.is_some() {
+            bail!(
+                "GVM_GATEWAY_E2E_SCANNER_BACKEND_URL and \
+                 GVM_GATEWAY_E2E_EXPECTED_SCANNER_SCENARIO must be set together"
+            );
+        }
+
         Ok(Self {
             base_url: env_or_default("GVM_GATEWAY_E2E_BASE_URL", DEFAULT_BASE_URL),
             username: env_or_default("GVM_GATEWAY_E2E_USERNAME", DEFAULT_USERNAME),
             password: env_or_default("GVM_GATEWAY_E2E_PASSWORD", DEFAULT_PASSWORD),
-            target_host: env_or_default("GVM_GATEWAY_E2E_TARGET_HOST", DEFAULT_TARGET_HOST),
+            target_host,
+            scanner_backend_identity,
+            scanner_backend_url,
+            expected_scanner_scenario,
             ready_timeout: Duration::from_secs(env_u64_or_default(
                 "GVM_GATEWAY_E2E_READY_TIMEOUT_SECS",
                 DEFAULT_READY_TIMEOUT_SECS,
@@ -107,6 +127,25 @@ impl E2eConfig {
 
 fn env_or_default(key: &str, default: &str) -> String {
     env::var(key).unwrap_or_else(|_| default.to_string())
+}
+
+fn optional_non_empty_env(key: &str) -> Option<String> {
+    env::var(key).ok().filter(|value| !value.trim().is_empty())
+}
+
+pub(super) fn validate_shadow_identities(
+    target_host: &str,
+    scanner_backend_identity: Option<&str>,
+) -> Result<()> {
+    if let Some(scanner_backend_identity) = scanner_backend_identity {
+        if target_host.eq_ignore_ascii_case(scanner_backend_identity) {
+            bail!(
+                "scanner backend identity {scanner_backend_identity:?} must differ from \
+                 synthetic target identity {target_host:?}"
+            );
+        }
+    }
+    Ok(())
 }
 
 fn env_u64_or_default(key: &str, default: u64) -> Result<u64> {

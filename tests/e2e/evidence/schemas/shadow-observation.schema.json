@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://greenbone.github.io/rust-gvm-api/e2e/shadow-observation.schema.json",
+  "title": "Direct-OpenVASD shadow observation window",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "generatedAt", "repository", "workflow", "job", "comparisonFingerprint", "gate", "runs"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "generatedAt": {"type": "string", "format": "date-time"},
+    "repository": {"type": "string", "minLength": 1},
+    "workflow": {"const": ".github/workflows/nightly-e2e.yml"},
+    "job": {"const": "Direct OpenVASD Shadow E2E (advisory)"},
+    "comparisonFingerprint": {
+      "oneOf": [
+        {"const": "unavailable"},
+        {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      ]
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requiredRuns", "requiredDays", "observedRuns", "spanDays", "satisfied"],
+      "properties": {
+        "requiredRuns": {"type": "integer", "minimum": 30},
+        "requiredDays": {"type": "integer", "minimum": 14},
+        "observedRuns": {"type": "integer", "minimum": 0},
+        "spanDays": {"type": "number", "minimum": 0},
+        "satisfied": {"type": "boolean"}
+      }
+    },
+    "runs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["runId", "runAttempt", "event", "headSha", "createdAt", "runUrl", "jobId", "jobUrl", "conclusion", "evidenceArtifactId", "provenanceSha256"],
+        "properties": {
+          "runId": {"type": "integer", "minimum": 1},
+          "runAttempt": {"type": "integer", "minimum": 1},
+          "event": {"type": "string", "minLength": 1},
+          "headSha": {"type": "string", "minLength": 1},
+          "createdAt": {"type": "string", "format": "date-time"},
+          "runUrl": {"type": "string", "format": "uri"},
+          "jobId": {"type": "integer", "minimum": 1},
+          "jobUrl": {"type": "string", "format": "uri"},
+          "conclusion": {"enum": ["success", "failure", "timed_out"]},
+          "evidenceArtifactId": {"type": "integer", "minimum": 1},
+          "provenanceSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    }
+  }
+}
