@@ -6,11 +6,12 @@ use gvm_gateway_e2e::harness::{assert_problem_response, E2eHarness};
 use reqwest::{Method, StatusCode};
 
 // Proves the live gvmd import contract owns a stable report resource: a
-// dedicated import task accepts one bounded envelope and the returned report is
-// readable at Location. The current compose gvmd cannot delete imported
-// reports, so that limitation is asserted explicitly while all independently
-// removable resources are cleaned up; compose volume teardown removes the
-// retained report. A capability regression is never silently skipped.
+// dedicated import task accepts one bounded envelope, the returned report is
+// readable at Location and retains its task relationship. After gvmd's
+// asynchronous import worker completes, DELETE returns 204 and a later
+// authenticated GET returns RFC 9457 not_found. This prevents the required OSP
+// lane from racing active-report cleanup or regressing to the obsolete
+// undeletable-report behavior before it cleans up the import task and session.
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires a compose-backed gvmd environment"]
 async fn rest_report_import_lifecycle_creates_reads_and_cleans_up() -> Result<()> {
@@ -40,24 +41,47 @@ async fn rest_report_import_lifecycle_creates_reads_and_cleans_up() -> Result<()
         "imported report did not retain its import-task relationship"
     );
 
-    let unsupported_report_cleanup = harness
+    let completed_task = harness
+        .wait_for_task_completion(&session.token, &task.id)
+        .await?;
+    assert_eq!(
+        completed_task
+            .last_report
+            .as_ref()
+            .or(completed_task.current_report.as_ref())
+            .map(|report| report.id.as_str()),
+        Some(report.id.as_str()),
+        "completed import task did not retain the imported report"
+    );
+
+    let deleted_report = harness
         .request(Method::DELETE, &report.location)
         .bearer_auth(&session.token)
         .send()
         .await?;
-    assert_problem_response(
-        unsupported_report_cleanup,
+    assert_eq!(
+        deleted_report.status(),
+        StatusCode::NO_CONTENT,
+        "permanently delete imported report"
+    );
+
+    let deleted_report_readback = harness
+        .request(Method::GET, &report.location)
+        .bearer_auth(&session.token)
+        .send()
+        .await?;
+    let problem = assert_problem_response(
+        deleted_report_readback,
         StatusCode::NOT_FOUND,
-        "compose gvmd does not support deleting imported reports",
+        "read permanently deleted imported report",
     )
     .await?;
+    assert_eq!(
+        problem.code, "not_found",
+        "deleted imported report must be permanently absent"
+    );
 
     harness.delete_task(&session.token, &task.id).await?;
-    let retained_report = harness.get_report(&session.token, &report.id).await?;
-    assert_eq!(
-        retained_report.id, report.id,
-        "compose gvmd unexpectedly removed the imported report with its task"
-    );
     harness.delete_session(&session.token).await?;
 
     Ok(())
