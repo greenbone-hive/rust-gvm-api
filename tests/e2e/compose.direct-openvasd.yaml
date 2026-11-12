@@ -6,14 +6,14 @@ x-direct-profile: &direct-profile
 services:
   vulnerability-tests:
     <<: *direct-profile
-    image: registry.community.greenbone.net/community/vulnerability-tests:latest@sha256:98a85feca8249f9ebc25e3c8bca43a440c13e9873aef8e533b005f9365f5645b
+    image: registry.community.greenbone.net/community/vulnerability-tests:latest@sha256:aa8919a34a87865dbc3d69c05d21a1ee8cf2eb4dc7d42231d194158d319f56b4
     command: /bin/sh -c 'mkdir -p /mnt/24.10/vt-data/nasl/; for f in byte_func.inc global_settings.nasl host_alive_detection.nasl host_details.inc http_func.inc list_array_func.inc mac_prefix.inc misc_func.inc network_func.inc os_func.inc plugin_feed_info.inc revisions-lib.inc smb_nt.inc traversal_func.inc version_func.inc; do cp -- "$${STORAGE_PATH}/24.10/vt-data/nasl/$${f}" "/mnt/"; done'
     volumes:
       - vt_data_vol:/mnt
 
   data-objects:
     <<: *direct-profile
-    image: registry.community.greenbone.net/community/data-objects:latest@sha256:eac40dbdb92a0980b97b3b74fed4c581206d6a4ef01650dc9c30260bea707bff
+    image: registry.community.greenbone.net/community/data-objects:latest@sha256:ffac5bfc686b77f16c91081cf2c5432c5e376c886d5a850047e09d731bef33b7
     environment:
       FEED_RELEASE: "24.10"
       KEEP_ALIVE: "1"
@@ -22,7 +22,7 @@ services:
 
   report-formats:
     <<: *direct-profile
-    image: registry.community.greenbone.net/community/report-formats:latest@sha256:2f9e5d818539d4b0fa93dcda2cec2f7e922c67cd018d001d4607ba4fb153a664
+    image: registry.community.greenbone.net/community/report-formats:latest@sha256:4f881a32e813ec3bbbc60e75b0a3d293da4a9cb84ba5567917c2bd6a84d8c9f9
     environment:
       FEED_RELEASE: "24.10"
       KEEP_ALIVE: "1"
@@ -40,7 +40,7 @@ services:
 
   notus-data:
     <<: *direct-profile
-    image: registry.community.greenbone.net/community/notus-data:latest@sha256:fb82fce7e0662bf9eb2630b28e7731ed1d4072d99ad20f32463f33fa5d3368ad
+    image: registry.community.greenbone.net/community/notus-data:latest@sha256:270bfc2138906cddadb03e25fa981cdae84d96be7984343df147b78edde20c16
     volumes:
       - notus_data_vol:/mnt
 
