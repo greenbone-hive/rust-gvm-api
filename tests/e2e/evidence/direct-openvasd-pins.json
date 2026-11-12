@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "emulator": {
     "sourceRepository": "greenbone/gvm-openapi-emulator",
-    "sourceRevision": "d85f0bf9101398738cf73abd2725540e38dd355e",
-    "image": "ghcr.io/greenbone/gvm-openapi-emulator:edge@sha256:b7d6c99c6444a51f76dc2dc9e9e54a019f96c78bcaab9a12c79833cfcd66e244",
+    "sourceRevision": "1a29de834b0e41aaa8cfd499cb029b6797b5212a",
+    "image": "ghcr.io/greenbone/gvm-openapi-emulator:edge@sha256:8249f4ec474a350b19aa7f530785e78ea0fb342f8dbe88b012270b538cd9412c",
     "openapiRevision": "6b0d7ec7e562aff805c8b2f968a8b0e18b5f63b2",
-    "openapiSha256": "349b7af1f6e13953f23ea31177dd25e3804a0cf22189cbfa5846219426604777",
-    "fixtureRevision": "openvasd-issue-41-v1",
+    "openapiSha256": "c57e15573b66d6fdba29a5378865f2029c6ea5e7a64e4dda640f68f793e0b825",
+    "fixtureRevision": "openvasd-issue-45-v2",
     "files": {
       "sample/scans/GET.json": "21ab5aa3a2a63a625a97afc8975560ddf564df5f7d65623e55fac88d46f046da",
       "sample/scans/POST.json": "0c1bda8048b3cef7c69c7bf63a9cf81a50ed0c78c80fdfa41e4d3ec94930e259",
@@ -20,7 +20,8 @@
       "sample/scans/{id}/status/GET.succeeded.json": "85516bbf374323f17ef36704a2f0090221475eefa35deb40002c495e843b3ded",
       "sample/scans/{id}/status/scenario.json": "96f2b924a46210557aa08cc30c747638ad259269c661fd7f6d88840dab97753f",
       "sample/scans/{id}/status/scenario.time.json": "0bee217a8d656e8b5a4e7e57cdf4cede5f41e025c145072444ad1bd8f7cafb6c",
-      "swagger.json": "349b7af1f6e13953f23ea31177dd25e3804a0cf22189cbfa5846219426604777"
+      "sample/vts/GET.json": "187437d85c8d10e00c87f4611ab5ec8ffc4ce48fb5f8a646fab0e6d28c44d8ca",
+      "swagger.json": "c57e15573b66d6fdba29a5378865f2029c6ea5e7a64e4dda640f68f793e0b825"
     }
   },
   "runtimeImages": {

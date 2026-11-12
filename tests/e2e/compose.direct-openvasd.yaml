@@ -63,7 +63,7 @@ services:
 
   openvasd-backend:
     <<: *direct-profile
-    image: ghcr.io/greenbone/gvm-openapi-emulator:edge@sha256:b7d6c99c6444a51f76dc2dc9e9e54a019f96c78bcaab9a12c79833cfcd66e244
+    image: ghcr.io/greenbone/gvm-openapi-emulator:edge@sha256:8249f4ec474a350b19aa7f530785e78ea0fb342f8dbe88b012270b538cd9412c
     environment:
       SERVER_PORT: "8086"
       SPEC_PATH: /work/swagger.json

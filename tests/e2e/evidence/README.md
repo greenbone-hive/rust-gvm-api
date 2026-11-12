@@ -6,12 +6,12 @@ does not change the current required OSP job or authorize promotion.
 
 ## Inventory and ownership
 
-[`contract-inventory.json`](contract-inventory.json) covers all 42 Rust tests
+[`contract-inventory.json`](contract-inventory.json) covers all 44 Rust tests
 in the `gvm-gateway-e2e` package:
 
-- 13 local helper/fixture tests;
+- 15 local helper/fixture tests;
 - 29 ignored compose-backed live tests;
-- 31 scanner-independent tests; and
+- 32 scanner-independent tests; and
 - 8 contracts that currently use the OSP scanner path but are expected to
   migrate to the direct-OpenVASD lane.
 

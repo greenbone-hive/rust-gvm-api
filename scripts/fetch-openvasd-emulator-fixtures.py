@@ -23,6 +23,8 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 PINS_PATH = REPOSITORY_ROOT / "tests" / "e2e" / "evidence" / "direct-openvasd-pins.json"
 DEFAULT_OUTPUT = REPOSITORY_ROOT / "dist" / "e2e-openvasd" / "fixtures"
 RAW_GITHUB_HOST = "raw.githubusercontent.com"
+VT_METADATA_FIXTURE = "sample/vts/GET.json"
+VT_SEVERITY_FIELDS = ("severity_vector", "cvss_base_vector")
 
 
 class FixtureError(RuntimeError):
@@ -48,6 +50,42 @@ def fixture_tree_sha256(files: dict[str, bytes]) -> str:
         digest.update(files[name])
         digest.update(b"\0")
     return digest.hexdigest()
+
+
+def validate_contract_metadata(files: dict[str, bytes], emulator: dict[str, object]) -> None:
+    """Tie the manifest revisions to the verified OpenAPI document."""
+
+    try:
+        swagger = json.loads(files["swagger.json"])
+        info = swagger["info"]
+    except (KeyError, TypeError, json.JSONDecodeError) as error:
+        raise FixtureError("pinned swagger.json must contain an info object") from error
+    if not isinstance(info, dict):
+        raise FixtureError("pinned swagger.json must contain an info object")
+    if info.get("x-upstream-openapi-revision") != emulator.get("openapiRevision"):
+        raise FixtureError("pinned swagger.json OpenAPI revision disagrees with the manifest")
+    if info.get("x-emulator-fixture-revision") != emulator.get("fixtureRevision"):
+        raise FixtureError("pinned swagger.json fixture revision disagrees with the manifest")
+
+
+def validate_gvmd_vt_metadata(files: dict[str, bytes]) -> None:
+    """Require the severity metadata gvmd needs before it imports OpenVASD VTs."""
+
+    try:
+        vts = json.loads(files[VT_METADATA_FIXTURE])
+    except (KeyError, TypeError, json.JSONDecodeError) as error:
+        raise FixtureError(f"{VT_METADATA_FIXTURE} must be a JSON VT metadata array") from error
+    if not isinstance(vts, list) or not vts:
+        raise FixtureError(f"{VT_METADATA_FIXTURE} must contain VT metadata")
+    for index, vt in enumerate(vts):
+        tag = vt.get("tag") if isinstance(vt, dict) else None
+        if not isinstance(tag, dict) or not any(
+            isinstance(tag.get(field), str) and tag[field] for field in VT_SEVERITY_FIELDS
+        ):
+            raise FixtureError(
+                f"{VT_METADATA_FIXTURE}[{index}] must include a non-empty "
+                "tag.severity_vector or tag.cvss_base_vector for gvmd"
+            )
 
 
 def fetch_fixtures(
@@ -87,6 +125,8 @@ def fetch_fixtures(
     openapi_sha = emulator.get("openapiSha256")
     if openapi_sha != expected_files.get("swagger.json"):
         raise FixtureError("the OpenAPI pin must equal the verified swagger.json hash")
+    validate_contract_metadata(files, emulator)
+    validate_gvmd_vt_metadata(files)
     return files
 
 

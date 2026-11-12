@@ -83,7 +83,16 @@ async fn rest_openvasd_faults_have_bounded_gateway_mappings() -> Result<()> {
                     break observed.status;
                 }
                 if observed.status == "Done" {
-                    bail!("fault scenario {scenario} unexpectedly completed successfully");
+                    // gvmd can publish Done before its asynchronous scanner-error
+                    // reconciliation changes the task to Interrupted. Keep polling
+                    // so that transient state cannot trigger cleanup before the
+                    // backend terminal mapping becomes observable. The outer scan
+                    // deadline still rejects a fault scenario that remains Done.
+                    eprintln!(
+                        "fault scenario {scenario} task {} is provisionally Done; \
+                         waiting for backend terminal reconciliation",
+                        task.id
+                    );
                 }
                 tokio::time::sleep(harness.config.poll_interval).await;
             };

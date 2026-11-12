@@ -554,24 +554,20 @@ impl E2eHarness {
         &self,
         scan_configs: &'a [ScanConfig],
     ) -> Result<&'a ScanConfig> {
-        scan_configs
-            .iter()
-            .find(|config| lower(&config.name).contains("host discovery"))
-            .or_else(|| {
+        select_discovery_scan_config_for_backend(
+            scan_configs,
+            self.config.scanner_backend_url.is_some(),
+        )
+        .with_context(|| {
+            format!(
+                "no discovery scan config found; available configs: {}",
                 scan_configs
                     .iter()
-                    .find(|config| lower(&config.name).contains("discovery"))
-            })
-            .with_context(|| {
-                format!(
-                    "no discovery scan config found; available configs: {}",
-                    scan_configs
-                        .iter()
-                        .map(|config| config.name.as_str())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            })
+                    .map(|config| config.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        })
     }
 
     pub fn select_scanner<'a>(&self, scanners: &'a [Scanner]) -> Result<&'a Scanner> {
@@ -598,6 +594,35 @@ impl E2eHarness {
             })
             .or_else(|| port_lists.first())
             .with_context(|| "no port lists returned from REST API".to_string())
+    }
+}
+
+pub(super) fn select_discovery_scan_config_for_backend(
+    scan_configs: &[ScanConfig],
+    direct_openvasd: bool,
+) -> Option<&ScanConfig> {
+    if direct_openvasd {
+        // The direct fixture imports the VTs selected by gvmd's exact
+        // "Discovery" config. "Host Discovery" is present too, but has no
+        // selected direct-OpenVASD VTs and would cause gvmd to reject a scan
+        // before it reaches the emulator.
+        scan_configs
+            .iter()
+            .find(|config| lower(&config.name) == "discovery")
+            .or_else(|| {
+                scan_configs
+                    .iter()
+                    .find(|config| lower(&config.name).contains("discovery"))
+            })
+    } else {
+        scan_configs
+            .iter()
+            .find(|config| lower(&config.name).contains("host discovery"))
+            .or_else(|| {
+                scan_configs
+                    .iter()
+                    .find(|config| lower(&config.name).contains("discovery"))
+            })
     }
 }
 

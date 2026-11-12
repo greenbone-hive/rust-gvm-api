@@ -270,6 +270,88 @@ class E2eEvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(FIXTURES.FixtureError, "SHA-256 mismatch"):
             FIXTURES.fetch_fixtures(pins, lambda _url: b"changed")
 
+    def test_fixture_fetch_rejects_vts_without_gvmd_severity_metadata(self) -> None:
+        """The direct lane must reject a VT fixture that gvmd would refuse to import."""
+
+        swagger = json.dumps(
+            {
+                "info": {
+                    "x-upstream-openapi-revision": "a" * 40,
+                    "x-emulator-fixture-revision": "openvasd-issue-45-v2",
+                }
+            }
+        ).encode()
+        vts = json.dumps(
+            [
+                {
+                    "oid": "1.3.6.1.4.1.25623.1.0.1",
+                    "tag": {"summary": "missing severity"},
+                }
+            ]
+        ).encode()
+        pins = {
+            "emulator": {
+                "sourceRepository": "greenbone/gvm-openapi-emulator",
+                "sourceRevision": "b" * 40,
+                "openapiRevision": "a" * 40,
+                "openapiSha256": FIXTURES.sha256(swagger),
+                "fixtureRevision": "openvasd-issue-45-v2",
+                "files": {
+                    "swagger.json": FIXTURES.sha256(swagger),
+                    "sample/vts/GET.json": FIXTURES.sha256(vts),
+                },
+            }
+        }
+        files = {"swagger.json": swagger, "sample/vts/GET.json": vts}
+        with self.assertRaisesRegex(FIXTURES.FixtureError, "cvss_base_vector"):
+            FIXTURES.fetch_fixtures(
+                pins,
+                lambda url: files["swagger.json"]
+                if url.endswith("/swagger.json")
+                else files["sample/vts/GET.json"],
+            )
+
+    def test_fixture_fetch_rejects_openapi_revision_metadata_drift(self) -> None:
+        """A hash-valid OpenAPI file must still identify the pinned upstream revision."""
+
+        swagger = json.dumps(
+            {
+                "info": {
+                    "x-upstream-openapi-revision": "c" * 40,
+                    "x-emulator-fixture-revision": "openvasd-issue-45-v2",
+                }
+            }
+        ).encode()
+        vts = json.dumps(
+            [
+                {
+                    "oid": "1.3.6.1.4.1.25623.1.0.1",
+                    "tag": {"severity_vector": "AV:N/AC:L/Au:N/C:N/I:N/A:N"},
+                }
+            ]
+        ).encode()
+        pins = {
+            "emulator": {
+                "sourceRepository": "greenbone/gvm-openapi-emulator",
+                "sourceRevision": "b" * 40,
+                "openapiRevision": "a" * 40,
+                "openapiSha256": FIXTURES.sha256(swagger),
+                "fixtureRevision": "openvasd-issue-45-v2",
+                "files": {
+                    "swagger.json": FIXTURES.sha256(swagger),
+                    "sample/vts/GET.json": FIXTURES.sha256(vts),
+                },
+            }
+        }
+        files = {"swagger.json": swagger, "sample/vts/GET.json": vts}
+        with self.assertRaisesRegex(FIXTURES.FixtureError, "OpenAPI revision"):
+            FIXTURES.fetch_fixtures(
+                pins,
+                lambda url: files["swagger.json"]
+                if url.endswith("/swagger.json")
+                else files["sample/vts/GET.json"],
+            )
+
     def test_fixture_download_rejects_non_github_transport(self) -> None:
         """Pinned fixture retrieval must reject local files before any transport runs."""
 

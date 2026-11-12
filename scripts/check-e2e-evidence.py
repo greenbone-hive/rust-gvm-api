@@ -507,6 +507,7 @@ def validate_direct_pins(document: Any) -> None:
         "sample/scans/{id}/status/GET.succeeded.json",
         "sample/scans/{id}/status/scenario.json",
         "sample/scans/{id}/status/scenario.time.json",
+        "sample/vts/GET.json",
         "swagger.json",
     }
     if set(files) != expected_files:
