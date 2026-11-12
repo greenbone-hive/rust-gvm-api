@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://greenbone.github.io/rust-gvm-api/e2e/fault-mappings.schema.json",
+  "title": "Direct-OpenVASD scanner failure mapping evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "lane", "scenarios"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "lane": {"const": "community-direct-openvasd-shadow"},
+    "scenarios": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["scenario", "injectedAt", "gatewayMapping", "target", "outcome"],
+        "properties": {
+          "scenario": {"enum": ["http-400", "http-500", "malformed-body", "malformed-header", "timeout"]},
+          "injectedAt": {"const": "openvasd-http-boundary"},
+          "gatewayMapping": {"type": "string", "minLength": 1},
+          "target": {"type": "string", "minLength": 1},
+          "outcome": {"enum": ["pass", "fail"]}
+        }
+      }
+    }
+  }
+}

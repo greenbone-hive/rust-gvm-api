@@ -17,6 +17,7 @@ EVIDENCE_ROOT = REPOSITORY_ROOT / "tests" / "e2e" / "evidence"
 INVENTORY_PATH = EVIDENCE_ROOT / "contract-inventory.json"
 OWNERS_PATH = EVIDENCE_ROOT / "owners.json"
 BASELINE_PATH = EVIDENCE_ROOT / "baselines" / "osp-required.json"
+DIRECT_PINS_PATH = EVIDENCE_ROOT / "direct-openvasd-pins.json"
 
 FAILURE_CLASSES = {
     "setup",
@@ -427,6 +428,155 @@ def validate_comparison(
             raise EvidenceError(f"{context}.ownerRole is not defined in owners.json")
 
 
+def validate_fault_mappings(document: Any, require_complete: bool = True) -> None:
+    root = expect_object(document, "fault mappings")
+    expect_keys(root, {"schemaVersion", "lane", "scenarios"}, "fault mappings")
+    if root["schemaVersion"] != 1:
+        raise EvidenceError("fault mappings.schemaVersion must equal 1")
+    if root["lane"] != "community-direct-openvasd-shadow":
+        raise EvidenceError("fault mappings.lane must identify the advisory shadow lane")
+    scenarios = root["scenarios"]
+    if not isinstance(scenarios, list):
+        raise EvidenceError("fault mappings.scenarios must be an array")
+    expected = {"http-400", "http-500", "malformed-body", "malformed-header", "timeout"}
+    seen: set[str] = set()
+    for index, raw_scenario in enumerate(scenarios):
+        context = f"fault mappings.scenarios[{index}]"
+        scenario = expect_object(raw_scenario, context)
+        expect_keys(
+            scenario,
+            {"scenario", "injectedAt", "gatewayMapping", "target", "outcome"},
+            context,
+        )
+        name = expect_string(scenario["scenario"], f"{context}.scenario")
+        if name not in expected or name in seen:
+            raise EvidenceError(f"{context}.scenario is unknown or duplicated")
+        seen.add(name)
+        if scenario["injectedAt"] != "openvasd-http-boundary":
+            raise EvidenceError(f"{context}.injectedAt must identify the scanner HTTP boundary")
+        expect_string(scenario["gatewayMapping"], f"{context}.gatewayMapping")
+        expect_string(scenario["target"], f"{context}.target")
+        if scenario["outcome"] not in {"pass", "fail"}:
+            raise EvidenceError(f"{context}.outcome is invalid")
+    if require_complete and seen != expected:
+        raise EvidenceError(f"fault mappings must cover every named scenario: missing={sorted(expected - seen)}")
+
+
+def validate_direct_pins(document: Any) -> None:
+    root = expect_object(document, "direct OpenVASD pins")
+    expect_keys(root, {"schemaVersion", "emulator", "runtimeImages", "identities", "runner"}, "direct OpenVASD pins")
+    if root["schemaVersion"] != 1:
+        raise EvidenceError("direct OpenVASD pins.schemaVersion must equal 1")
+    emulator = expect_object(root["emulator"], "direct OpenVASD pins.emulator")
+    expect_keys(
+        emulator,
+        {
+            "sourceRepository",
+            "sourceRevision",
+            "image",
+            "openapiRevision",
+            "openapiSha256",
+            "fixtureRevision",
+            "files",
+        },
+        "direct OpenVASD pins.emulator",
+    )
+    for field in ("sourceRepository", "sourceRevision", "image", "openapiRevision", "openapiSha256", "fixtureRevision"):
+        expect_string(emulator[field], f"direct OpenVASD pins.emulator.{field}")
+    if emulator["sourceRepository"] != "greenbone/gvm-openapi-emulator":
+        raise EvidenceError("emulator sourceRepository must identify the upstream Phase 1 repository")
+    if not re.fullmatch(r"[0-9a-f]{40}", emulator["sourceRevision"]):
+        raise EvidenceError("emulator sourceRevision must be a full commit SHA")
+    if not re.fullmatch(r"[0-9a-f]{40}", emulator["openapiRevision"]):
+        raise EvidenceError("emulator openapiRevision must be a full commit SHA")
+    if not re.fullmatch(r"[0-9a-f]{64}", emulator["openapiSha256"]):
+        raise EvidenceError("emulator openapiSha256 must be an exact SHA-256")
+    if not re.search(r"@sha256:[0-9a-f]{64}$", emulator["image"]):
+        raise EvidenceError("emulator image must be pinned by digest")
+    files = expect_object(emulator["files"], "direct OpenVASD pins.emulator.files")
+    expected_files = {
+        "sample/scans/GET.json",
+        "sample/scans/POST.json",
+        "sample/scans/preferences/GET.json",
+        "sample/scans/{id}/results/GET.json",
+        "sample/scans/{id}/status/GET.requested.json",
+        "sample/scans/{id}/status/GET.running.1.json",
+        "sample/scans/{id}/status/GET.running.2.json",
+        "sample/scans/{id}/status/GET.running.3.json",
+        "sample/scans/{id}/status/GET.running.4.json",
+        "sample/scans/{id}/status/GET.succeeded.json",
+        "sample/scans/{id}/status/scenario.json",
+        "sample/scans/{id}/status/scenario.time.json",
+        "sample/vts/GET.json",
+        "swagger.json",
+    }
+    if set(files) != expected_files:
+        raise EvidenceError("emulator files must exactly cover the Phase 1 OpenVASD fixture set")
+    if files.get("swagger.json") != emulator["openapiSha256"]:
+        raise EvidenceError("pinned swagger.json must match openapiSha256")
+    for name, digest in files.items():
+        if name.startswith("/") or ".." in Path(name).parts:
+            raise EvidenceError(f"unsafe emulator fixture path: {name}")
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise EvidenceError(f"emulator fixture {name} must have an exact SHA-256")
+
+    runtime_images = expect_object(root["runtimeImages"], "direct OpenVASD pins.runtimeImages")
+    expected_images = {
+        "gvmd",
+        "vulnerability-tests",
+        "data-objects",
+        "report-formats",
+        "gpg-data",
+        "notus-data",
+        "pg-gvm-migrator",
+        "pg-gvm",
+        "scenario-proxy",
+        "e2e-target",
+        "real-openvasd",
+    }
+    if set(runtime_images) != expected_images:
+        raise EvidenceError("direct OpenVASD runtimeImages must exactly cover the lane topology")
+    for name, image in runtime_images.items():
+        expect_string(name, "direct OpenVASD runtimeImages key")
+        if not isinstance(image, str) or not re.search(r"@sha256:[0-9a-f]{64}$", image):
+            raise EvidenceError(f"runtime image {name} must be pinned by digest")
+
+    identities = expect_object(root["identities"], "direct OpenVASD pins.identities")
+    expect_keys(identities, {"scannerBackend", "syntheticTarget"}, "direct OpenVASD pins.identities")
+    backend = expect_string(identities["scannerBackend"], "direct OpenVASD pins.identities.scannerBackend")
+    target = expect_string(identities["syntheticTarget"], "direct OpenVASD pins.identities.syntheticTarget")
+    if backend == target:
+        raise EvidenceError("scanner backend and synthetic target identities must differ")
+    runner = expect_object(root["runner"], "direct OpenVASD pins.runner")
+    expect_keys(runner, {"label", "rust"}, "direct OpenVASD pins.runner")
+    expect_string(runner["label"], "direct OpenVASD pins.runner.label")
+    expect_string(runner["rust"], "direct OpenVASD pins.runner.rust")
+
+    compose_text = (REPOSITORY_ROOT / "tests" / "e2e" / "compose.direct-openvasd.yaml").read_text(encoding="utf-8")
+    real_compose_text = (REPOSITORY_ROOT / "tests" / "e2e" / "compose.real-openvasd.yaml").read_text(encoding="utf-8")
+    if emulator["image"] not in compose_text:
+        raise EvidenceError("pinned emulator image is not wired into the direct Compose profile")
+    for name, image in runtime_images.items():
+        selected = real_compose_text if name == "real-openvasd" else compose_text
+        if image not in selected:
+            raise EvidenceError(f"pinned runtime image {name} is not wired into its Compose profile")
+    for identity in (backend, target):
+        if f"  {identity}:" not in compose_text:
+            raise EvidenceError(f"pinned identity {identity} is not a Compose service")
+    if f"--scanner-host={backend}" not in compose_text:
+        raise EvidenceError("direct Compose scanner configuration does not use the pinned backend identity")
+
+    workflows = (
+        (REPOSITORY_ROOT / ".github" / "workflows" / "nightly-e2e.yml").read_text(encoding="utf-8"),
+        (REPOSITORY_ROOT / ".github" / "workflows" / "real-openvasd-compatibility.yml").read_text(encoding="utf-8"),
+    )
+    for workflow in workflows:
+        if f"runs-on: {runner['label']}" not in workflow:
+            raise EvidenceError("an OpenVASD workflow does not use the pinned runner label")
+        if f'rust-version: "{runner["rust"]}"' not in workflow:
+            raise EvidenceError("an OpenVASD workflow does not use the pinned Rust toolchain")
+
+
 def nearest_rank(values: list[float], percentile: float) -> float:
     if not values:
         raise EvidenceError("cannot calculate a percentile for an empty list")
@@ -608,9 +758,11 @@ def validate_baseline(document: Any) -> None:
 def validate_schema_documents() -> None:
     required_schemas = {
         "contract-inventory.schema.json",
+        "fault-mappings.schema.json",
         "provenance.schema.json",
         "comparison.schema.json",
         "run-evidence.schema.json",
+        "shadow-observation.schema.json",
     }
     found = {path.name for path in (EVIDENCE_ROOT / "schemas").glob("*.json")}
     if found != required_schemas:
@@ -632,6 +784,7 @@ def validate_schema_documents() -> None:
 def validate_all(repository_root: Path = REPOSITORY_ROOT) -> None:
     validate_schema_documents()
     owners = validate_owners(load_json(OWNERS_PATH))
+    validate_direct_pins(load_json(DIRECT_PINS_PATH))
     known_contracts = validate_inventory(load_json(INVENTORY_PATH), owners, repository_root)
     validate_provenance(load_json(EVIDENCE_ROOT / "examples" / "provenance.json"))
     validate_comparison(

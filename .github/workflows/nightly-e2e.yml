@@ -92,6 +92,115 @@ jobs:
         if: always()
         run: ./scripts/compose-dev.sh down -v
 
+  direct-openvasd-shadow:
+    name: Direct OpenVASD Shadow E2E (advisory)
+    needs: classify-changes
+    if: needs.classify-changes.outputs.e2e_required == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    permissions:
+      contents: read
+    env:
+      GVM_GATEWAY_E2E_TARGET_HOST: e2e-target
+      GVM_GATEWAY_E2E_SCANNER_BACKEND_IDENTITY: openvasd-backend
+      GVM_GATEWAY_E2E_SCANNER_BACKEND_URL: http://127.0.0.1:8086
+      GVM_GATEWAY_E2E_EXPECTED_SCANNER_SCENARIO: success
+      GVM_GATEWAY_E2E_RUN_SCOPE: ${{ github.run_id }}-${{ github.run_attempt }}-shadow
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Rust
+        uses: greenbone/actions/setup-rust@d6d4c9500cb4e83f8a516ec1d40b04bcc720bd22 # v3
+        with:
+          rust-version: "1.98.1"
+          components: rustfmt
+          cache-key: cargo-e2e-direct-openvasd-${{ runner.os }}-${{ runner.arch }}-1.98.1-${{ hashFiles('**/Cargo.lock') }}
+      - name: Fetch pinned OpenVASD fixtures
+        run: python3 scripts/fetch-openvasd-emulator-fixtures.py
+      - name: Start direct-OpenVASD shadow runtime
+        id: start_runtime
+        run: ./scripts/compose-direct-openvasd.sh up -d --build
+      - name: Verify direct-OpenVASD readiness and identities
+        id: readiness
+        run: ./scripts/run-e2e-tests.sh --wait-only
+      - name: Capture exact direct-OpenVASD provenance
+        run: |
+          mkdir -p dist/e2e-openvasd/raw
+          python3 scripts/capture-e2e-provenance.py \
+            --lane direct-openvasd \
+            --output dist/e2e-openvasd/raw/provenance.json
+      - name: Run all named community contracts
+        id: contracts
+        run: |
+          mkdir -p dist/e2e-openvasd/raw
+          set -o pipefail
+          ./scripts/run-direct-openvasd-contracts.sh \
+            2>&1 | tee dist/e2e-openvasd/raw/cargo.log
+      - name: Exercise scanner failure mappings
+        id: faults
+        if: always() && steps.readiness.outcome == 'success'
+        run: |
+          mkdir -p dist/e2e-openvasd/raw
+          set -o pipefail
+          ./scripts/run-openvasd-fault-mappings.sh \
+            2>&1 | tee dist/e2e-openvasd/raw/faults.log
+      - name: Check direct-OpenVASD application state
+        if: always() && steps.start_runtime.outcome == 'success'
+        run: ./scripts/check-direct-openvasd-runtime.sh dist/e2e-openvasd/raw
+      - name: Capture bounded direct-OpenVASD diagnostics
+        if: always()
+        run: ./scripts/capture-direct-openvasd-diagnostics.sh dist/e2e-openvasd/raw
+      - name: Tear down direct-OpenVASD shadow runtime
+        if: always()
+        run: ./scripts/compose-direct-openvasd.sh down -v --remove-orphans
+      - name: Upload raw direct-OpenVASD evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: e2e-direct-openvasd-shadow-raw
+          path: dist/e2e-openvasd/raw/*
+          if-no-files-found: error
+          retention-days: 30
+
+  direct-openvasd-shadow-evidence:
+    name: Direct OpenVASD Shadow Evidence (advisory)
+    if: >-
+      always() &&
+      needs.classify-changes.outputs.e2e_required == 'true'
+    needs: [classify-changes, rest-discovery-scan, direct-openvasd-shadow]
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Download raw direct-OpenVASD evidence
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: e2e-direct-openvasd-shadow-raw
+          path: dist/e2e-openvasd/raw
+      - name: Finalize Phase 0 evidence
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dist/e2e-openvasd/raw dist/e2e-openvasd/final
+          python3 scripts/finalize-openvasd-evidence.py \
+            --raw-dir dist/e2e-openvasd/raw \
+            --output-dir dist/e2e-openvasd/final \
+            --job-name "Direct OpenVASD Shadow E2E (advisory)" \
+            --osp-job-name "REST Discovery Scan E2E" \
+            --raw-artifact e2e-direct-openvasd-shadow-raw
+      - name: Upload finalized direct-OpenVASD evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: e2e-direct-openvasd-shadow-evidence
+          path: |
+            dist/e2e-openvasd/final/*
+            dist/e2e-openvasd/raw/provenance.json
+          if-no-files-found: error
+          retention-days: 30
+
   rest-discovery-scan-main-gate:
     name: REST Discovery Scan E2E (main)
     if: >-

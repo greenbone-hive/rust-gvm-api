@@ -9,3 +9,6 @@ mod live_mutations;
 mod reports;
 mod supporting;
 mod system;
+
+#[cfg(test)]
+mod discovery_test;

@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "emulator": {
+    "sourceRepository": "greenbone/gvm-openapi-emulator",
+    "sourceRevision": "1a29de834b0e41aaa8cfd499cb029b6797b5212a",
+    "image": "ghcr.io/greenbone/gvm-openapi-emulator:edge@sha256:8249f4ec474a350b19aa7f530785e78ea0fb342f8dbe88b012270b538cd9412c",
+    "openapiRevision": "6b0d7ec7e562aff805c8b2f968a8b0e18b5f63b2",
+    "openapiSha256": "c57e15573b66d6fdba29a5378865f2029c6ea5e7a64e4dda640f68f793e0b825",
+    "fixtureRevision": "openvasd-issue-45-v2",
+    "files": {
+      "sample/scans/GET.json": "21ab5aa3a2a63a625a97afc8975560ddf564df5f7d65623e55fac88d46f046da",
+      "sample/scans/POST.json": "0c1bda8048b3cef7c69c7bf63a9cf81a50ed0c78c80fdfa41e4d3ec94930e259",
+      "sample/scans/preferences/GET.json": "b583418b050f6537cf0a7e02fec06304a14bcb01d0c8fb914907f61fbb0ae53f",
+      "sample/scans/{id}/results/GET.json": "8b35e4f851a17d56217c42e84968265a84091280a721bf873831f2adcea868fd",
+      "sample/scans/{id}/status/GET.requested.json": "1e8d09c94af94b238e3abc1e744526a5a6fd9b3032ce21e4f8e7964b897d49f4",
+      "sample/scans/{id}/status/GET.running.1.json": "28644bbd6f3bf279e24b2fd30b84ab9d46ee23d0f97832060ee820f1d54e59de",
+      "sample/scans/{id}/status/GET.running.2.json": "48533d167ad405d38b37913d6cae1f0d8b2606c23f91faf102517fadbc4ba15c",
+      "sample/scans/{id}/status/GET.running.3.json": "82db6c934c6d8f2e1f69b28e8df8e02680d00db04ca4a77e8e73b50f0b57b3e9",
+      "sample/scans/{id}/status/GET.running.4.json": "15dfce13045541569648b3c057e908d1604eec4970364616459b96898cabba5a",
+      "sample/scans/{id}/status/GET.succeeded.json": "85516bbf374323f17ef36704a2f0090221475eefa35deb40002c495e843b3ded",
+      "sample/scans/{id}/status/scenario.json": "96f2b924a46210557aa08cc30c747638ad259269c661fd7f6d88840dab97753f",
+      "sample/scans/{id}/status/scenario.time.json": "0bee217a8d656e8b5a4e7e57cdf4cede5f41e025c145072444ad1bd8f7cafb6c",
+      "sample/vts/GET.json": "187437d85c8d10e00c87f4611ab5ec8ffc4ce48fb5f8a646fab0e6d28c44d8ca",
+      "swagger.json": "c57e15573b66d6fdba29a5378865f2029c6ea5e7a64e4dda640f68f793e0b825"
+    }
+  },
+  "runtimeImages": {
+    "gvmd": "ghcr.io/greenbone/gvmd:all-features-26.43.0@sha256:ad4428c3a6270065a5f7a5a4c189fe2834920fc4b281bda5bfce42fbf7457aee",
+    "vulnerability-tests": "registry.community.greenbone.net/community/vulnerability-tests:latest@sha256:aa8919a34a87865dbc3d69c05d21a1ee8cf2eb4dc7d42231d194158d319f56b4",
+    "data-objects": "registry.community.greenbone.net/community/data-objects:latest@sha256:ffac5bfc686b77f16c91081cf2c5432c5e376c886d5a850047e09d731bef33b7",
+    "report-formats": "registry.community.greenbone.net/community/report-formats:latest@sha256:4f881a32e813ec3bbbc60e75b0a3d293da4a9cb84ba5567917c2bd6a84d8c9f9",
+    "gpg-data": "registry.community.greenbone.net/community/gpg-data:latest@sha256:1fe6303bd47671737d2d3325f025cee36d4f8c4107dae7e85f0cb7ec4caac01f",
+    "notus-data": "registry.community.greenbone.net/community/notus-data:latest@sha256:270bfc2138906cddadb03e25fa981cdae84d96be7984343df147b78edde20c16",
+    "pg-gvm-migrator": "registry.community.greenbone.net/community/pg-gvm-migrator:stable@sha256:8fc1cc11cac0481674527e01ec7610a8195110cf117d700bd47fe3af7012b34d",
+    "pg-gvm": "registry.community.greenbone.net/community/pg-gvm:stable@sha256:a18d9e2f0cbba7839e65547a2331ce8f984500e8c4fbe91d08f9a48036d03fa2",
+    "scenario-proxy": "docker.io/library/nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10",
+    "e2e-target": "docker.io/library/nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10",
+    "real-openvasd": "registry.community.greenbone.net/community/openvas-scanner:stable@sha256:5b2043df8abed6acff7cd4c08636ea87c57f73b95cd406c88dc2adcec24426dd"
+  },
+  "identities": {
+    "scannerBackend": "openvasd-backend",
+    "syntheticTarget": "e2e-target"
+  },
+  "runner": {
+    "label": "ubuntu-24.04",
+    "rust": "1.98.1"
+  }
+}

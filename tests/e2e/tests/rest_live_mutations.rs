@@ -415,6 +415,21 @@ fn derive_preference_mutation(preference: &ScanConfigPreference) -> Option<Strin
         return None;
     }
 
+    if preference
+        .preference_type
+        .as_deref()
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("checkbox"))
+    {
+        // The direct OpenVASD VT fixture exposes a real gvmd checkbox without
+        // alternatives. Toggle it explicitly so the live mutation contract
+        // validates the imported fixture instead of treating it as immutable.
+        return match current {
+            "yes" => Some("no".to_string()),
+            "no" => Some("yes".to_string()),
+            _ => None,
+        };
+    }
+
     if let Some(alternative) = preference.alternatives.iter().find(|alternative| {
         alternative.as_str() != current
             && preference.default.as_deref() != Some(alternative.as_str())
@@ -825,6 +840,8 @@ fn stable_store_selection_honors_fixture_id_and_rejects_unaddressable_entries() 
 
 #[test]
 fn preference_mutation_prefers_alternatives_and_derives_safe_entry_values() {
+    // Entry and checkbox preferences need deterministic non-default mutations
+    // so the live direct-OpenVASD fixture can prove set/reset/restore behavior.
     let mut preference = ScanConfigPreference {
         nvt: None,
         name: "fixture".to_string(),
@@ -843,6 +860,15 @@ fn preference_mutation_prefers_alternatives_and_derives_safe_entry_values() {
     assert_eq!(
         derive_preference_mutation(&preference).as_deref(),
         Some("10")
+    );
+
+    preference.preference_type = Some("checkbox".to_string());
+    preference.value = Some("yes".to_string());
+    preference.default = Some("yes".to_string());
+    preference.alternatives.clear();
+    assert_eq!(
+        derive_preference_mutation(&preference).as_deref(),
+        Some("no")
     );
 
     preference.preference_type = Some("password".to_string());

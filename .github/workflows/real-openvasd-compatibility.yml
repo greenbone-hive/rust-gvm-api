@@ -1,0 +1,87 @@
+name: Real OpenVASD Compatibility
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_ref:
+        description: Exact release commit or tag to qualify (defaults to the dispatched ref)
+        required: false
+        type: string
+  schedule:
+    - cron: "17 4 * * 0"
+
+concurrency:
+  group: real-openvasd-compatibility-${{ inputs.release_ref || github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+  GVM_GATEWAY_E2E_BASE_URL: http://127.0.0.1:8080
+  GVM_GATEWAY_E2E_USERNAME: admin
+  GVM_GATEWAY_E2E_PASSWORD: admin
+  GVM_GATEWAY_E2E_TARGET_HOST: e2e-target
+  GVM_GATEWAY_E2E_SCANNER_BACKEND_IDENTITY: openvasd-backend
+  GVM_GATEWAY_E2E_READY_TIMEOUT_SECS: "1200"
+  GVM_GATEWAY_E2E_RESOURCE_TIMEOUT_SECS: "1200"
+  GVM_GATEWAY_E2E_SCAN_TIMEOUT_SECS: "900"
+  GVM_GATEWAY_E2E_POLL_INTERVAL_SECS: "10"
+  GVM_GATEWAY_E2E_OPENVASD_KIND: real
+
+jobs:
+  compatibility:
+    name: Real OpenVASD Direct-HTTP Compatibility (advisory)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      GVM_GATEWAY_E2E_RUN_SCOPE: ${{ github.run_id }}-${{ github.run_attempt }}-real
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.release_ref || github.sha }}
+      - name: Set up Rust
+        uses: greenbone/actions/setup-rust@d6d4c9500cb4e83f8a516ec1d40b04bcc720bd22 # v3
+        with:
+          rust-version: "1.98.1"
+          components: rustfmt
+          cache-key: cargo-e2e-real-openvasd-${{ runner.os }}-${{ runner.arch }}-1.98.1-${{ hashFiles('**/Cargo.lock') }}
+      - name: Fetch pinned OpenVASD fixtures
+        run: python3 scripts/fetch-openvasd-emulator-fixtures.py
+      - name: Start real-OpenVASD direct runtime
+        id: start_runtime
+        run: ./scripts/compose-direct-openvasd.sh up -d --build
+      - name: Verify real-OpenVASD readiness and identities
+        run: ./scripts/run-e2e-tests.sh --wait-only
+      - name: Capture exact real-OpenVASD provenance
+        run: |
+          mkdir -p dist/e2e-openvasd/real
+          python3 scripts/capture-e2e-provenance.py \
+            --lane real-openvasd \
+            --output dist/e2e-openvasd/real/provenance.json
+      - name: Run direct-HTTP happy-path compatibility contract
+        run: |
+          set -o pipefail
+          cargo test -p gvm-gateway-e2e --test rest_discovery_scan \
+            rest_discovery_lifecycle_completes_scan_and_links_report -- \
+            --ignored --exact --nocapture \
+            2>&1 | tee dist/e2e-openvasd/real/cargo.log
+      - name: Check real-OpenVASD application state
+        if: always() && steps.start_runtime.outcome == 'success'
+        run: ./scripts/check-direct-openvasd-runtime.sh dist/e2e-openvasd/real
+      - name: Capture bounded real-OpenVASD diagnostics
+        if: always()
+        run: ./scripts/capture-direct-openvasd-diagnostics.sh dist/e2e-openvasd/real
+      - name: Tear down real-OpenVASD runtime
+        if: always()
+        run: ./scripts/compose-direct-openvasd.sh down -v --remove-orphans
+      - name: Upload real-OpenVASD compatibility evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: real-openvasd-compatibility-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/e2e-openvasd/real/*
+          if-no-files-found: error
+          retention-days: 90
