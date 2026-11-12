@@ -882,6 +882,27 @@ impl GatewayService {
         self.jobs.state.lock().unwrap().jobs.len()
     }
 
+    #[cfg(test)]
+    pub(crate) async fn wait_for_job_worker_for_tests(
+        &self,
+        job_id: &str,
+    ) -> Result<(), GatewayError> {
+        let state_changed = {
+            let state =
+                self.jobs.state.lock().map_err(|_| {
+                    GatewayError::Internal("job registry lock poisoned".to_string())
+                })?;
+            Arc::clone(
+                &state
+                    .jobs
+                    .get(job_id)
+                    .ok_or_else(|| GatewayError::NotFound(format!("job {job_id} not found")))?
+                    .state_changed,
+            )
+        };
+        self.wait_for_job_worker(job_id, &state_changed).await
+    }
+
     async fn wait_for_job_worker(
         &self,
         job_id: &str,
@@ -1041,15 +1062,26 @@ impl JobReaper {
     pub(crate) async fn sweep_once_for_test(&self) {
         Self::sweep_once(Arc::clone(&self.jobs));
     }
+
+    #[cfg(test)]
+    pub(crate) async fn sweep_once_at_for_test(&self, now_epoch_secs: u64) {
+        self.jobs
+            .sweep_expired_jobs_at(now_epoch_secs)
+            .expect("job reaper test sweep should acquire the registry lock");
+    }
 }
 
 impl JobRegistry {
     fn sweep_expired_jobs(&self) -> Result<usize, GatewayError> {
+        self.sweep_expired_jobs_at(now_epoch_secs())
+    }
+
+    fn sweep_expired_jobs_at(&self, now_epoch_secs: u64) -> Result<usize, GatewayError> {
         let mut state = self
             .state
             .lock()
             .map_err(|_| GatewayError::Internal("job registry lock poisoned".to_string()))?;
-        Ok(purge_expired_jobs(&mut state, now_epoch_secs()))
+        Ok(purge_expired_jobs(&mut state, now_epoch_secs))
     }
 }
 

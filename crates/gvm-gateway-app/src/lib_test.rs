@@ -485,11 +485,12 @@ async fn service_gvmd_report_export_job_forwards_export_options() {
 #[tokio::test]
 async fn service_report_export_jobs_expire_after_terminal_retention() {
     let service = create_test_service_with_report_port(Arc::new(ExistingReportPort));
-    service.set_job_policy_for_tests(1000, 1);
+    service.set_job_policy_for_tests(1000, 900);
     let session = service.session_manager().create("admin").unwrap();
 
-    // The short retention locks the background cleanup contract without waiting
-    // for the production 15-minute expiry window.
+    // Use the documented retention window while observing the terminal state,
+    // then advance only the reaper's test clock. A one-second wall-clock window
+    // races with a delayed CI executor before the first status read.
     let job = service
         .create_report_export_job(
             &session.token,
@@ -518,8 +519,11 @@ async fn service_report_export_jobs_expire_after_terminal_retention() {
     assert!(terminal.completed_at.is_some());
     assert!(terminal.expires_at.is_some());
 
-    tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
-    service.job_reaper().sweep_once_for_test().await;
+    service
+        .wait_for_job_worker_for_tests(&job.id)
+        .await
+        .expect("job worker should finish before retention cleanup");
+    service.job_reaper().sweep_once_at_for_test(u64::MAX).await;
     assert_eq!(service.retained_job_count_for_tests(), 0);
     let expired = service.get_job(&session.token, &job.id).await;
     assert!(matches!(expired, Err(GatewayError::NotFound(_))));
