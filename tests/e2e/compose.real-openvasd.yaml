@@ -6,18 +6,27 @@ services:
       - /bin/sh
       - -c
       - |
+        set -eu
+        # Generate metadata from the same minimized NASL set mounted below.
+        # This keeps every advertised VT resolvable by the real scanner.
+        scannerctl feed transform --path /var/lib/openvas/plugins > /var/lib/openvas/plugins/vt-metadata.json
+        cd /var/lib/openvas/plugins
+        sha256sum -- *.inc *.nasl vt-metadata.json > sha256sums
         printf "table_driven_lsc = yes\n" > /mnt/openvas.conf
         sed "s/127/128/" /etc/openvas/openvas_log.conf | sed 's/gvm/openvas/' > /mnt/openvas_log.conf
         # The E2E topology deliberately mounts a minimized VT subset rather
         # than a complete signed feed, so readiness must not require release
         # feed signature files that are outside this compatibility fixture.
-        printf '[feed]\npath = "/var/lib/openvas/plugins"\ncheck_interval = "3600s"\nsignature_check = false\n' > /mnt/openvasd.toml
+        # Keep the SQLite cache off Docker's default 64 MiB /dev/shm and use
+        # the embedded scanner instead of the absent OSPD compatibility socket.
+        printf '[feed]\npath = "/var/lib/openvas/plugins"\ncheck_interval = "3600s"\nsignature_check = false\n\n[storage]\nlocation = "/etc/openvas/openvasd-storage"\n\n[scanner]\ntype = "openvasd"\n' > /mnt/openvasd.toml
         chmod 644 /mnt/openvas.conf /mnt/openvas_log.conf /mnt/openvasd.toml
         touch /var/log/openvas/openvas.log
         chmod 666 /var/log/openvas/openvas.log
     volumes:
       - openvas_data_vol:/mnt
       - openvas_log_data_vol:/var/log/openvas
+      - vt_data_vol:/var/lib/openvas/plugins
     depends_on:
       vulnerability-tests:
         condition: service_completed_successfully
@@ -50,7 +59,9 @@ services:
       notus-data:
         condition: service_completed_successfully
     healthcheck:
-      test: [CMD-SHELL, "curl -fsS http://127.0.0.1:8086/health/ready >/dev/null"]
+      # The scanner image ships Python but only the libcurl runtime, not the
+      # curl CLI. Probe readiness with the guaranteed standard library.
+      test: [CMD, python3, -c, 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8086/health/ready", timeout=5).read()']
       interval: 10s
       timeout: 5s
       retries: 60
