@@ -766,7 +766,7 @@ class E2eEvidenceTests(unittest.TestCase):
             self.assertIn("@sha256:", image)
 
     def test_real_openvasd_compose_accepts_the_minimized_vt_fixture(self) -> None:
-        """Real OpenVASD must receive a hash inventory without requiring absent release signatures."""
+        """Real OpenVASD must index the exact minimized VT set without requiring release signatures."""
 
         direct_compose = (ROOT / "tests/e2e/compose.direct-openvasd.yaml").read_text(
             encoding="utf-8"
@@ -774,7 +774,16 @@ class E2eEvidenceTests(unittest.TestCase):
         real_compose = (ROOT / "tests/e2e/compose.real-openvasd.yaml").read_text(
             encoding="utf-8"
         )
-        self.assertIn("sha256sum -- *.inc *.nasl > sha256sums", direct_compose)
+        self.assertNotIn("vt-metadata.json", direct_compose)
+        self.assertIn(
+            "scannerctl feed transform --path /var/lib/openvas/plugins",
+            real_compose,
+        )
+        self.assertIn(
+            "sha256sum -- *.inc *.nasl vt-metadata.json > sha256sums",
+            real_compose,
+        )
+        self.assertIn("vt_data_vol:/var/lib/openvas/plugins", real_compose)
         self.assertIn("signature_check = false", real_compose)
         self.assertIn("OPENVASD_CONFIG: /etc/openvas/openvasd.toml", real_compose)
         self.assertIn("> /mnt/openvasd.toml", real_compose)

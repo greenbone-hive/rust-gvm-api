@@ -6,6 +6,12 @@ services:
       - /bin/sh
       - -c
       - |
+        set -eu
+        # Generate metadata from the same minimized NASL set mounted below.
+        # This keeps every advertised VT resolvable by the real scanner.
+        scannerctl feed transform --path /var/lib/openvas/plugins > /var/lib/openvas/plugins/vt-metadata.json
+        cd /var/lib/openvas/plugins
+        sha256sum -- *.inc *.nasl vt-metadata.json > sha256sums
         printf "table_driven_lsc = yes\n" > /mnt/openvas.conf
         sed "s/127/128/" /etc/openvas/openvas_log.conf | sed 's/gvm/openvas/' > /mnt/openvas_log.conf
         # The E2E topology deliberately mounts a minimized VT subset rather
@@ -18,6 +24,7 @@ services:
     volumes:
       - openvas_data_vol:/mnt
       - openvas_log_data_vol:/var/log/openvas
+      - vt_data_vol:/var/lib/openvas/plugins
     depends_on:
       vulnerability-tests:
         condition: service_completed_successfully
