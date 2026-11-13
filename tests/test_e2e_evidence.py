@@ -765,6 +765,16 @@ class E2eEvidenceTests(unittest.TestCase):
         for image in pins["runtimeImages"].values():
             self.assertIn("@sha256:", image)
 
+    def test_real_openvasd_compose_accepts_the_minimized_vt_fixture(self) -> None:
+        """Real OpenVASD readiness must not require signatures absent from the intentional VT subset."""
+
+        compose = (ROOT / "tests/e2e/compose.real-openvasd.yaml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("signature_check = false", compose)
+        self.assertIn("OPENVASD_CONFIG: /etc/openvas/openvasd.toml", compose)
+        self.assertIn("> /mnt/openvasd.toml", compose)
+
 
 if __name__ == "__main__":
     unittest.main()
