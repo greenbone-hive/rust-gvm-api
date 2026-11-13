@@ -7,7 +7,7 @@ services:
   vulnerability-tests:
     <<: *direct-profile
     image: registry.community.greenbone.net/community/vulnerability-tests:latest@sha256:aa8919a34a87865dbc3d69c05d21a1ee8cf2eb4dc7d42231d194158d319f56b4
-    command: /bin/sh -c 'mkdir -p /mnt/24.10/vt-data/nasl/; for f in byte_func.inc global_settings.nasl host_alive_detection.nasl host_details.inc http_func.inc list_array_func.inc mac_prefix.inc misc_func.inc network_func.inc os_func.inc plugin_feed_info.inc revisions-lib.inc smb_nt.inc traversal_func.inc version_func.inc; do cp -- "$${STORAGE_PATH}/24.10/vt-data/nasl/$${f}" "/mnt/"; done'
+    command: /bin/sh -c 'mkdir -p /mnt/24.10/vt-data/nasl/; for f in byte_func.inc global_settings.nasl host_alive_detection.nasl host_details.inc http_func.inc list_array_func.inc mac_prefix.inc misc_func.inc network_func.inc os_func.inc plugin_feed_info.inc revisions-lib.inc smb_nt.inc traversal_func.inc version_func.inc; do cp -- "$${STORAGE_PATH}/24.10/vt-data/nasl/$${f}" "/mnt/"; done; cd /mnt; sha256sum -- *.inc *.nasl > sha256sums'
     volumes:
       - vt_data_vol:/mnt
 
