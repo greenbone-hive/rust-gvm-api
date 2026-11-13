@@ -33,6 +33,9 @@ PROVENANCE = load_script("capture_e2e_provenance", "scripts/capture-e2e-provenan
 FINALIZER = load_script("finalize_openvasd_evidence", "scripts/finalize-openvasd-evidence.py")
 FIXTURES = load_script("fetch_openvasd_fixtures", "scripts/fetch-openvasd-emulator-fixtures.py")
 OBSERVATIONS = load_script("collect_shadow_observations", "scripts/collect-shadow-observations.py")
+PINS_VALIDATOR = load_script(
+    "validate_direct_openvasd_pins", "scripts/validate-direct-openvasd-pins.py"
+)
 SECURE_HTTPS = sys.modules["secure_https"]
 
 
@@ -490,6 +493,77 @@ class E2eEvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(CHECKER.EvidenceError, "exactly cover"):
             CHECKER.validate_direct_pins(pins)
 
+    def test_runtime_image_manifest_validator_checks_every_pinned_runtime_image(self) -> None:
+        """Pre-start validation must query the emulator and every runtime input before Compose can run."""
+
+        images = PINS_VALIDATOR.runtime_images()
+        pins = json.loads(
+            (ROOT / "tests/e2e/evidence/direct-openvasd-pins.json").read_text(encoding="utf-8")
+        )
+        inspected: list[str] = []
+        PINS_VALIDATOR.validate_runtime_images(images, inspected.append)
+        self.assertEqual(images["emulator"], pins["emulator"]["image"])
+        self.assertEqual(set(images) - {"emulator"}, set(pins["runtimeImages"]))
+        self.assertEqual(inspected, [images[name] for name in sorted(images)])
+
+    def test_runtime_image_manifest_validator_names_the_unavailable_pin_and_stops(self) -> None:
+        """A removed registry manifest must fail clearly without proceeding to Compose startup."""
+
+        images = {
+            "available": "registry.example/available:stable@sha256:" + "a" * 64,
+            "missing": "registry.example/missing:stable@sha256:" + "b" * 64,
+            "not-checked-after-failure": "registry.example/next:stable@sha256:" + "c" * 64,
+        }
+        inspected: list[str] = []
+
+        def inspect(image: str) -> None:
+            inspected.append(image)
+            if image == images["missing"]:
+                raise PINS_VALIDATOR.RuntimeImageManifestError("manifest unknown")
+
+        with self.assertRaisesRegex(
+            PINS_VALIDATOR.RuntimeImageManifestError,
+            "unavailable runtime image 'missing': registry.example/missing:stable@sha256:" + "b" * 64,
+        ):
+            PINS_VALIDATOR.validate_runtime_images(images, inspect)
+        self.assertEqual(inspected, [images["available"], images["missing"]])
+
+    def test_runtime_image_manifest_validator_resolves_the_retained_digest_directly(self) -> None:
+        """A moving tag must not hide a retained immutable manifest during preflight."""
+
+        image = "registry.example:5443/team/scanner:stable@sha256:" + "d" * 64
+        self.assertEqual(
+            PINS_VALIDATOR.digest_reference(image),
+            "registry.example:5443/team/scanner@sha256:" + "d" * 64,
+        )
+
+    def test_compose_runtime_images_remain_synchronized_with_the_pin_manifest(self) -> None:
+        """Changing a Compose service independently of its manifest pin must fail closed."""
+
+        pins = json.loads(
+            (ROOT / "tests/e2e/evidence/direct-openvasd-pins.json").read_text(encoding="utf-8")
+        )
+        CHECKER.validate_compose_runtime_images(
+            pins["runtimeImages"], pins["emulator"]["image"]
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            direct = Path(directory) / "compose.direct-openvasd.yaml"
+            real = Path(directory) / "compose.real-openvasd.yaml"
+            direct.write_text(
+                (ROOT / "tests/e2e/compose.direct-openvasd.yaml")
+                .read_text(encoding="utf-8")
+                .replace(pins["runtimeImages"]["gpg-data"], "registry.example/gpg:latest@sha256:" + "0" * 64),
+                encoding="utf-8",
+            )
+            real.write_text(
+                (ROOT / "tests/e2e/compose.real-openvasd.yaml").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(CHECKER.EvidenceError, "direct Compose service 'gpg-data'"):
+                CHECKER.validate_compose_runtime_images(
+                    pins["runtimeImages"], pins["emulator"]["image"], direct, real
+                )
+
     def test_shadow_comparison_covers_every_named_contract_and_fault(self) -> None:
         """The advisory lane may not report success while omitting a named contract."""
 
@@ -653,6 +727,22 @@ class E2eEvidenceTests(unittest.TestCase):
         self.assertIn("schedule:", real)
         self.assertNotIn("pull_request:", real)
         self.assertIn("Real OpenVASD Direct-HTTP Compatibility (advisory)", real)
+
+    def test_shadow_and_real_lanes_share_manifest_validation_before_compose(self) -> None:
+        """Both advisory lanes must reject unavailable pins before their shared launcher starts Compose."""
+
+        launcher = (ROOT / "scripts/compose-direct-openvasd.sh").read_text(encoding="utf-8")
+        validator = 'python3 "${ROOT_DIR}/scripts/validate-direct-openvasd-pins.py"'
+        self.assertIn(validator, launcher)
+        self.assertIn("up|start|create|run|restart)", launcher)
+        self.assertLess(launcher.index(validator), launcher.index("exec docker compose"))
+        for workflow in (
+            ROOT / ".github/workflows/nightly-e2e.yml",
+            ROOT / ".github/workflows/real-openvasd-compatibility.yml",
+        ):
+            with self.subTest(workflow=workflow.name):
+                source = workflow.read_text(encoding="utf-8")
+                self.assertIn("./scripts/compose-direct-openvasd.sh up -d --build", source)
 
     def test_direct_compose_uses_pinned_separate_topology(self) -> None:
         """The profile must wire a real target beside, never as, its scanner backend."""
