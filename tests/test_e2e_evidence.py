@@ -785,6 +785,10 @@ class E2eEvidenceTests(unittest.TestCase):
         )
         self.assertIn("vt_data_vol:/var/lib/openvas/plugins", real_compose)
         self.assertIn("signature_check = false", real_compose)
+        self.assertIn(
+            'location = "/etc/openvas/openvasd-storage"', real_compose
+        )
+        self.assertIn('type = "openvasd"', real_compose)
         self.assertIn("OPENVASD_CONFIG: /etc/openvas/openvasd.toml", real_compose)
         self.assertIn("> /mnt/openvasd.toml", real_compose)
 

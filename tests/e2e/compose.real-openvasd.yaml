@@ -17,7 +17,9 @@ services:
         # The E2E topology deliberately mounts a minimized VT subset rather
         # than a complete signed feed, so readiness must not require release
         # feed signature files that are outside this compatibility fixture.
-        printf '[feed]\npath = "/var/lib/openvas/plugins"\ncheck_interval = "3600s"\nsignature_check = false\n' > /mnt/openvasd.toml
+        # Keep the SQLite cache off Docker's default 64 MiB /dev/shm and use
+        # the embedded scanner instead of the absent OSPD compatibility socket.
+        printf '[feed]\npath = "/var/lib/openvas/plugins"\ncheck_interval = "3600s"\nsignature_check = false\n\n[storage]\nlocation = "/etc/openvas/openvasd-storage"\n\n[scanner]\ntype = "openvasd"\n' > /mnt/openvasd.toml
         chmod 644 /mnt/openvas.conf /mnt/openvas_log.conf /mnt/openvasd.toml
         touch /var/log/openvas/openvas.log
         chmod 666 /var/log/openvas/openvas.log
