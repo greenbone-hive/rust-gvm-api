@@ -13,7 +13,7 @@ services:
 
   data-objects:
     <<: *direct-profile
-    image: registry.community.greenbone.net/community/data-objects:latest@sha256:ffac5bfc686b77f16c91081cf2c5432c5e376c886d5a850047e09d731bef33b7
+    image: registry.community.greenbone.net/community/data-objects:latest@sha256:b1ebdc9b6d686c25b871bd4c25961e844f45a745c16992e9ce5eafa9cd03216e
     environment:
       FEED_RELEASE: "24.10"
       KEEP_ALIVE: "1"
