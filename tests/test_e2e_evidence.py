@@ -789,6 +789,8 @@ class E2eEvidenceTests(unittest.TestCase):
             'location = "/etc/openvas/openvasd-storage"', real_compose
         )
         self.assertIn('type = "openvasd"', real_compose)
+        self.assertIn("urllib.request.urlopen", real_compose)
+        self.assertNotIn("curl -fsS", real_compose)
         self.assertIn("OPENVASD_CONFIG: /etc/openvas/openvasd.toml", real_compose)
         self.assertIn("> /mnt/openvasd.toml", real_compose)
 

@@ -59,7 +59,9 @@ services:
       notus-data:
         condition: service_completed_successfully
     healthcheck:
-      test: [CMD-SHELL, "curl -fsS http://127.0.0.1:8086/health/ready >/dev/null"]
+      # The scanner image ships Python but only the libcurl runtime, not the
+      # curl CLI. Probe readiness with the guaranteed standard library.
+      test: [CMD, python3, -c, 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8086/health/ready", timeout=5).read()']
       interval: 10s
       timeout: 5s
       retries: 60
