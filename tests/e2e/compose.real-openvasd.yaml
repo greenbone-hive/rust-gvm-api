@@ -1,7 +1,9 @@
 services:
   configure-openvas:
     profiles: [direct-openvasd]
-    image: registry.community.greenbone.net/community/openvas-scanner:stable@sha256:c9dd880d314ba078d2c1b3609af45c837a2481a60c93c079caf8c818f17ebf13
+    # Issue #695 temporarily overrides this only in the manual/weekly real
+    # compatibility workflow. Keep the official digest as the default.
+    image: ${GVM_GATEWAY_E2E_REAL_OPENVASD_IMAGE:-registry.community.greenbone.net/community/openvas-scanner:stable@sha256:c9dd880d314ba078d2c1b3609af45c837a2481a60c93c079caf8c818f17ebf13}
     command:
       - /bin/sh
       - -c
@@ -32,7 +34,7 @@ services:
         condition: service_completed_successfully
 
   openvasd-backend:
-    image: registry.community.greenbone.net/community/openvas-scanner:stable@sha256:c9dd880d314ba078d2c1b3609af45c837a2481a60c93c079caf8c818f17ebf13
+    image: ${GVM_GATEWAY_E2E_REAL_OPENVASD_IMAGE:-registry.community.greenbone.net/community/openvas-scanner:stable@sha256:c9dd880d314ba078d2c1b3609af45c837a2481a60c93c079caf8c818f17ebf13}
     environment:
       SERVER_PORT: null
       SPEC_PATH: null

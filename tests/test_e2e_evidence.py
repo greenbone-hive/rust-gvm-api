@@ -15,6 +15,9 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SCRIPTS = ROOT / "scripts"
+if str(SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS))
 
 
 def load_script(name: str, relative_path: str):
@@ -27,6 +30,9 @@ def load_script(name: str, relative_path: str):
     return module
 
 
+TEMPORARY_SCANNER = load_script(
+    "build_temporary_openvas_scanner", "scripts/build_temporary_openvas_scanner.py"
+)
 CHECKER = load_script("check_e2e_evidence", "scripts/check-e2e-evidence.py")
 COLLECTOR = load_script("collect_e2e_baseline", "scripts/collect-e2e-baseline.py")
 PROVENANCE = load_script("capture_e2e_provenance", "scripts/capture-e2e-provenance.py")
@@ -258,6 +264,245 @@ class E2eEvidenceTests(unittest.TestCase):
         records["e2e-target"]["image"] = "example.invalid/mutable:latest"
         with self.assertRaisesRegex(RuntimeError, "image drifted"):
             PROVENANCE.assert_pinned_runtime(records, pins, "direct-openvasd")
+
+    def test_temporary_scanner_manifest_requires_the_exact_commit_and_immutable_image(self) -> None:
+        """Issue #695 must never float to another PR revision, registry, or mutable image tag."""
+
+        reference = TEMPORARY_SCANNER.IMAGE_REPOSITORY + "@sha256:" + "a" * 64
+        manifest = TEMPORARY_SCANNER.build_manifest(reference)
+        self.assertEqual(TEMPORARY_SCANNER.validate_manifest(manifest), reference)
+
+        changed_source = copy.deepcopy(manifest)
+        changed_source["source"]["revision"] = "b" * 40
+        with self.assertRaisesRegex(
+            TEMPORARY_SCANNER.TemporaryScannerBuildError, "source identity drifted"
+        ):
+            TEMPORARY_SCANNER.validate_manifest(changed_source)
+
+        mutable_image = copy.deepcopy(manifest)
+        mutable_image["image"]["reference"] = (
+            TEMPORARY_SCANNER.IMAGE_REPOSITORY + ":latest"
+        )
+        with self.assertRaisesRegex(
+            TEMPORARY_SCANNER.TemporaryScannerBuildError, "immutable local-registry digest"
+        ):
+            TEMPORARY_SCANNER.validate_manifest(mutable_image)
+
+    def test_temporary_scanner_cleanup_removes_local_image_then_prunes_build_cache(self) -> None:
+        """Hosted-runner disk hygiene must retain only the registry copy before Compose starts."""
+
+        staging_reference = TEMPORARY_SCANNER.IMAGE_REPOSITORY + ":staging"
+        image_id = "sha256:" + "1" * 64
+        commands: list[list[str]] = []
+        inspected: list[str] = []
+
+        def inspect(reference: str) -> bool:
+            inspected.append(reference)
+            return False
+
+        TEMPORARY_SCANNER.cleanup_local_build_state(
+            staging_reference,
+            image_id,
+            command_runner=commands.append,
+            image_inspector=inspect,
+        )
+        self.assertEqual(
+            commands,
+            [
+                ["docker", "image", "rm", "--force", image_id],
+                ["docker", "builder", "prune", "--all", "--force"],
+            ],
+        )
+        self.assertEqual(inspected, [staging_reference, image_id])
+
+    def test_temporary_scanner_cleanup_fails_before_prune_if_local_image_survives(self) -> None:
+        """A successful untag command cannot hide retained scanner layers from the contract."""
+
+        staging_reference = TEMPORARY_SCANNER.IMAGE_REPOSITORY + ":staging"
+        image_id = "sha256:" + "2" * 64
+        commands: list[list[str]] = []
+        with self.assertRaisesRegex(
+            TEMPORARY_SCANNER.TemporaryScannerBuildError, "cleanup retained"
+        ):
+            TEMPORARY_SCANNER.cleanup_local_build_state(
+                staging_reference,
+                image_id,
+                command_runner=commands.append,
+                image_inspector=lambda reference: reference == image_id,
+            )
+        self.assertEqual(commands, [["docker", "image", "rm", "--force", image_id]])
+
+    def test_temporary_scanner_cleanup_propagates_required_cache_prune_failure(self) -> None:
+        """The compatibility job must stop rather than run the full stack beside retained cache."""
+
+        commands: list[list[str]] = []
+
+        def run(command: list[str]) -> None:
+            commands.append(command)
+            if command[:3] == ["docker", "builder", "prune"]:
+                raise TEMPORARY_SCANNER.TemporaryScannerBuildError("cache prune refused")
+
+        with self.assertRaisesRegex(
+            TEMPORARY_SCANNER.TemporaryScannerBuildError, "cache prune refused"
+        ):
+            TEMPORARY_SCANNER.cleanup_local_build_state(
+                TEMPORARY_SCANNER.IMAGE_REPOSITORY + ":staging",
+                "sha256:" + "5" * 64,
+                command_runner=run,
+                image_inspector=lambda _reference: False,
+            )
+        self.assertEqual(commands[-1], ["docker", "builder", "prune", "--all", "--force"])
+
+    def test_temporary_scanner_cleanup_failure_preserves_verified_manifest(self) -> None:
+        """Cleanup must fail the job without deleting the evidence already written to disk."""
+
+        reference = TEMPORARY_SCANNER.IMAGE_REPOSITORY + "@sha256:" + "3" * 64
+        manifest = TEMPORARY_SCANNER.build_manifest(reference)
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "temporary-scanner-build.json"
+            github_env = Path(directory) / "github-env"
+            arguments = [
+                "build_temporary_openvas_scanner.py",
+                "--source",
+                str(Path(directory) / "source"),
+                "--output",
+                str(output),
+                "--github-env",
+                str(github_env),
+            ]
+            with (
+                patch.object(sys, "argv", arguments),
+                patch.object(
+                    TEMPORARY_SCANNER,
+                    "build_and_publish",
+                    return_value=(manifest, "scanner:staging", "sha256:" + "4" * 64),
+                ),
+                patch.object(
+                    TEMPORARY_SCANNER,
+                    "cleanup_local_build_state",
+                    side_effect=TEMPORARY_SCANNER.TemporaryScannerBuildError(
+                        "build cache prune failed"
+                    ),
+                ),
+            ):
+                with self.assertRaisesRegex(
+                    TEMPORARY_SCANNER.TemporaryScannerBuildError,
+                    "build cache prune failed",
+                ):
+                    TEMPORARY_SCANNER.main()
+            self.assertEqual(json.loads(output.read_text(encoding="utf-8")), manifest)
+            self.assertFalse(github_env.exists())
+
+    def test_temporary_scanner_preflight_rejects_override_manifest_disagreement(self) -> None:
+        """Compose cannot start when its scanner override differs from the validated build output."""
+
+        reference = TEMPORARY_SCANNER.IMAGE_REPOSITORY + "@sha256:" + "c" * 64
+        manifest = TEMPORARY_SCANNER.build_manifest(reference)
+        with tempfile.TemporaryDirectory() as directory:
+            manifest_path = Path(directory) / "temporary-scanner-build.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            images = PINS_VALIDATOR.runtime_images(
+                temporary_scanner_build_manifest=manifest_path,
+                real_openvasd_image=reference,
+            )
+            self.assertEqual(images["real-openvasd"], reference)
+            with self.assertRaisesRegex(
+                PINS_VALIDATOR.RuntimeImageManifestError, "override does not match"
+            ):
+                PINS_VALIDATOR.runtime_images(
+                    temporary_scanner_build_manifest=manifest_path,
+                    real_openvasd_image=(
+                        TEMPORARY_SCANNER.IMAGE_REPOSITORY + "@sha256:" + "d" * 64
+                    ),
+                )
+
+    def test_real_runtime_provenance_requires_one_exact_temporary_scanner_identity(self) -> None:
+        """Configure and backend containers must preserve the built commit, reference, and image ID."""
+
+        pins = json.loads(
+            (ROOT / "tests/e2e/evidence/direct-openvasd-pins.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        reference = TEMPORARY_SCANNER.IMAGE_REPOSITORY + "@sha256:" + "e" * 64
+        manifest = TEMPORARY_SCANNER.build_manifest(reference)
+        service_to_pin = {
+            "gvmd": "gvmd",
+            "configure-direct-openvasd": "gvmd",
+            "vulnerability-tests": "vulnerability-tests",
+            "data-objects": "data-objects",
+            "report-formats": "report-formats",
+            "gpg-data": "gpg-data",
+            "notus-data": "notus-data",
+            "pg-gvm-migrator": "pg-gvm-migrator",
+            "pg-gvm": "pg-gvm",
+            "openvasd-scenario-proxy": "scenario-proxy",
+            "e2e-target": "e2e-target",
+        }
+        records = {
+            service: {
+                "image": pins["runtimeImages"][pin],
+                "sourceRevision": "unused",
+                "imageDigest": f"sha256:{service}",
+            }
+            for service, pin in service_to_pin.items()
+        }
+        for service in ("configure-openvas", "openvasd-backend"):
+            records[service] = {
+                "image": reference,
+                "sourceRevision": TEMPORARY_SCANNER.SOURCE_REVISION,
+                "imageDigest": "sha256:one-built-image",
+            }
+        PROVENANCE.assert_pinned_runtime(records, pins, "real-openvasd", manifest)
+
+        records["openvasd-backend"]["imageDigest"] = "sha256:different-image"
+        with self.assertRaisesRegex(RuntimeError, "one identical temporary image"):
+            PROVENANCE.assert_pinned_runtime(records, pins, "real-openvasd", manifest)
+
+    def test_real_provenance_records_temporary_source_build_inputs_and_repository_digest(self) -> None:
+        """Uploaded provenance must link the runtime scanner to every relevant temporary build input."""
+
+        reference = TEMPORARY_SCANNER.IMAGE_REPOSITORY + "@sha256:" + "f" * 64
+        manifest = TEMPORARY_SCANNER.build_manifest(reference)
+
+        def image(service: str) -> dict[str, str]:
+            return {
+                "sourceRevision": f"image-id:sha256:{service}",
+                "image": f"example.invalid/{service}@sha256:" + "1" * 64,
+                "imageDigest": f"sha256:{service}",
+            }
+
+        records = {
+            "gvm-gateway": image("gvm-gateway"),
+            "gvmd": image("gvmd"),
+            "openvasd-backend": {
+                "sourceRevision": TEMPORARY_SCANNER.SOURCE_REVISION,
+                "image": reference,
+                "imageDigest": "sha256:built-scanner",
+            },
+            "e2e-target": image("e2e-target"),
+            **{service: image(service) for service in PROVENANCE.DIRECT_FEED_SERVICES},
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            manifest_path = Path(directory) / "temporary-scanner-build.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            document = PROVENANCE.build_document(
+                records,
+                "0123456789abcdef",
+                {},
+                scanner_service="openvasd-backend",
+                feed_services=PROVENANCE.DIRECT_FEED_SERVICES,
+                target_service="e2e-target",
+                temporary_scanner_build_path=manifest_path,
+                temporary_scanner_build=manifest,
+            )
+        CHECKER.validate_provenance(document)
+        fixtures = {item["name"]: item["revision"] for item in document["fixtures"]}
+        self.assertEqual(document["scanner"]["sourceRevision"], TEMPORARY_SCANNER.SOURCE_REVISION)
+        self.assertEqual(document["scanner"]["image"], reference)
+        self.assertEqual(fixtures["temporary-openvas-scanner-image"], reference)
+        self.assertIn("temporary-openvas-scanner-build-inputs", fixtures)
+        self.assertIn("temporary-openvas-scanner-build-manifest", fixtures)
 
     def test_fixture_fetch_fails_closed_on_hash_drift(self) -> None:
         """An upstream file change cannot silently alter the pinned test backend."""
@@ -727,6 +972,63 @@ class E2eEvidenceTests(unittest.TestCase):
         self.assertIn("schedule:", real)
         self.assertNotIn("pull_request:", real)
         self.assertIn("Real OpenVASD Direct-HTTP Compatibility (advisory)", real)
+
+    def test_only_real_compatibility_builds_the_exact_temporary_scanner_commit(self) -> None:
+        """The workaround must stay weekly/manual and disappear from PR and emulator execution."""
+
+        expected_revision = "d6e3cbe74ca6f1f4ff1a9d9fcafca59732a32b81"
+        self.assertEqual(TEMPORARY_SCANNER.SOURCE_REVISION, expected_revision)
+        self.assertEqual(TEMPORARY_SCANNER.DOCKERFILE, ".docker/prod.Dockerfile")
+        self.assertEqual(
+            TEMPORARY_SCANNER.DOCKERFILE_SHA256,
+            "86c23e2f9660b56c2b73a7f6cdf8a94b6138bdd85b09294f089f1763e2d6baed",
+        )
+        real = (ROOT / ".github/workflows/real-openvasd-compatibility.yml").read_text(
+            encoding="utf-8"
+        )
+        nightly = (ROOT / ".github/workflows/nightly-e2e.yml").read_text(
+            encoding="utf-8"
+        )
+        ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertIn("repository: greenbone/openvas-scanner", real)
+        self.assertIn(f"ref: {expected_revision}", real)
+        self.assertIn(f"image: {TEMPORARY_SCANNER.REGISTRY_IMAGE}", real)
+        self.assertIn("python3 scripts/build_temporary_openvas_scanner.py", real)
+        self.assertIn("--temporary-scanner-build-manifest", real)
+        self.assertNotIn("pull_request:", real)
+        for ordinary_workflow in (nightly, ci):
+            self.assertNotIn(TEMPORARY_SCANNER.SOURCE_REVISION, ordinary_workflow)
+            self.assertNotIn("build_temporary_openvas_scanner.py", ordinary_workflow)
+
+    def test_temporary_scanner_documentation_names_the_complete_removal_trigger(self) -> None:
+        """The workaround must not outlive both the upstream merge and fixed official image."""
+
+        evidence_readme = (ROOT / "tests/e2e/evidence/README.md").read_text(
+            encoding="utf-8"
+        )
+        normalized = " ".join(evidence_readme.split())
+        self.assertIn("PR #2454 is merged", normalized)
+        self.assertIn(
+            "official community scanner image containing that fix is published", normalized
+        )
+
+    def test_real_compose_reuses_one_override_and_preserves_the_official_default(self) -> None:
+        """Both scanner roles must share one digest override while local/default runs stay official."""
+
+        compose = (ROOT / "tests/e2e/compose.real-openvasd.yaml").read_text(
+            encoding="utf-8"
+        )
+        pins = json.loads(
+            (ROOT / "tests/e2e/evidence/direct-openvasd-pins.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        expression = (
+            "${GVM_GATEWAY_E2E_REAL_OPENVASD_IMAGE:-"
+            + pins["runtimeImages"]["real-openvasd"]
+            + "}"
+        )
+        self.assertEqual(compose.count(f"image: {expression}"), 2)
 
     def test_shadow_and_real_lanes_share_manifest_validation_before_compose(self) -> None:
         """Both advisory lanes must reject unavailable pins before their shared launcher starts Compose."""

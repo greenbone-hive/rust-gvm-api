@@ -11,6 +11,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from build_temporary_openvas_scanner import load_manifest
+
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 PINS_PATH = REPOSITORY_ROOT / "tests" / "e2e" / "evidence" / "direct-openvasd-pins.json"
@@ -21,7 +23,11 @@ class RuntimeImageManifestError(RuntimeError):
     """A runtime image pin cannot be used safely for a Compose launch."""
 
 
-def runtime_images(path: Path = PINS_PATH) -> dict[str, str]:
+def runtime_images(
+    path: Path = PINS_PATH,
+    temporary_scanner_build_manifest: Path | None = None,
+    real_openvasd_image: str | None = None,
+) -> dict[str, str]:
     """Load every valid immutable runtime image reference from the pin manifest."""
 
     try:
@@ -50,6 +56,21 @@ def runtime_images(path: Path = PINS_PATH) -> dict[str, str]:
             raise RuntimeImageManifestError(
                 f"runtime image {name!r} is not pinned to an immutable SHA-256 digest: {image!r}"
             )
+    if temporary_scanner_build_manifest is not None:
+        try:
+            temporary_build = load_manifest(temporary_scanner_build_manifest)
+        except RuntimeError as error:
+            raise RuntimeImageManifestError(str(error)) from error
+        temporary_image = temporary_build["image"]["reference"]
+        if real_openvasd_image != temporary_image:
+            raise RuntimeImageManifestError(
+                "real OpenVASD Compose override does not match the temporary build manifest"
+            )
+        validated["real-openvasd"] = temporary_image
+    elif real_openvasd_image is not None:
+        raise RuntimeImageManifestError(
+            "a real OpenVASD image override requires a temporary build manifest"
+        )
     return validated
 
 
@@ -73,8 +94,13 @@ def inspect_manifest(image: str) -> None:
     """Ask the registry for the exact pinned manifest without pulling or starting an image."""
 
     try:
+        reference = digest_reference(image)
+        command = ["docker", "manifest", "inspect"]
+        if reference.startswith("localhost:"):
+            command.append("--insecure")
+        command.append(reference)
         result = subprocess.run(
-            ["docker", "manifest", "inspect", digest_reference(image)],
+            command,
             check=False,
             text=True,
             capture_output=True,
@@ -109,8 +135,14 @@ def validate_runtime_images(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pins", type=Path, default=PINS_PATH)
+    parser.add_argument("--temporary-scanner-build-manifest", type=Path)
+    parser.add_argument("--real-openvasd-image")
     args = parser.parse_args()
-    images = runtime_images(args.pins)
+    images = runtime_images(
+        args.pins,
+        args.temporary_scanner_build_manifest,
+        args.real_openvasd_image,
+    )
     validate_runtime_images(images)
     print(f"validated {len(images)} immutable direct-OpenVASD runtime image manifests")
     return 0

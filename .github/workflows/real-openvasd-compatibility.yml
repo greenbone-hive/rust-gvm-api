@@ -36,12 +36,34 @@ jobs:
     name: Real OpenVASD Direct-HTTP Compatibility (advisory)
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    services:
+      temporary-scanner-registry:
+        image: docker.io/library/registry:2@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
+        ports:
+          - 5000:5000
     env:
       GVM_GATEWAY_E2E_RUN_SCOPE: ${{ github.run_id }}-${{ github.run_attempt }}-real
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.release_ref || github.sha }}
+      # Temporary issue #695 workaround. Remove this checkout and build after
+      # upstream PR #2454 is merged and an official community scanner image
+      # containing the fix is published.
+      - name: Check out exact temporary OpenVAS scanner source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: greenbone/openvas-scanner
+          ref: d6e3cbe74ca6f1f4ff1a9d9fcafca59732a32b81
+          path: .temporary/openvas-scanner
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Build and publish exact temporary OpenVAS scanner image
+        run: |
+          python3 scripts/build_temporary_openvas_scanner.py \
+            --source .temporary/openvas-scanner \
+            --output dist/e2e-openvasd/real/temporary-scanner-build.json \
+            --github-env "${GITHUB_ENV}"
       - name: Set up Rust
         uses: greenbone/actions/setup-rust@d6d4c9500cb4e83f8a516ec1d40b04bcc720bd22 # v3
         with:
@@ -60,6 +82,8 @@ jobs:
           mkdir -p dist/e2e-openvasd/real
           python3 scripts/capture-e2e-provenance.py \
             --lane real-openvasd \
+            --temporary-scanner-build-manifest \
+              "${GVM_GATEWAY_E2E_TEMPORARY_SCANNER_BUILD_MANIFEST}" \
             --output dist/e2e-openvasd/real/provenance.json
       - name: Run direct-HTTP happy-path compatibility contract
         run: |

@@ -11,6 +11,11 @@ import statistics
 from pathlib import Path
 from typing import Any
 
+from build_temporary_openvas_scanner import (
+    REGISTRY_IMAGE as TEMPORARY_SCANNER_REGISTRY_IMAGE,
+    SOURCE_REVISION as TEMPORARY_SCANNER_SOURCE_REVISION,
+)
+
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE_ROOT = REPOSITORY_ROOT / "tests" / "e2e" / "evidence"
@@ -159,7 +164,11 @@ def validate_compose_runtime_images(
     }
     real_expected = {
         **{
-            service: runtime_images[name]
+            service: (
+                "${GVM_GATEWAY_E2E_REAL_OPENVASD_IMAGE:-"
+                f"{runtime_images[name]}"
+                "}"
+            )
             for name, services in REAL_RUNTIME_IMAGE_SERVICES.items()
             for service in services
         },
@@ -636,15 +645,36 @@ def validate_direct_pins(document: Any) -> None:
     if f"--scanner-host={backend}" not in compose_text:
         raise EvidenceError("direct Compose scanner configuration does not use the pinned backend identity")
 
-    workflows = (
-        (REPOSITORY_ROOT / ".github" / "workflows" / "nightly-e2e.yml").read_text(encoding="utf-8"),
-        (REPOSITORY_ROOT / ".github" / "workflows" / "real-openvasd-compatibility.yml").read_text(encoding="utf-8"),
+    nightly_workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "nightly-e2e.yml").read_text(
+        encoding="utf-8"
     )
+    real_workflow = (
+        REPOSITORY_ROOT / ".github" / "workflows" / "real-openvasd-compatibility.yml"
+    ).read_text(encoding="utf-8")
+    workflows = (nightly_workflow, real_workflow)
     for workflow in workflows:
         if f"runs-on: {runner['label']}" not in workflow:
             raise EvidenceError("an OpenVASD workflow does not use the pinned runner label")
         if f'rust-version: "{runner["rust"]}"' not in workflow:
             raise EvidenceError("an OpenVASD workflow does not use the pinned Rust toolchain")
+
+    temporary_workflow_inputs = (
+        "repository: greenbone/openvas-scanner",
+        f"ref: {TEMPORARY_SCANNER_SOURCE_REVISION}",
+        f"image: {TEMPORARY_SCANNER_REGISTRY_IMAGE}",
+        "python3 scripts/build_temporary_openvas_scanner.py",
+        "GVM_GATEWAY_E2E_TEMPORARY_SCANNER_BUILD_MANIFEST",
+    )
+    for required_input in temporary_workflow_inputs:
+        if required_input not in real_workflow:
+            raise EvidenceError(
+                f"real OpenVASD workflow is missing temporary build input: {required_input}"
+            )
+    if (
+        TEMPORARY_SCANNER_SOURCE_REVISION in nightly_workflow
+        or "build_temporary_openvas_scanner.py" in nightly_workflow
+    ):
+        raise EvidenceError("the direct emulator lane must not build the temporary real scanner")
 
 
 def nearest_rank(values: list[float], percentile: float) -> float:
