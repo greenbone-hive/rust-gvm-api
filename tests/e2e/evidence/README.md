@@ -68,6 +68,10 @@ OpenAPI and every mounted fixture, gvmd, feed/data images, the target, the
 test-only fault proxy, real OpenVASD, runner label, and Rust toolchain.
 `scripts/fetch-openvasd-emulator-fixtures.py` downloads only listed files from
 the full source commit and rejects any hash mismatch.
+Before the shared direct-OpenVASD Compose launcher starts either advisory lane,
+`scripts/validate-direct-openvasd-pins.py` resolves every digest-pinned runtime
+image in this manifest. An unavailable manifest names the exact immutable image
+and stops the launch; no mutable-tag fallback is permitted.
 
 ## Advisory direct-OpenVASD shadow lane
 

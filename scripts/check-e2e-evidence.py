@@ -51,6 +51,21 @@ ISOLATION_KINDS = {
     "global-lock-shared-gvmd",
 }
 CLEANUP_KINDS = {"none", "session", "reverse-delete", "best-effort-reverse-delete"}
+DIRECT_RUNTIME_IMAGE_SERVICES = {
+    "gvmd": ("gvmd", "configure-direct-openvasd"),
+    "vulnerability-tests": ("vulnerability-tests",),
+    "data-objects": ("data-objects",),
+    "report-formats": ("report-formats",),
+    "gpg-data": ("gpg-data",),
+    "notus-data": ("notus-data",),
+    "pg-gvm-migrator": ("pg-gvm-migrator",),
+    "pg-gvm": ("pg-gvm",),
+    "scenario-proxy": ("openvasd-scenario-proxy",),
+    "e2e-target": ("e2e-target",),
+}
+REAL_RUNTIME_IMAGE_SERVICES = {
+    "real-openvasd": ("configure-openvas", "openvasd-backend"),
+}
 
 
 class EvidenceError(ValueError):
@@ -98,6 +113,67 @@ def expect_string_list(value: Any, context: str) -> list[str]:
     if len(result) != len(set(result)):
         raise EvidenceError(f"{context} must not contain duplicates")
     return result
+
+
+def compose_service_images(path: Path) -> dict[str, str]:
+    """Read the image assigned to each service without accepting unstructured drift."""
+
+    images: dict[str, str] = {}
+    current_service: str | None = None
+    in_services = False
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line == "services:":
+            in_services = True
+            continue
+        if not in_services:
+            continue
+        service = re.fullmatch(r"  ([A-Za-z0-9_-]+):", line)
+        if service:
+            current_service = service.group(1)
+            continue
+        image = re.fullmatch(r"    image: (\S+)", line)
+        if image and current_service:
+            if current_service in images:
+                raise EvidenceError(f"Compose service {current_service!r} declares multiple images")
+            images[current_service] = image.group(1)
+    return images
+
+
+def validate_compose_runtime_images(
+    runtime_images: dict[str, str],
+    emulator_image: str,
+    direct_compose_path: Path = REPOSITORY_ROOT / "tests" / "e2e" / "compose.direct-openvasd.yaml",
+    real_compose_path: Path = REPOSITORY_ROOT / "tests" / "e2e" / "compose.real-openvasd.yaml",
+) -> None:
+    """Keep every runtime service's immutable Compose reference equal to its manifest pin."""
+
+    direct_images = compose_service_images(direct_compose_path)
+    real_images = compose_service_images(real_compose_path)
+    direct_expected = {
+        **{
+            service: runtime_images[name]
+            for name, services in DIRECT_RUNTIME_IMAGE_SERVICES.items()
+            for service in services
+        },
+        "openvasd-backend": emulator_image,
+    }
+    real_expected = {
+        **{
+            service: runtime_images[name]
+            for name, services in REAL_RUNTIME_IMAGE_SERVICES.items()
+            for service in services
+        },
+    }
+    for compose_name, declared, expected in (
+        ("direct", direct_images, direct_expected),
+        ("real", real_images, real_expected),
+    ):
+        for service, image in expected.items():
+            if declared.get(service) != image:
+                raise EvidenceError(
+                    f"{compose_name} Compose service {service!r} image does not match its "
+                    "pinned runtime manifest entry"
+                )
 
 
 def discover_rust_tests(repository_root: Path = REPOSITORY_ROOT) -> dict[str, dict[str, Any]]:
@@ -553,13 +629,7 @@ def validate_direct_pins(document: Any) -> None:
     expect_string(runner["rust"], "direct OpenVASD pins.runner.rust")
 
     compose_text = (REPOSITORY_ROOT / "tests" / "e2e" / "compose.direct-openvasd.yaml").read_text(encoding="utf-8")
-    real_compose_text = (REPOSITORY_ROOT / "tests" / "e2e" / "compose.real-openvasd.yaml").read_text(encoding="utf-8")
-    if emulator["image"] not in compose_text:
-        raise EvidenceError("pinned emulator image is not wired into the direct Compose profile")
-    for name, image in runtime_images.items():
-        selected = real_compose_text if name == "real-openvasd" else compose_text
-        if image not in selected:
-            raise EvidenceError(f"pinned runtime image {name} is not wired into its Compose profile")
+    validate_compose_runtime_images(runtime_images, emulator["image"])
     for identity in (backend, target):
         if f"  {identity}:" not in compose_text:
             raise EvidenceError(f"pinned identity {identity} is not a Compose service")

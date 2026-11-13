@@ -1,14 +1,18 @@
 services:
   configure-openvas:
     profiles: [direct-openvasd]
-    image: registry.community.greenbone.net/community/openvas-scanner:stable@sha256:5b2043df8abed6acff7cd4c08636ea87c57f73b95cd406c88dc2adcec24426dd
+    image: registry.community.greenbone.net/community/openvas-scanner:stable@sha256:c9dd880d314ba078d2c1b3609af45c837a2481a60c93c079caf8c818f17ebf13
     command:
       - /bin/sh
       - -c
       - |
         printf "table_driven_lsc = yes\n" > /mnt/openvas.conf
         sed "s/127/128/" /etc/openvas/openvas_log.conf | sed 's/gvm/openvas/' > /mnt/openvas_log.conf
-        chmod 644 /mnt/openvas.conf /mnt/openvas_log.conf
+        # The E2E topology deliberately mounts a minimized VT subset rather
+        # than a complete signed feed, so readiness must not require release
+        # feed signature files that are outside this compatibility fixture.
+        printf '[feed]\npath = "/var/lib/openvas/plugins"\ncheck_interval = "3600s"\nsignature_check = false\n' > /mnt/openvasd.toml
+        chmod 644 /mnt/openvas.conf /mnt/openvas_log.conf /mnt/openvasd.toml
         touch /var/log/openvas/openvas.log
         chmod 666 /var/log/openvas/openvas.log
     volumes:
@@ -19,7 +23,7 @@ services:
         condition: service_completed_successfully
 
   openvasd-backend:
-    image: registry.community.greenbone.net/community/openvas-scanner:stable@sha256:5b2043df8abed6acff7cd4c08636ea87c57f73b95cd406c88dc2adcec24426dd
+    image: registry.community.greenbone.net/community/openvas-scanner:stable@sha256:c9dd880d314ba078d2c1b3609af45c837a2481a60c93c079caf8c818f17ebf13
     environment:
       SERVER_PORT: null
       SPEC_PATH: null
@@ -30,6 +34,7 @@ services:
       OPENVASD_RESET_TOKEN: null
       OPENVASD_TIMEOUT_DELAY: null
       GNUPGHOME: /etc/openvas/gnupg
+      OPENVASD_CONFIG: /etc/openvas/openvasd.toml
       LISTENING: 0.0.0.0:8086
     volumes:
       - openvas_data_vol:/etc/openvas
