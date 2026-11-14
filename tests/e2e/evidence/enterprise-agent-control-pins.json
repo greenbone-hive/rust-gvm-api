@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "sourceBuildWorkaround": {
+    "replacementCondition": "Replace the source build only after greenbone/gvm-openapi-emulator PR #50 merges and an immutable published image for the exact merged content is available.",
+    "repository": "greenbone/gvm-openapi-emulator",
+    "revision": "82c03f6cf190942764f99ac799efc539cc57b4ca",
+    "gitTree": "aa757aab988d086bd2a32f58132ebdac9bdb90ef",
+    "sourceArchiveSha256": "b2e614cd0e46e2ee08083c36282915707061c1cd6f799668830603f8b86ff62c",
+    "dockerfile": "Dockerfile",
+    "dockerfileSha256": "833c06bb50137c10f08600af23757d0bc7d21a36e5d8092f48a8b088d97a647a"
+  },
+  "agentControl": {
+    "profile": "agent-control",
+    "apiRevision": "b3367ab0648cba4e3c6c709f796cf694cd5ac1b5",
+    "fixtureRevision": "agent-control-issue-49-v1",
+    "fixtureDirectory": "examples/agent-folder",
+    "fixtureTreeSha256": "489b0ca2a6704bf8687a191a400ca6029851719a4c8904a5ac365ea53719f3da",
+    "apiInputSha256": "9593da2fb85e3e922adf3a70192b9c393be70b0834579fe1e54196bcbd1e9f64",
+    "swaggerSha256": "902715531919d1ebea417a4b2a453dd39ac02b411be2434e441498b0ccfad24d",
+    "defaultScannerId": "3b4be213-281f-49ee-b457-5a5f34f71510",
+    "resetToken": "issue-680-enterprise-reset"
+  },
+  "realCompatibilityContract": {
+    "inventoryPath": "/api/v1/admin/agents",
+    "inventoryResponseShape": "raw-array",
+    "paginationQuery": {"page": "page", "perPage": "per_page"},
+    "paginationHeaders": {
+      "totalCount": "x-total-count",
+      "page": "x-page",
+      "perPage": "x-per-page"
+    },
+    "installerInstructionsPath": "/agent-control/public/v2/api/installers/instructions",
+    "installerLanguageParameter": "lang",
+    "installerOriginParameter": "origin_url"
+  },
+  "communitySubstrate": {
+    "pinsManifest": "tests/e2e/evidence/direct-openvasd-pins.json",
+    "compose": "tests/e2e/compose.direct-openvasd.yaml",
+    "scannerId": "08b69003-5fc2-4037-a479-93b440211c73"
+  },
+  "runner": {
+    "label": "ubuntu-24.04",
+    "rust": "1.98.1"
+  }
+}

@@ -747,7 +747,12 @@ name = "gvm-gateway-e2e"
 version = "0.6.0"
 dependencies = [
  "anyhow",
+ "axum",
  "form_urlencoded",
+ "gvm-client",
+ "gvm-connection",
+ "gvm-gmp",
+ "gvm-protocol",
  "reqwest",
  "serde",
  "serde_json",

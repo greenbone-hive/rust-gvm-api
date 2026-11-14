@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://greenbone.github.io/rust-gvm-api/e2e/enterprise-agent-control-provenance.schema.json",
+  "title": "Exact enterprise Agent Control emulator-lane provenance",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "lane", "rustGvmApi", "featureEnabledGvmd", "openvasd", "agentControl", "agentControlScenarioSelection", "databases", "feedData", "composeHarness", "runner", "realCompatibilityInput"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "lane": {"const": "enterprise-agent-control-emulator-advisory"},
+    "rustGvmApi": {"$ref": "#/$defs/component"},
+    "featureEnabledGvmd": {"$ref": "#/$defs/component"},
+    "openvasd": {
+      "type": "object", "additionalProperties": false,
+      "required": ["runtime", "sourceRevision", "apiRevision", "fixtureRevision", "fixtureTreeSha256", "pinsSha256"],
+      "properties": {
+        "runtime": {"$ref": "#/$defs/component"},
+        "sourceRevision": {"$ref": "#/$defs/nonempty"},
+        "apiRevision": {"$ref": "#/$defs/nonempty"},
+        "fixtureRevision": {"$ref": "#/$defs/nonempty"},
+        "fixtureTreeSha256": {"$ref": "#/$defs/sha256"},
+        "pinsSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "agentControl": {
+      "type": "object", "additionalProperties": false,
+      "required": ["runtime", "sourceRepository", "sourceRevision", "sourceGitTree", "sourceArchiveSha256", "dockerfileSha256", "buildManifestSha256", "profile", "apiRevision", "apiInputSha256", "swaggerSha256", "fixtureRevision", "fixtureTreeSha256"],
+      "properties": {
+        "runtime": {"$ref": "#/$defs/component"},
+        "sourceRepository": {"const": "greenbone/gvm-openapi-emulator"},
+        "sourceRevision": {"const": "82c03f6cf190942764f99ac799efc539cc57b4ca"},
+        "sourceGitTree": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+        "sourceArchiveSha256": {"$ref": "#/$defs/sha256"},
+        "dockerfileSha256": {"$ref": "#/$defs/sha256"},
+        "buildManifestSha256": {"$ref": "#/$defs/sha256"},
+        "profile": {"const": "agent-control"},
+        "apiRevision": {"const": "b3367ab0648cba4e3c6c709f796cf694cd5ac1b5"},
+        "apiInputSha256": {"$ref": "#/$defs/sha256"},
+        "swaggerSha256": {"$ref": "#/$defs/sha256"},
+        "fixtureRevision": {"const": "agent-control-issue-49-v1"},
+        "fixtureTreeSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "agentControlScenarioSelection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "runtime", "sourceSha256", "control", "role", "upstreamService"],
+      "properties": {
+        "name": {"const": "issue-680-agent-control-scenario-proxy"},
+        "runtime": {"$ref": "#/$defs/component"},
+        "sourceSha256": {"$ref": "#/$defs/sha256"},
+        "control": {"const": "bearer-authenticated-and-loopback-published"},
+        "role": {"const": "selects-upstream-profile-with-x-emulator-scenario"},
+        "upstreamService": {"const": "agent-control-backend"}
+      }
+    },
+    "databases": {"type": "array", "minItems": 2, "items": {"$ref": "#/$defs/namedComponent"}},
+    "feedData": {"type": "array", "minItems": 5, "items": {"$ref": "#/$defs/revision"}},
+    "composeHarness": {
+      "type": "object", "additionalProperties": false,
+      "required": ["composeSha256", "harnessSha256", "runnerScriptSha256"],
+      "properties": {
+        "composeSha256": {"$ref": "#/$defs/sha256"},
+        "harnessSha256": {"$ref": "#/$defs/sha256"},
+        "runnerScriptSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "runner": {
+      "type": "object", "additionalProperties": false,
+      "required": ["os", "architecture", "image", "rust"],
+      "properties": {
+        "os": {"$ref": "#/$defs/nonempty"}, "architecture": {"$ref": "#/$defs/nonempty"},
+        "image": {"$ref": "#/$defs/nonempty"}, "rust": {"const": "1.98.1"}
+      }
+    },
+    "realCompatibilityInput": {
+      "type": "object", "additionalProperties": false,
+      "required": ["configured", "reason"],
+      "properties": {"configured": {"const": false}, "reason": {"$ref": "#/$defs/nonempty"}}
+    }
+  },
+  "$defs": {
+    "nonempty": {"type": "string", "minLength": 1},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "component": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sourceRevision", "image", "imageDigest"],
+      "properties": {"sourceRevision": {"$ref": "#/$defs/nonempty"}, "image": {"$ref": "#/$defs/nonempty"}, "imageDigest": {"$ref": "#/$defs/nonempty"}}
+    },
+    "namedComponent": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "sourceRevision", "image", "imageDigest"],
+      "properties": {
+        "name": {"$ref": "#/$defs/nonempty"},
+        "sourceRevision": {"$ref": "#/$defs/nonempty"},
+        "image": {"$ref": "#/$defs/nonempty"},
+        "imageDigest": {"$ref": "#/$defs/nonempty"}
+      }
+    },
+    "revision": {
+      "type": "object", "additionalProperties": false, "required": ["name", "revision"],
+      "properties": {"name": {"$ref": "#/$defs/nonempty"}, "revision": {"$ref": "#/$defs/nonempty"}}
+    }
+  }
+}

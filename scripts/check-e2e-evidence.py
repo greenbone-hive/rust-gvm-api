@@ -24,6 +24,8 @@ INVENTORY_PATH = EVIDENCE_ROOT / "contract-inventory.json"
 OWNERS_PATH = EVIDENCE_ROOT / "owners.json"
 BASELINE_PATH = EVIDENCE_ROOT / "baselines" / "osp-required.json"
 DIRECT_PINS_PATH = EVIDENCE_ROOT / "direct-openvasd-pins.json"
+ENTERPRISE_PINS_PATH = EVIDENCE_ROOT / "enterprise-agent-control-pins.json"
+ENTERPRISE_POLICY_PATH = EVIDENCE_ROOT / "enterprise-promotion-policy.json"
 PROMOTION_DECISION_PATH = EVIDENCE_ROOT / "promotion-decision.json"
 ROLLBACK_EVENTS_PATH = EVIDENCE_ROOT / "rollback-events.json"
 SHADOW_LEDGER_TEMPLATE = EVIDENCE_ROOT / "shadow-ledger"
@@ -872,6 +874,10 @@ def validate_schema_documents() -> None:
         "promotion-decision.schema.json",
         "promotion-readiness.schema.json",
         "real-openvasd-compatibility.schema.json",
+        "enterprise-agent-control-provenance.schema.json",
+        "enterprise-agent-control-evidence.schema.json",
+        "enterprise-promotion-policy.schema.json",
+        "real-agent-control-compatibility.schema.json",
         "rollback-events.schema.json",
     }
     found = {path.name for path in (EVIDENCE_ROOT / "schemas").glob("*.json")}
@@ -983,6 +989,87 @@ def validate_all(repository_root: Path = REPOSITORY_ROOT) -> None:
     validate_schema_documents()
     owners = validate_owners(load_json(OWNERS_PATH))
     validate_direct_pins(load_json(DIRECT_PINS_PATH))
+    enterprise_pins = expect_object(load_json(ENTERPRISE_PINS_PATH), "enterprise pins")
+    enterprise_source = expect_object(
+        enterprise_pins.get("sourceBuildWorkaround"),
+        "enterprise pins.sourceBuildWorkaround",
+    )
+    if enterprise_source.get("revision") != "82c03f6cf190942764f99ac799efc539cc57b4ca":
+        raise EvidenceError("enterprise Agent Control source commit is not the exact PR #50 input")
+    for key in ("gitTree", "sourceArchiveSha256", "dockerfileSha256"):
+        if not re.fullmatch(r"[0-9a-f]{40}" if key == "gitTree" else r"[0-9a-f]{64}", enterprise_source.get(key, "")):
+            raise EvidenceError(f"enterprise Agent Control {key} is not an exact identity")
+    agent_control = expect_object(
+        enterprise_pins.get("agentControl"), "enterprise pins.agentControl"
+    )
+    if (
+        agent_control.get("profile") != "agent-control"
+        or agent_control.get("apiRevision")
+        != "b3367ab0648cba4e3c6c709f796cf694cd5ac1b5"
+        or agent_control.get("fixtureRevision") != "agent-control-issue-49-v1"
+        or agent_control.get("fixtureDirectory") != "examples/agent-folder"
+    ):
+        raise EvidenceError("enterprise Agent Control profile/API/fixture pins drifted")
+    for key in ("fixtureTreeSha256", "apiInputSha256", "swaggerSha256"):
+        if not re.fullmatch(r"[0-9a-f]{64}", agent_control.get(key, "")):
+            raise EvidenceError(f"enterprise Agent Control {key} is not an exact SHA-256")
+    real_contract = expect_object(
+        enterprise_pins.get("realCompatibilityContract"),
+        "enterprise pins.realCompatibilityContract",
+    )
+    expected_real_contract = {
+        "inventoryPath": "/api/v1/admin/agents",
+        "inventoryResponseShape": "raw-array",
+        "paginationQuery": {"page": "page", "perPage": "per_page"},
+        "paginationHeaders": {
+            "totalCount": "x-total-count",
+            "page": "x-page",
+            "perPage": "x-per-page",
+        },
+        "installerInstructionsPath": "/agent-control/public/v2/api/installers/instructions",
+        "installerLanguageParameter": "lang",
+        "installerOriginParameter": "origin_url",
+    }
+    if real_contract != expected_real_contract:
+        raise EvidenceError("real Agent Control wire-contract pins drifted from exact PR #50 source")
+    containerfile = (repository_root / "Containerfile").read_text()
+    if "FROM builder AS enterprise-test-tools" not in containerfile:
+        raise EvidenceError("enterprise test tools must use a named non-production stage")
+    production_stage = containerfile.split("FROM debian:trixie-slim AS runtime", 1)[-1]
+    if "enterprise-feature-preflight" in production_stage:
+        raise EvidenceError("default production runtime must exclude the enterprise preflight")
+    enterprise_compose = (
+        repository_root / "tests/e2e/compose.enterprise-agent-control.yaml"
+    ).read_text()
+    if enterprise_compose.count("target: enterprise-test-tools") < 2:
+        raise EvidenceError("enterprise preflight and scenario proxy must select the test-only stage")
+    if "--scanner-host=agent-control-scenario-proxy" not in enterprise_compose:
+        raise EvidenceError("feature-enabled gvmd must use the Agent Control scenario boundary")
+    policy = expect_object(load_json(ENTERPRISE_POLICY_PATH), "enterprise promotion policy")
+    if (
+        policy.get("advisory") is not True
+        or policy.get("promotionAllowed") is not False
+        or policy.get("universalCommunityGateUnchanged") is not True
+    ):
+        raise EvidenceError("enterprise promotion policy must remain advisory, non-promotable, and additive")
+    enterprise_workflow = (
+        repository_root / ".github/workflows/enterprise-agent-control.yml"
+    ).read_text()
+    real_agent_workflow = (
+        repository_root / ".github/workflows/real-agent-control-compatibility.yml"
+    ).read_text()
+    if any(
+        trigger in workflow
+        for workflow in (enterprise_workflow, real_agent_workflow)
+        for trigger in ("pull_request:", "push:")
+    ):
+        raise EvidenceError("enterprise workflows must remain scheduled/manual only")
+    nightly_workflow = (repository_root / ".github/workflows/nightly-e2e.yml").read_text()
+    if (
+        "enterprise-agent-control.yml" in nightly_workflow
+        or "real-agent-control-compatibility.yml" in nightly_workflow
+    ):
+        raise EvidenceError("enterprise workflows must not weaken or replace the universal community gate")
     known_contracts = validate_inventory(load_json(INVENTORY_PATH), owners, repository_root)
     validate_provenance(load_json(EVIDENCE_ROOT / "examples" / "provenance.json"))
     validate_comparison(

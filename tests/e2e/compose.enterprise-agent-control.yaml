@@ -1,0 +1,107 @@
+services:
+  agent-control-backend:
+    profiles: [enterprise-agent-control]
+    image: ${GVM_GATEWAY_E2E_AGENT_CONTROL_IMAGE:?exact Agent Control emulator digest is required}
+    environment:
+      SERVER_PORT: "8080"
+      SPEC_PATH: /work/swagger.json
+      SAMPLES_DIR: /work/sample
+      PROFILE: agent-control
+      FALLBACK_MODE: none
+      VALIDATION_MODE: required
+      OPENVASD_RESET_TOKEN: issue-680-enterprise-reset
+      AGENT_CONTROL_RESET_TOKEN: issue-680-enterprise-reset
+      AGENT_CONTROL_TIMEOUT_DELAY: 11s
+    ports:
+      - 127.0.0.1:8090:8080
+    volumes:
+      - ${GVM_GATEWAY_E2E_AGENT_CONTROL_SOURCE:?exact Agent Control source checkout is required}/examples/agent-folder:/work:ro
+    healthcheck:
+      test: [CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1:8080/health/ready"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  agent-control-scenario-proxy:
+    profiles: [enterprise-agent-control]
+    image: local/gvm-gateway:enterprise-test-tools
+    build:
+      context: ../..
+      dockerfile: Containerfile
+      target: enterprise-test-tools
+    entrypoint: [/workspace/target/release/agent-control-scenario-proxy]
+    command: []
+    environment:
+      AGENT_CONTROL_PROXY_LISTEN: 0.0.0.0:8081
+      AGENT_CONTROL_PROXY_UPSTREAM: http://agent-control-backend:8080
+      AGENT_CONTROL_PROXY_CONTROL_TOKEN: issue-680-enterprise-proxy-control
+      # Longer than the upstream profile's bounded timeout scenario so the
+      # upstream 504 response, headers, and body are forwarded unchanged.
+      AGENT_CONTROL_PROXY_UPSTREAM_TIMEOUT_SECONDS: "30"
+    ports:
+      - 127.0.0.1:8091:8081
+    depends_on:
+      agent-control-backend:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1:8081/health/ready"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  gvmd:
+    environment:
+      GVMD_ENABLE_AGENTS: "true"
+      AGENT_CONTROL_USER_TOKEN_SECRET: issue-680-emulator-only-signing-secret
+    depends_on:
+      agent-control-backend:
+        condition: service_healthy
+
+  configure-agent-control:
+    profiles: [enterprise-agent-control]
+    image: ghcr.io/greenbone/gvmd:all-features-26.43.0@sha256:ad4428c3a6270065a5f7a5a4c189fe2834920fc4b281bda5bfce42fbf7457aee
+    environment:
+      GVMD_ENABLE_AGENTS: "true"
+      AGENT_CONTROL_USER_TOKEN_SECRET: issue-680-emulator-only-signing-secret
+    command:
+      - gvmd
+      - --modify-scanner=3b4be213-281f-49ee-b457-5a5f34f71510
+      - --scanner-host=agent-control-scenario-proxy
+      - --scanner-port=8081
+    volumes:
+      - gvmd_data_vol:/var/lib/gvm
+      - psql_data_vol:/var/lib/postgresql
+      - psql_socket_vol:/var/run/postgresql
+    depends_on:
+      gvmd:
+        condition: service_healthy
+      agent-control-backend:
+        condition: service_healthy
+      agent-control-scenario-proxy:
+        condition: service_healthy
+
+  gvm-gateway:
+    depends_on:
+      configure-direct-openvasd:
+        condition: service_completed_successfully
+      configure-agent-control:
+        condition: service_completed_successfully
+
+  enterprise-feature-preflight:
+    profiles: [enterprise-agent-control]
+    image: local/gvm-gateway:enterprise-test-tools
+    build:
+      context: ../..
+      dockerfile: Containerfile
+      target: enterprise-test-tools
+    entrypoint: [/workspace/target/release/enterprise-feature-preflight]
+    command: []
+    environment:
+      GVM_FEATURE_PREFLIGHT_SOCKET: /run/gvmd/gvmd.sock
+      GVM_FEATURE_PREFLIGHT_USERNAME: admin
+      GVM_FEATURE_PREFLIGHT_PASSWORD: admin
+    volumes:
+      - gvmd_socket_vol:/run/gvmd
+    depends_on:
+      configure-agent-control:
+        condition: service_completed_successfully

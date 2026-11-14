@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://greenbone.github.io/rust-gvm-api/e2e/enterprise-promotion-policy.schema.json",
+  "title": "Enterprise Agent Control advisory promotion policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "lane", "advisory", "requiredCommunityGate", "universalCommunityGateUnchanged", "promotionAllowed", "promotionPrerequisites", "prohibitedEffects"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "lane": {"const": "enterprise-agent-control-emulator-advisory"},
+    "advisory": {"const": true},
+    "requiredCommunityGate": {"const": "community-osp"},
+    "universalCommunityGateUnchanged": {"const": true},
+    "promotionAllowed": {"const": false},
+    "promotionPrerequisites": {"type": "array", "minItems": 5, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "prohibitedEffects": {"type": "array", "minItems": 4, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+  }
+}

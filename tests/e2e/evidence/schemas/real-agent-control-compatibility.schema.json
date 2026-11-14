@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://greenbone.github.io/rust-gvm-api/e2e/real-agent-control-compatibility.schema.json",
+  "title": "Bounded real Agent Control compatibility evidence",
+  "type": "object",
+  "required": ["schemaVersion", "lane", "advisory", "completedAt", "status", "failureClassification", "provenance", "checks"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "lane": {"const": "real-agent-control-compatibility-advisory"},
+    "advisory": {"const": true},
+    "completedAt": {"type": "string", "format": "date-time"},
+    "status": {"enum": ["passed", "failed"]},
+    "failureClassification": {"type": ["string", "null"], "enum": [null, "incomplete-operator-input", "connectivity", "health", "authentication", "signing", "authenticated-signed-access", "inventory", "pagination", "scan-agent-configuration", "installer-instructions"]},
+    "detail": {"type": "string", "minLength": 1},
+    "provenance": {
+      "type": ["object", "null"],
+      "required": ["serviceOrigin", "serviceRevision", "apiRevision", "fixtureRevision", "authHeaderName", "signingHeaderName", "contractSourceRevision", "contractApiRevision", "contractFixtureRevision", "contractSwaggerSha256"],
+      "properties": {
+        "serviceOrigin": {"type": "string", "format": "uri"},
+        "serviceRevision": {"type": "string", "minLength": 1},
+        "apiRevision": {"type": "string", "minLength": 1},
+        "fixtureRevision": {"type": "string", "minLength": 1},
+        "authHeaderName": {"type": "string", "minLength": 1},
+        "signingHeaderName": {"type": "string", "minLength": 1},
+        "contractSourceRevision": {"const": "82c03f6cf190942764f99ac799efc539cc57b4ca"},
+        "contractApiRevision": {"const": "b3367ab0648cba4e3c6c709f796cf694cd5ac1b5"},
+        "contractFixtureRevision": {"const": "agent-control-issue-49-v1"},
+        "contractSwaggerSha256": {"const": "902715531919d1ebea417a4b2a453dd39ac02b411be2434e441498b0ccfad24d"}
+      },
+      "additionalProperties": false
+    },
+    "checks": {
+      "type": ["object", "null"],
+      "required": ["healthShape", "emptyInventory", "pagination", "scanAgentConfigSha256", "installerInstructionsSha256", "dependencyFailureClassifications", "observations"],
+      "properties": {
+        "healthShape": {"type": "string", "minLength": 1},
+        "emptyInventory": {"const": true},
+        "pagination": {
+          "type": "object", "additionalProperties": false,
+          "required": ["totalCount", "page", "perPage", "rawHeaders"],
+          "properties": {
+            "totalCount": {"const": 0}, "page": {"const": 1}, "perPage": {"const": 1},
+            "rawHeaders": {
+              "type": "object", "additionalProperties": false,
+              "required": ["x-total-count", "x-page", "x-per-page"],
+              "properties": {
+                "x-total-count": {"const": ["0"]},
+                "x-page": {"const": ["1"]},
+                "x-per-page": {"const": ["1"]}
+              }
+            }
+          }
+        },
+        "scanAgentConfigSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "installerInstructionsSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "dependencyFailureClassifications": {
+          "const": ["connectivity", "health", "authentication", "signing", "authenticated-signed-access", "inventory", "pagination", "scan-agent-configuration", "installer-instructions"]
+        },
+        "observations": {"type": "array", "minItems": 6, "items": {"type": "object"}}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

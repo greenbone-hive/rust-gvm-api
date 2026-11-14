@@ -1,0 +1,57 @@
+name: Real Agent Control Compatibility (advisory)
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_ref:
+        description: Exact rust-gvm-api commit to qualify (defaults to dispatched commit)
+        required: false
+        type: string
+  schedule:
+    - cron: "11 5 * * 0"
+
+concurrency:
+  group: real-agent-control-compatibility-${{ inputs.release_ref || github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  compatibility:
+    name: Real Agent Control Compatibility (advisory, operator-configured)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      REAL_AGENT_CONTROL_URL: ${{ vars.REAL_AGENT_CONTROL_URL }}
+      REAL_AGENT_CONTROL_HEALTH_PATH: ${{ vars.REAL_AGENT_CONTROL_HEALTH_PATH }}
+      REAL_AGENT_CONTROL_AUTH_HEADER_NAME: ${{ vars.REAL_AGENT_CONTROL_AUTH_HEADER_NAME }}
+      REAL_AGENT_CONTROL_AUTH_HEADER_VALUE: ${{ secrets.REAL_AGENT_CONTROL_AUTH_HEADER_VALUE }}
+      REAL_AGENT_CONTROL_SIGNING_HEADER_NAME: ${{ vars.REAL_AGENT_CONTROL_SIGNING_HEADER_NAME }}
+      REAL_AGENT_CONTROL_SIGNING_HEADER_VALUE: ${{ secrets.REAL_AGENT_CONTROL_SIGNING_HEADER_VALUE }}
+      REAL_AGENT_CONTROL_SERVICE_REVISION: ${{ vars.REAL_AGENT_CONTROL_SERVICE_REVISION }}
+      REAL_AGENT_CONTROL_API_REVISION: ${{ vars.REAL_AGENT_CONTROL_API_REVISION }}
+      REAL_AGENT_CONTROL_FIXTURE_REVISION: ${{ vars.REAL_AGENT_CONTROL_FIXTURE_REVISION }}
+    steps:
+      - name: Check out exact compatibility harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.release_ref || github.sha }}
+          persist-credentials: false
+      - name: Run bounded read-only real compatibility probe
+        id: compatibility
+        continue-on-error: true
+        run: |
+          python3 scripts/run-real-agent-control-compatibility.py \
+            --output dist/e2e-enterprise/real-agent-control-compatibility.json
+      - name: Upload real compatibility evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: real-agent-control-compatibility-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/e2e-enterprise/real-agent-control-compatibility.json
+          if-no-files-found: error
+          retention-days: 10
+      - name: Preserve fail-closed compatibility result
+        if: steps.compatibility.outcome != 'success'
+        run: exit 1
