@@ -6,14 +6,14 @@ x-direct-profile: &direct-profile
 services:
   vulnerability-tests:
     <<: *direct-profile
-    image: registry.community.greenbone.net/community/vulnerability-tests:latest@sha256:ea5b863946410127ff3a1a09594f28472a99cb7c676b159fb2fffb177cabdc08
+    image: registry.community.greenbone.net/community/vulnerability-tests:latest@sha256:851983199d390aeb04d3c03eacdd1334ea351ebaf44e3c69791e6056efd5b31a
     command: /bin/sh -c 'mkdir -p /mnt/24.10/vt-data/nasl/; for f in byte_func.inc global_settings.nasl host_alive_detection.nasl host_details.inc http_func.inc list_array_func.inc mac_prefix.inc misc_func.inc network_func.inc os_func.inc plugin_feed_info.inc revisions-lib.inc smb_nt.inc traversal_func.inc version_func.inc; do cp -- "$${STORAGE_PATH}/24.10/vt-data/nasl/$${f}" "/mnt/"; done'
     volumes:
       - vt_data_vol:/mnt
 
   data-objects:
     <<: *direct-profile
-    image: registry.community.greenbone.net/community/data-objects:latest@sha256:b1ebdc9b6d686c25b871bd4c25961e844f45a745c16992e9ce5eafa9cd03216e
+    image: registry.community.greenbone.net/community/data-objects:latest@sha256:d441df44088a368d6474bce174197b7f7dee3f0baeec9b0cdcbc5653309da66c
     environment:
       FEED_RELEASE: "24.10"
       KEEP_ALIVE: "1"
@@ -40,7 +40,7 @@ services:
 
   notus-data:
     <<: *direct-profile
-    image: registry.community.greenbone.net/community/notus-data:latest@sha256:8432ee013a4049b9d349d73e58bfd0f0a1509a5a3ea41ad7c567c213b2dbf3b4
+    image: registry.community.greenbone.net/community/notus-data:latest@sha256:ecae93207cf3e675358568b5d31e37a805ead7327aca8c33230348352dd52d5a
     volumes:
       - notus_data_vol:/mnt
 
