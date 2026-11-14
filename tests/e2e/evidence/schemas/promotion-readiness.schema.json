@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://greenbone.github.io/rust-gvm-api/e2e/promotion-readiness.schema.json",
+  "title": "Direct-HTTP promotion readiness and rollback report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "generatedAt", "mode", "promotionReady", "evidenceRange", "exclusions", "approver", "effectiveStatusNames", "incidentContact", "effectiveAt", "checks", "rollbackWindow", "rollbackIndicators"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "generatedAt": {"type": "string", "format": "date-time"},
+    "mode": {"enum": ["observing", "approved"]},
+    "promotionReady": {"type": "boolean"},
+    "evidenceRange": {"type": "object"},
+    "exclusions": {"type": "array"},
+    "approver": {"type": ["object", "null"]},
+    "effectiveStatusNames": {"type": "object"},
+    "incidentContact": {"type": "object"},
+    "effectiveAt": {"type": ["string", "null"], "format": "date-time"},
+    "checks": {
+      "type": "array",
+      "minItems": 10,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "passed", "actual", "threshold", "reasons"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "passed": {"type": "boolean"},
+          "actual": true,
+          "threshold": {"type": "string", "minLength": 1},
+          "reasons": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "rollbackWindow": {"type": "object"},
+    "rollbackIndicators": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {"type": "object"}
+    }
+  }
+}

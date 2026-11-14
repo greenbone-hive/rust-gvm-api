@@ -164,6 +164,24 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertIn("--format xml", release)
         self.assertNotIn("find . -name '*.cdx.", release)
 
+    def test_shadow_evidence_write_permission_is_confined_to_trusted_persistence_job(self) -> None:
+        # Durable evidence needs one branch writer, but untrusted PR and merge
+        # executions must never inherit that permission or enter its condition.
+        workflow = (WORKFLOW_DIR / "nightly-e2e.yml").read_text(encoding="utf-8")
+        persistence = workflow.split(
+            "  persist-direct-openvasd-shadow-evidence:", 1
+        )[1].split("  direct-openvasd-main-candidate-gate:", 1)[0]
+        self.assertEqual(workflow.count("contents: write"), 1)
+        self.assertIn("actions: read", persistence)
+        self.assertIn("contents: write", persistence)
+        self.assertIn("github.event_name == 'push'", persistence)
+        self.assertIn("github.event_name == 'schedule'", persistence)
+        self.assertIn("github.event_name == 'workflow_dispatch'", persistence)
+        self.assertNotIn("pull_request", persistence)
+        self.assertNotIn("merge_group", persistence)
+        self.assertIn("ref: e2e-shadow-evidence", persistence)
+        self.assertIn("persist-credentials: false", persistence)
+
     def test_networked_jobs_use_hardened_runner_and_evidence_is_retained(self) -> None:
         workflow = source()
         self.assertEqual(workflow.count("step-security/harden-runner@"), len(REQUIRED_JOBS))

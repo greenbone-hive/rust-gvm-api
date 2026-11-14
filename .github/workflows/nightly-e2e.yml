@@ -159,7 +159,7 @@ jobs:
           name: e2e-direct-openvasd-shadow-raw
           path: dist/e2e-openvasd/raw/*
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 10
 
   direct-openvasd-shadow-evidence:
     name: Direct OpenVASD Shadow Evidence (advisory)
@@ -199,7 +199,117 @@ jobs:
             dist/e2e-openvasd/final/*
             dist/e2e-openvasd/raw/provenance.json
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 10
+
+  persist-direct-openvasd-shadow-evidence:
+    name: Persist Direct OpenVASD Shadow Evidence (advisory)
+    if: >-
+      always() &&
+      needs.direct-openvasd-shadow-evidence.result == 'success' &&
+      (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/devel')
+    needs: [direct-openvasd-shadow-evidence]
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: direct-openvasd-shadow-evidence-ledger
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Check out trusted workflow revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check out append-only evidence branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: e2e-shadow-evidence
+          path: dist/durable-shadow-ledger
+      - name: Validate and append durable evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/persist-shadow-evidence-ledger.py \
+            --ledger-root dist/durable-shadow-ledger
+      - name: Commit append-only ledger entry
+        working-directory: dist/durable-shadow-ledger
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ledger.json runs/
+          git diff --cached --exit-code && {
+            echo "Run attempt is already present with identical evidence."
+            exit 0
+          }
+          git commit -m "evidence: archive shadow run ${{ github.run_id }} attempt ${{ github.run_attempt }}"
+          git push origin HEAD:refs/heads/e2e-shadow-evidence
+
+  direct-openvasd-main-candidate-gate:
+    name: Direct OpenVASD E2E (main candidate, advisory)
+    if: >-
+      always() &&
+      ((github.event_name == 'pull_request' && github.base_ref == 'main') ||
+       (github.event_name == 'merge_group' && github.event.merge_group.base_ref == 'refs/heads/main') ||
+       (github.event_name != 'pull_request' && github.event_name != 'merge_group' && github.ref_name == 'main'))
+    needs: [classify-changes, direct-openvasd-shadow]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate main direct-HTTP candidate gate
+        run: |
+          echo "e2e_required=${{ needs.classify-changes.outputs.e2e_required }}"
+          echo "direct_http_result=${{ needs.direct-openvasd-shadow.result }}"
+
+          if [[ "${{ needs.classify-changes.result }}" != "success" ]]; then
+            echo "Change classification failed; failing closed." >&2
+            exit 1
+          fi
+
+          if [[ "${{ needs.classify-changes.outputs.e2e_required }}" != "true" ]]; then
+            echo "Docs-only change; expensive candidate E2E scan is not required."
+            exit 0
+          fi
+
+          if [[ "${{ needs.direct-openvasd-shadow.result }}" == "success" ]]; then
+            echo "Main direct-HTTP candidate scan passed."
+            exit 0
+          fi
+
+          echo "Main direct-HTTP candidate scan did not pass." >&2
+          exit 1
+
+  direct-openvasd-devel-candidate-gate:
+    name: Direct OpenVASD E2E (devel candidate, advisory)
+    if: >-
+      always() &&
+      ((github.event_name == 'pull_request' && github.base_ref == 'devel') ||
+       (github.event_name == 'merge_group' && github.event.merge_group.base_ref == 'refs/heads/devel') ||
+       (github.event_name != 'pull_request' && github.event_name != 'merge_group' && github.ref_name == 'devel'))
+    needs: [classify-changes, direct-openvasd-shadow]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate devel direct-HTTP candidate gate
+        run: |
+          echo "e2e_required=${{ needs.classify-changes.outputs.e2e_required }}"
+          echo "direct_http_result=${{ needs.direct-openvasd-shadow.result }}"
+
+          if [[ "${{ needs.classify-changes.result }}" != "success" ]]; then
+            echo "Change classification failed; failing closed." >&2
+            exit 1
+          fi
+
+          if [[ "${{ needs.classify-changes.outputs.e2e_required }}" != "true" ]]; then
+            echo "Docs-only change; expensive candidate E2E scan is not required."
+            exit 0
+          fi
+
+          if [[ "${{ needs.direct-openvasd-shadow.result }}" == "success" ]]; then
+            echo "Devel direct-HTTP candidate scan passed."
+            exit 0
+          fi
+
+          echo "Devel direct-HTTP candidate scan did not pass." >&2
+          exit 1
 
   rest-discovery-scan-main-gate:
     name: REST Discovery Scan E2E (main)

@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "repository": "greenbone-hive/rust-gvm-api",
+  "workflow": ".github/workflows/nightly-e2e.yml",
+  "job": "Direct OpenVASD Shadow E2E (advisory)",
+  "entries": []
+}

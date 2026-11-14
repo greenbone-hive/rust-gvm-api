@@ -30,6 +30,11 @@ EXPECTED_FAULTS = {
     "malformed-header",
     "timeout",
 }
+EXPECTED_DIAGNOSTICS = {
+    "compose-ps.txt",
+    "compose.log",
+    "runner-container-runtime.txt",
+}
 TEST_RESULT = re.compile(r"\btest (?P<name>\S+) \.\.\. (?P<result>ok|FAILED|ignored)\s*$")
 ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
 FAULT_PREFIX = "FAULT_EVIDENCE "
@@ -331,6 +336,31 @@ def build_run_evidence(
     }
 
 
+def build_diagnostic_evidence(
+    raw_dir: Path, environment: dict[str, str]
+) -> dict[str, Any]:
+    """Record bounded diagnostic presence separately from artifact existence.
+
+    The raw artifact can exist even when its always-running capture step produced
+    only a subset of the expected files.  Keeping that distinction machine
+    readable prevents an uploaded-but-incomplete artifact from satisfying the
+    Phase 3 diagnostic-completeness gate.
+    """
+
+    present = sorted(
+        name for name in EXPECTED_DIAGNOSTICS if (raw_dir / name).is_file()
+    )
+    expected = sorted(EXPECTED_DIAGNOSTICS)
+    return {
+        "schemaVersion": 1,
+        "runId": int(environment["GITHUB_RUN_ID"]),
+        "runAttempt": int(environment["GITHUB_RUN_ATTEMPT"]),
+        "expected": expected,
+        "present": present,
+        "complete": present == expected,
+    }
+
+
 def resolve_job_and_artifacts(
     repository: str,
     run_id: str,
@@ -401,12 +431,14 @@ def main() -> int:
     )
     comparison = build_comparison(inventory, outcomes, baseline_outcomes)
     run_evidence = build_run_evidence(job, artifacts, dict(os.environ), args.raw_artifact, args.raw_dir)
+    diagnostic_evidence = build_diagnostic_evidence(args.raw_dir, dict(os.environ))
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     for name, document in (
         ("comparison.json", comparison),
         ("fault-mappings.json", fault_document),
         ("run-evidence.json", run_evidence),
+        ("diagnostic-evidence.json", diagnostic_evidence),
     ):
         (args.output_dir / name).write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
     print(f"finalized direct-OpenVASD evidence for job {job['id']}")

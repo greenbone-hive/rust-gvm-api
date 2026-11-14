@@ -103,7 +103,7 @@ upstream emulator's `http-400`, `http-500`, `malformed-body`,
 the public gateway and requires its 502/504 or terminal gvmd task mapping. A
 trap restores the direct scanner and resets emulator state.
 
-Every shadow execution uploads a 30-day raw artifact containing exact
+Every shadow execution uploads a 10-day staging artifact containing exact
 provenance, Cargo/fault output, Compose state, runtime details, and logs bounded
 to 2 MiB and 2,000 lines per service. An always-running evidence job resolves
 exact job/artifact identity through GitHub's read-only API and records timings,
@@ -131,7 +131,7 @@ python3 scripts/fetch-openvasd-emulator-fixtures.py
 
 `Real OpenVASD Compatibility` runs weekly or manually, never on ordinary PRs.
 Manual `release_ref` selects the exact release commit/tag, so the stable
-`Real OpenVASD Direct-HTTP Compatibility (advisory)` result and 90-day artifact
+`Real OpenVASD Direct-HTTP Compatibility (advisory)` result and 10-day artifact
 can be cited as a release prerequisite. The override
 [`../compose.real-openvasd.yaml`](../compose.real-openvasd.yaml) swaps only the
 backend implementation and scanner/feed mounts; gvmd, gateway, direct-HTTP
@@ -171,14 +171,17 @@ Automating release policy or branch protection remains outside this phase.
 ## Shadow observation gate
 
 Phase 3 requires at least 30 comparable finalized shadow runs spanning at
-least 14 days. No elapsed shadow evidence is checked in by this implementation.
-After runs exist, collect the auditable window with:
+least 14 days. Repository Actions retention is capped at 10 days, so ordinary
+artifacts are staging inputs only and can never satisfy this gate. The live
+collector remains useful for diagnostics, but an expired live artifact is
+excluded and is never inferred or backfilled:
 
 ```bash
 python3 scripts/collect-shadow-observations.py \
   --repository greenbone-hive/rust-gvm-api \
   --required-runs 30 \
   --required-days 14 \
+  --allow-incomplete \
   --output shadow-observations.json
 ```
 
@@ -189,7 +192,7 @@ and test-harness input; it counts only runs matching the newest qualifying
 fingerprint. Collection starts from the repository's exact-name finalized
 artifact inventory rather than scanning workflow history from before the
 shadow lane existed. For each counted artifact it resolves the originating
-workflow and exact run attempt, requires all four finalizer documents, and
+workflow and exact run attempt, requires every finalizer document, and
 cross-checks the run/job identity recorded in the archive. Missing, expired,
 partial, malformed, cross-workflow, or provenance-incomparable artifacts do
 not qualify.
@@ -200,6 +203,123 @@ true only when both reach their unchanged minimum. To inspect progress before
 14 days have elapsed, add `--allow-incomplete`; the collector stops after the
 finite finalized-artifact inventory and writes an explicitly unsatisfied
 snapshot. It does not waive the gate.
+
+## Durable append-only evidence branch
+
+`Persist Direct OpenVASD Shadow Evidence (advisory)` copies evidence to the
+dedicated `e2e-shadow-evidence` branch during the same trusted workflow attempt,
+before the 10-day staging artifacts can expire. The branch contains only
+`ledger.json` and `runs/<runId>-<attempt>/`. Each run directory preserves the
+exact raw ZIP files and the five finalized JSON documents. Every file has a
+size and SHA-256 in the entry manifest; every entry seals that manifest,
+preserves exact run/job/artifact/provenance/fingerprint identities, and chains
+to the preceding entry hash.
+
+Persistence is deliberately narrower than the E2E workflow:
+
+- it runs only for `push`, `schedule`, or `workflow_dispatch` on `main` or
+  `devel`; pull requests, forks, and merge queues are rejected by both the job
+  condition and the persistence script;
+- only the persistence job receives `actions: read` and `contents: write`; its
+  first checkout does not retain credentials, while the separate evidence
+  branch checkout owns the push credential;
+- one global, non-cancelling concurrency group serializes branch writers;
+- `e2e-shadow-evidence` is not a workflow trigger, preventing commit loops;
+- the script re-resolves the workflow, run attempt, jobs, and non-expired
+  artifacts through GitHub, accepts only a successful finalizer, compares raw
+  and finalized provenance bytes, validates all closed documents, and refuses
+  expired or ambiguous sources;
+- an identical run-attempt append is a no-op; the same identity with different
+  content, a changed reviewed prefix, a broken chain, an undeclared file, or a
+  modified payload fails closed. The workflow never force-pushes.
+
+An operator must initialize the branch once before enabling the persistence
+job. In an empty orphan checkout named `e2e-shadow-evidence`, copy
+[`shadow-ledger/ledger.json`](shadow-ledger/ledger.json) to the branch root as
+`ledger.json`, commit it, and push the new branch. Do not copy source code into
+that branch. One concrete initialization sequence, run from a trusted checkout
+of the reviewed source branch, is:
+
+```bash
+ledger_init=$(mktemp -d)
+git -C "${ledger_init}" init
+git -C "${ledger_init}" remote add origin \
+  https://github.com/greenbone-hive/rust-gvm-api.git
+git -C "${ledger_init}" switch --orphan e2e-shadow-evidence
+cp tests/e2e/evidence/shadow-ledger/ledger.json "${ledger_init}/ledger.json"
+git -C "${ledger_init}" add ledger.json
+git -C "${ledger_init}" commit -m "evidence: initialize shadow ledger"
+git -C "${ledger_init}" push origin HEAD:refs/heads/e2e-shadow-evidence
+```
+
+The repository must permit Actions `GITHUB_TOKEN` contents writes and the
+evidence branch must accept the bot's ordinary fast-forward pushes. The job
+then appends commits using only that repository-scoped token; no PAT, release
+credential, or organization-admin permission is required. This patch does not
+create the branch, change the repository token policy, or change any branch
+rule.
+
+Recovery is forward-only. Check out the evidence branch, restore `ledger.json`
+and `runs/` from the last validated commit into the working tree, validate that
+tree with the offline collector, and push the repair as a new ordinary commit.
+Never reset or force-push the branch: the Git history must retain the rejected
+state and the recovery. Then rerun a new trusted full E2E execution. If a source
+artifact has expired, that run is permanently ineligible and must not be
+reconstructed. A missed run is replaced only by accumulating a new real run;
+the 30-run/14-day thresholds remain unchanged.
+
+To inspect the durable store after all source artifacts have expired:
+
+```bash
+git clone --single-branch --branch e2e-shadow-evidence \
+  https://github.com/greenbone-hive/rust-gvm-api durable-shadow-ledger
+
+python3 scripts/collect-shadow-observations.py \
+  --ledger-root durable-shadow-ledger \
+  --required-runs 30 \
+  --required-days 14 \
+  --allow-incomplete \
+  --output shadow-observations.json
+```
+
+## Phase 3 promotion and rollback evaluation
+
+Phase 3 remains observing until the raw window, latest real-service result,
+and an explicit approval record all exist. The evaluator accepts the validated
+durable branch checkout directly; it does not accept an ephemeral observation
+summary or an arbitrary evidence directory:
+
+```bash
+python3 scripts/evaluate-openvasd-promotion.py \
+  --ledger-root durable-shadow-ledger \
+  --compatibility compatibility-result.json \
+  --compatibility-provenance provenance.json \
+  --allow-observing \
+  --output promotion-readiness.json
+```
+
+The evaluator returns a failing status when policy is unmet. `--allow-observing`
+is an explicit report-only mode for collecting progress; automation must still
+read `promotionReady`. Malformed or inconsistent inputs always stop the command.
+A broken ledger, partial diagnostic set, unrecorded external-runner exclusion,
+or missing compatibility result fails closed in the report.
+
+[`promotion-decision.json`](promotion-decision.json) deliberately records
+`observing`, null evidence/approval/effective fields, stable existing and
+candidate status names, the incident contact, and the dual rollback minimum.
+It must not be changed to `approved` until review binds an approver and approval
+URL to the exact evaluated evidence range. The candidate main/devel jobs remain
+advisory; the existing OSP main/devel gate jobs and branch protection are not
+changed by this repository record.
+
+[`rollback-events.json`](rollback-events.json) starts empty and accepts only
+explicitly owned, reproducible emulator false-gate events. The readiness report
+combines that classified input with retained evidence to expose all four
+rollback indicators: OSP/direct named regressions, two reproducible emulator
+false failures in seven days, latest-20 reliability regression, and two
+completed failures without complete diagnostics. Rollback-window closure stays
+false until both 14 elapsed days and 30 eligible required runs have accumulated
+after the recorded effective time.
 
 ## OSP baseline
 

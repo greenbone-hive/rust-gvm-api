@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://greenbone.github.io/rust-gvm-api/e2e/promotion-decision.schema.json",
+  "title": "Direct-HTTP gate promotion decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "status", "evidenceRange", "exclusions", "approver", "effectiveStatusNames", "incidentContact", "effectiveAt", "rollbackWindow"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "status": {"enum": ["observing", "approved"]},
+    "evidenceRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["comparisonFingerprint", "ledgerHeadSha256", "oldestRunId", "newestRunId", "oldestCreatedAt", "newestCreatedAt"],
+      "properties": {
+        "comparisonFingerprint": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "ledgerHeadSha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "oldestRunId": {"type": ["integer", "null"], "minimum": 1},
+        "newestRunId": {"type": ["integer", "null"], "minimum": 1},
+        "oldestCreatedAt": {"type": ["string", "null"], "format": "date-time"},
+        "newestCreatedAt": {"type": ["string", "null"], "format": "date-time"}
+      }
+    },
+    "exclusions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["runId", "jobUrl", "classification", "reason", "ownerRole", "incidentUrl"],
+        "properties": {
+          "runId": {"type": "integer", "minimum": 1},
+          "jobUrl": {"type": "string", "format": "uri"},
+          "classification": {"const": "external-runner-outage"},
+          "reason": {"type": "string", "minLength": 1},
+          "ownerRole": {"const": "promotion-rollback-incident"},
+          "incidentUrl": {"type": "string", "format": "uri"}
+        }
+      }
+    },
+    "approver": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["identity", "approvedAt", "recordUrl"],
+          "properties": {
+            "identity": {"type": "string", "minLength": 1},
+            "approvedAt": {"type": "string", "format": "date-time"},
+            "recordUrl": {"type": "string", "format": "uri"}
+          }
+        }
+      ]
+    },
+    "effectiveStatusNames": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["existingRequired", "candidate"],
+      "properties": {
+        "existingRequired": {"type": "array", "minItems": 2, "maxItems": 2, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "candidate": {"type": "array", "minItems": 2, "maxItems": 2, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "incidentContact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ownerRole", "handle"],
+      "properties": {
+        "ownerRole": {"const": "promotion-rollback-incident"},
+        "handle": {"type": "string", "minLength": 1}
+      }
+    },
+    "effectiveAt": {"type": ["string", "null"], "format": "date-time"},
+    "rollbackWindow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimumDays", "minimumEligibleRequiredRuns"],
+      "properties": {
+        "minimumDays": {"type": "integer", "minimum": 14},
+        "minimumEligibleRequiredRuns": {"type": "integer", "minimum": 30}
+      }
+    }
+  }
+}

@@ -13,6 +13,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -36,11 +37,18 @@ TEMPORARY_SCANNER = load_script(
     "build_temporary_openvas_scanner", "scripts/build_temporary_openvas_scanner.py"
 )
 CHECKER = load_script("check_e2e_evidence", "scripts/check-e2e-evidence.py")
+LEDGER = sys.modules["shadow_evidence_ledger"]
 COLLECTOR = load_script("collect_e2e_baseline", "scripts/collect-e2e-baseline.py")
 PROVENANCE = load_script("capture_e2e_provenance", "scripts/capture-e2e-provenance.py")
 FINALIZER = load_script("finalize_openvasd_evidence", "scripts/finalize-openvasd-evidence.py")
 FIXTURES = load_script("fetch_openvasd_fixtures", "scripts/fetch-openvasd-emulator-fixtures.py")
 OBSERVATIONS = load_script("collect_shadow_observations", "scripts/collect-shadow-observations.py")
+PROMOTION = load_script(
+    "evaluate_openvasd_promotion", "scripts/evaluate-openvasd-promotion.py"
+)
+PERSIST_LEDGER = load_script(
+    "persist_shadow_evidence_ledger", "scripts/persist-shadow-evidence-ledger.py"
+)
 PINS_VALIDATOR = load_script(
     "validate_direct_openvasd_pins", "scripts/validate-direct-openvasd-pins.py"
 )
@@ -58,10 +66,434 @@ class E2eEvidenceTests(unittest.TestCase):
             (evidence_root / "baselines" / "osp-required.json").read_text(encoding="utf-8")
         )
 
+    def phase3_fixture(
+        self, directory: Path, *, rollback_failures: bool = False
+    ) -> SimpleNamespace:
+        """Create a complete synthetic window; no generated fixture is production evidence."""
+
+        digest = "sha256:" + "a" * 64
+        provenance = {
+            "schemaVersion": 1,
+            "gateway": {"sourceRevision": "a" * 40, "image": "gateway", "imageDigest": digest},
+            "gvmd": {"sourceRevision": "gvmd", "image": "gvmd", "imageDigest": digest},
+            "scanner": {"sourceRevision": "scanner", "image": "scanner", "imageDigest": digest},
+            "feedData": [{"name": "feed", "revision": digest}],
+            "fixtures": [
+                {"name": "GVM_GATEWAY_E2E_TARGET_HOST", "revision": "e2e-target"},
+                {"name": "scanner-backend-identity", "revision": "openvasd-backend"},
+                {"name": "synthetic-target-identity", "revision": "e2e-target"},
+                *[
+                    {"name": name, "revision": digest}
+                    for name in (
+                        "tests/e2e/compose.direct-openvasd.yaml",
+                        "synthetic-target-image",
+                        "tests/e2e/evidence/direct-openvasd-pins.json",
+                        "gvm-openapi-emulator/examples/openvasd/swagger.json",
+                        "gvm-openapi-emulator/examples/openvasd",
+                        "tests/e2e-harness",
+                    )
+                ],
+            ],
+            "apiContract": {"name": "spec/rest-api/openapi.yaml", "revision": digest},
+            "composeSha256": "a" * 64,
+            "runner": {"os": "Linux", "architecture": "X64", "image": "ubuntu-24.04"},
+            "harnessRevision": "a" * 40,
+        }
+        fingerprint = PROMOTION.provenance_fingerprint(provenance)
+        evidence_root = directory / "retained"
+        ledger_root = directory / "ledger"
+        now = PROMOTION.dt.datetime.now(PROMOTION.dt.timezone.utc).replace(microsecond=0)
+        start = now - PROMOTION.dt.timedelta(days=14)
+        contracts = sorted(self.inventory["contractOwners"])
+        for index in range(30):
+            run_id = 1000 + index
+            created = start + PROMOTION.dt.timedelta(days=14 * index / 29)
+            created_at = created.isoformat().replace("+00:00", "Z")
+            conclusion = "success"
+            failure_classification = None
+            diagnostics_complete = True
+            rows = [
+                {
+                    "contract": contract,
+                    "baseline": "pass",
+                    "candidate": "pass",
+                    "disposition": "equivalent",
+                    "ownerRole": self.inventory["contractOwners"][contract],
+                }
+                for contract in contracts
+            ]
+            if rollback_failures and index in {28, 29}:
+                conclusion = "failure"
+                failure_classification = "unexplained-flake" if index == 28 else "assertion"
+                diagnostics_complete = False
+            if rollback_failures and index == 29:
+                rows[0]["candidate"] = "fail"
+                rows[0]["disposition"] = "gap"
+            run_url = f"https://github.com/greenbone-hive/rust-gvm-api/actions/runs/{run_id}"
+            job_url = f"{run_url}/job/{run_id + 10000}"
+            package = evidence_root / f"run-{run_id}-attempt-1"
+            package.mkdir(parents=True)
+            documents = {
+                "comparison.json": {
+                    "schemaVersion": 1,
+                    "baselineLane": "community-osp",
+                    "candidateLane": "community-direct-openvasd-shadow",
+                    "contracts": rows,
+                },
+                "fault-mappings.json": {
+                    "schemaVersion": 1,
+                    "lane": "community-direct-openvasd-shadow",
+                    "scenarios": [
+                        {
+                            "scenario": scenario,
+                            "injectedAt": "openvasd-http-boundary",
+                            "gatewayMapping": "task:Interrupted",
+                            "target": "e2e-target",
+                            "outcome": "pass",
+                        }
+                        for scenario in sorted(FINALIZER.EXPECTED_FAULTS)
+                    ],
+                },
+                "provenance.json": provenance,
+                "run-evidence.json": {
+                    "runId": run_id,
+                    "runAttempt": 1,
+                    "runNumber": index + 1,
+                    "event": "push",
+                    "headBranch": "main",
+                    "headSha": "b" * 40,
+                    "createdAt": created_at,
+                    "runUrl": run_url,
+                    "jobId": run_id + 10000,
+                    "jobUrl": job_url,
+                    "conclusion": conclusion,
+                    "timingsSeconds": {"startup": 100, "tests": 200, "total": 600},
+                    "retried": False,
+                    "artifacts": {
+                        "expected": ["e2e-direct-openvasd-shadow-raw"],
+                        "present": ["e2e-direct-openvasd-shadow-raw"],
+                        "complete": True,
+                    },
+                    "failureClassification": failure_classification,
+                    "failureOwnerRole": "community-contract-lane" if failure_classification else None,
+                },
+                "diagnostic-evidence.json": {
+                    "schemaVersion": 1,
+                    "runId": run_id,
+                    "runAttempt": 1,
+                    "expected": sorted(PROMOTION.EXPECTED_DIAGNOSTICS),
+                    "present": sorted(PROMOTION.EXPECTED_DIAGNOSTICS) if diagnostics_complete else [],
+                    "complete": diagnostics_complete,
+                },
+            }
+            for name, document in documents.items():
+                (package / name).write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+            provenance_sha = PROMOTION.hashlib.sha256(
+                (package / "provenance.json").read_bytes()
+            ).hexdigest()
+            payload = {
+                f"final/{name}": (package / name).read_bytes() for name in documents
+            }
+            payload.update(
+                {
+                    "raw/provenance.json": (package / "provenance.json").read_bytes(),
+                    "raw/cargo.log": b"synthetic finalized contract log\n",
+                    "raw/faults.log": b"synthetic finalized fault log\n",
+                }
+            )
+            if diagnostics_complete:
+                payload.update(
+                    {
+                        f"raw/{name}": b"bounded diagnostic\n"
+                        for name in PROMOTION.EXPECTED_DIAGNOSTICS
+                    }
+                )
+            LEDGER.append_entry(
+                ledger_root,
+                {
+                    "runId": run_id,
+                    "runAttempt": 1,
+                    "createdAt": created_at,
+                    "comparisonFingerprint": fingerprint,
+                    "evidenceArtifactId": run_id + 20000,
+                    "rawArtifactId": run_id + 30000,
+                    "provenanceSha256": provenance_sha,
+                },
+                payload,
+            )
+        observations = LEDGER.observation_from_ledger(
+            ledger_root, generated_at=now
+        )
+        ledger = LEDGER.validate_ledger(ledger_root)
+        evidence_range = PROMOTION.decision_range(
+            observations["runs"], fingerprint, ledger["entries"][-1]["entrySha256"]
+        )
+        now_text = now.isoformat().replace("+00:00", "Z")
+        decision = json.loads(
+            (ROOT / "tests/e2e/evidence/promotion-decision.json").read_text(encoding="utf-8")
+        )
+        decision.update(
+            {
+                "status": "approved",
+                "evidenceRange": evidence_range,
+                "approver": {
+                    "identity": "@reviewer",
+                    "approvedAt": now_text,
+                    "recordUrl": "https://github.com/greenbone-hive/rust-gvm-api/issues/679",
+                },
+                "effectiveAt": now_text,
+            }
+        )
+        decision_path = directory / "decision.json"
+        decision_path.write_text(json.dumps(decision), encoding="utf-8")
+        compatibility_provenance_path = directory / "compatibility-provenance.json"
+        compatibility_provenance_path.write_text(
+            json.dumps(provenance, indent=2) + "\n", encoding="utf-8"
+        )
+        compatibility_provenance_sha = PROMOTION.hashlib.sha256(
+            compatibility_provenance_path.read_bytes()
+        ).hexdigest()
+        compatibility_path = directory / "compatibility.json"
+        compatibility_path.write_text(
+            json.dumps(
+                {
+                    "schemaVersion": 1,
+                    "repository": "greenbone-hive/rust-gvm-api",
+                    "workflow": ".github/workflows/real-openvasd-compatibility.yml",
+                    "job": "Real OpenVASD Direct-HTTP Compatibility (advisory)",
+                    "runId": 999,
+                    "runAttempt": 1,
+                    "runUrl": "https://github.com/greenbone-hive/rust-gvm-api/actions/runs/999",
+                    "headSha": "b" * 40,
+                    "completedAt": now_text,
+                    "conclusion": "success",
+                    "provenanceSha256": compatibility_provenance_sha,
+                    "unresolvedReleaseBlockingDrift": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        events = {"schemaVersion": 1, "events": []}
+        if rollback_failures:
+            events["events"] = [
+                {
+                    "kind": "emulator-false-gate-failure",
+                    "runId": 1028 + offset,
+                    "jobUrl": f"https://github.com/greenbone-hive/rust-gvm-api/actions/runs/{1028 + offset}/job/1",
+                    "occurredAt": (now - PROMOTION.dt.timedelta(days=2 - offset)).isoformat().replace("+00:00", "Z"),
+                    "reproducedAt": (now - PROMOTION.dt.timedelta(days=2 - offset, hours=-1)).isoformat().replace("+00:00", "Z"),
+                    "issueUrl": "https://github.com/greenbone-hive/rust-gvm-api/issues/679",
+                    "ownerRole": "promotion-rollback-incident",
+                }
+                for offset in range(2)
+            ]
+        events_path = directory / "events.json"
+        events_path.write_text(json.dumps(events), encoding="utf-8")
+        return SimpleNamespace(
+            ledger_root=ledger_root,
+            compatibility=compatibility_path,
+            compatibility_provenance=compatibility_provenance_path,
+            decision=decision_path,
+            rollback_events=events_path,
+            baseline=ROOT / "tests/e2e/evidence/baselines/osp-required.json",
+            inventory=ROOT / "tests/e2e/evidence/contract-inventory.json",
+        )
+
     def test_checked_in_evidence_satisfies_all_versioned_contracts(self) -> None:
         """The repository must remain usable as the canonical Phase 0 evidence source."""
 
         CHECKER.validate_all(ROOT)
+
+    def test_phase3_evaluator_requires_every_threshold_and_explicit_approval(self) -> None:
+        """A complete qualifying window may report ready only when approval is recorded too."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            args = self.phase3_fixture(Path(directory))
+            report = PROMOTION.evaluate(args)
+            self.assertTrue(report["promotionReady"])
+            self.assertEqual(report["mode"], "approved")
+            self.assertTrue(all(check["passed"] for check in report["checks"]))
+            self.assertEqual(len(report["rollbackIndicators"]), 4)
+
+            args.decision = ROOT / "tests/e2e/evidence/promotion-decision.json"
+            observing = PROMOTION.evaluate(args)
+            self.assertFalse(observing["promotionReady"])
+            self.assertEqual(observing["mode"], "observing")
+            approval = next(
+                check for check in observing["checks"] if check["name"] == "recorded-approval"
+            )
+            self.assertFalse(approval["passed"])
+            self.assertIn("decision status remains observing", approval["reasons"])
+
+    def test_phase3_reports_all_four_rollback_triggers(self) -> None:
+        """Each rollback condition stays machine-reportable from retained or classified evidence."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            args = self.phase3_fixture(Path(directory), rollback_failures=True)
+            report = PROMOTION.evaluate(args)
+            indicators = {
+                indicator["trigger"]: indicator for indicator in report["rollbackIndicators"]
+            }
+            self.assertTrue(indicators["named-regression-missed-vs-osp"]["fired"])
+            self.assertTrue(
+                indicators["two-reproducible-emulator-false-gate-failures-in-7-days"]["fired"]
+            )
+            self.assertTrue(indicators["latest-20-pass-rate-or-flake-regression"]["fired"])
+            self.assertTrue(
+                indicators["missing-diagnostics-for-two-completed-failures"]["fired"]
+            )
+
+    def test_phase3_missing_retained_inputs_fail_closed_without_claiming_readiness(self) -> None:
+        """Ephemeral observations cannot substitute for durable raw evidence or compatibility provenance."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            ledger_root = root / "ledger"
+            ledger_root.mkdir()
+            (ledger_root / "ledger.json").write_text(
+                json.dumps(LEDGER.empty_ledger()), encoding="utf-8"
+            )
+            args = SimpleNamespace(
+                ledger_root=ledger_root,
+                compatibility=None,
+                compatibility_provenance=None,
+                decision=ROOT / "tests/e2e/evidence/promotion-decision.json",
+                rollback_events=ROOT / "tests/e2e/evidence/rollback-events.json",
+                baseline=ROOT / "tests/e2e/evidence/baselines/osp-required.json",
+                inventory=ROOT / "tests/e2e/evidence/contract-inventory.json",
+            )
+            report = PROMOTION.evaluate(args)
+            self.assertFalse(report["promotionReady"])
+            failed = {check["name"] for check in report["checks"] if not check["passed"]}
+            self.assertIn("retained-raw-evidence-and-provenance", failed)
+            self.assertIn("observation-window", failed)
+            self.assertIn("latest-real-openvasd-compatibility", failed)
+            self.assertIn("recorded-approval", failed)
+
+    def test_durable_ledger_survives_the_ten_day_actions_expiration_boundary(self) -> None:
+        """Expired Actions artifacts cannot erase 14-day evidence already sealed in the repository branch."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            args = self.phase3_fixture(Path(directory))
+            durable = LEDGER.observation_from_ledger(args.ledger_root)
+
+            def api(endpoint: str) -> dict[str, object]:
+                if endpoint.endswith(f"actions/workflows/{OBSERVATIONS.WORKFLOW}"):
+                    return {"id": 42}
+                if "actions/artifacts?" in endpoint:
+                    return {"artifacts": []}
+                raise AssertionError(f"unexpected API request: {endpoint}")
+
+            with patch.object(OBSERVATIONS, "gh_api", side_effect=api):
+                expired_live_view = OBSERVATIONS.collect("greenbone-hive/rust-gvm-api")
+
+            self.assertEqual(expired_live_view["gate"]["observedRuns"], 0)
+            self.assertFalse(expired_live_view["gate"]["satisfied"])
+            self.assertEqual(durable["gate"]["observedRuns"], 30)
+            self.assertTrue(durable["gate"]["satisfied"])
+
+    def test_expired_artifacts_are_never_backfilled_into_the_durable_ledger(self) -> None:
+        """The persistence job must fail rather than infer evidence after the ten-day source expires."""
+
+        artifacts = {
+            "artifacts": [
+                {"id": 1, "name": PERSIST_LEDGER.RAW_ARTIFACT, "expired": True},
+                {"id": 2, "name": PERSIST_LEDGER.FINAL_ARTIFACT, "expired": True},
+            ]
+        }
+        with patch.object(PERSIST_LEDGER, "gh_json", return_value=artifacts):
+            with self.assertRaisesRegex(PERSIST_LEDGER.PersistenceError, "no backfill"):
+                PERSIST_LEDGER.resolve_artifacts(
+                    {"GITHUB_REPOSITORY": "greenbone-hive/rust-gvm-api", "GITHUB_RUN_ID": "7"},
+                    {"started_at": "2026-11-01T00:00:00Z"},
+                    {"started_at": "2026-11-01T00:01:00Z"},
+                )
+
+    def test_durable_ledger_rejects_partial_mutated_and_differing_duplicate_evidence(self) -> None:
+        """Sealed manifests reject missing files, silent edits, or replacement of one run attempt."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            args = self.phase3_fixture(Path(directory))
+            ledger = LEDGER.validate_ledger(args.ledger_root)
+            entry = ledger["entries"][0]
+            run_dir = args.ledger_root / "runs" / f"{entry['runId']}-{entry['runAttempt']}"
+            files = {
+                item["path"]: (run_dir / item["path"]).read_bytes()
+                for item in entry["files"]
+            }
+            partial = dict(files)
+            del partial["final/diagnostic-evidence.json"]
+            with self.assertRaisesRegex(LEDGER.LedgerError, "required finalized documents"):
+                LEDGER.validate_finalized_payload(entry, partial)
+
+            injected = dict(files)
+            run_evidence = json.loads(injected["final/run-evidence.json"])
+            run_evidence["event"] = "pull_request"
+            injected["final/run-evidence.json"] = json.dumps(run_evidence).encode()
+            with self.assertRaisesRegex(LEDGER.LedgerError, "invalid or untrusted"):
+                LEDGER.validate_finalized_payload(entry, injected)
+
+            wrong_fingerprint = copy.deepcopy(entry)
+            wrong_fingerprint["comparisonFingerprint"] = "0" * 64
+            with self.assertRaisesRegex(LEDGER.LedgerError, "comparison fingerprint"):
+                LEDGER.validate_finalized_payload(wrong_fingerprint, files)
+
+            files["raw/cargo.log"] += b"different duplicate content\n"
+            metadata = {
+                name: entry[name]
+                for name in (
+                    "runId", "runAttempt", "createdAt", "comparisonFingerprint",
+                    "evidenceArtifactId", "rawArtifactId", "provenanceSha256",
+                )
+            }
+            with self.assertRaisesRegex(LEDGER.LedgerError, "different content"):
+                LEDGER.append_entry(args.ledger_root, metadata, files)
+
+            comparison = run_dir / "final" / "comparison.json"
+            comparison.unlink()
+            with self.assertRaisesRegex(LEDGER.LedgerError, "payload is missing"):
+                LEDGER.validate_ledger(args.ledger_root)
+            comparison.write_bytes(files["final/comparison.json"])
+            LEDGER.validate_ledger(args.ledger_root)
+
+            cargo = run_dir / "raw" / "cargo.log"
+            cargo.write_bytes(cargo.read_bytes() + b"post-review mutation\n")
+            with self.assertRaisesRegex(LEDGER.LedgerError, "payload was modified"):
+                LEDGER.validate_ledger(args.ledger_root)
+
+    def test_durable_ledger_rejects_history_rewrite_and_untrusted_event(self) -> None:
+        """Reviewed prefixes are append-only and fork or pull-request executions cannot persist evidence."""
+
+        previous = LEDGER.empty_ledger()
+        current = copy.deepcopy(previous)
+        current["entries"] = [{"unexpected": "replacement"}]
+        with self.assertRaisesRegex(LEDGER.LedgerError, "modified instead of appended"):
+            LEDGER.validate_append_only(current, previous)
+
+        environment = {
+            "GITHUB_REPOSITORY": "greenbone-hive/rust-gvm-api",
+            "GITHUB_RUN_ID": "7",
+            "GITHUB_RUN_ATTEMPT": "1",
+            "GITHUB_EVENT_NAME": "pull_request",
+            "GITHUB_REF": "refs/pull/7/merge",
+            "GITHUB_SHA": "a" * 40,
+        }
+        with patch.dict(PERSIST_LEDGER.os.environ, environment, clear=True):
+            with self.assertRaisesRegex(PERSIST_LEDGER.PersistenceError, "untrusted"):
+                PERSIST_LEDGER.trusted_environment()
+
+    def test_finalizer_distinguishes_uploaded_artifacts_from_complete_diagnostics(self) -> None:
+        """Two missing failure diagnostics must remain visible even when an artifact uploaded."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            raw = Path(directory)
+            (raw / "compose.log").write_text("bounded log", encoding="utf-8")
+            evidence = FINALIZER.build_diagnostic_evidence(
+                raw, {"GITHUB_RUN_ID": "42", "GITHUB_RUN_ATTEMPT": "2"}
+            )
+            self.assertFalse(evidence["complete"])
+            self.assertEqual(evidence["present"], ["compose.log"])
+            self.assertEqual(evidence["runId"], 42)
 
     def test_inventory_matches_every_rust_test_exactly_once(self) -> None:
         """Adding or removing a Rust E2E test without inventory maintenance must fail."""
@@ -962,6 +1394,35 @@ class E2eEvidenceTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "every finalized document"):
                 OBSERVATIONS.artifact_documents("greenbone/rust-gvm-api", 42)
 
+    def test_phase3_retention_recovers_diagnostics_from_preexisting_raw_archives(self) -> None:
+        """The first Phase 2 runs keep valid progress only when their raw ZIP proves every diagnostic."""
+
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w") as bundle:
+            for name in sorted(OBSERVATIONS.EXPECTED_DIAGNOSTICS):
+                bundle.writestr(f"raw/{name}", "evidence")
+        response = {
+            "artifacts": [
+                {
+                    "id": 42,
+                    "name": OBSERVATIONS.RAW_EVIDENCE_ARTIFACT,
+                    "expired": False,
+                    "created_at": "2026-11-14T00:05:00Z",
+                }
+            ]
+        }
+        with (
+            patch.object(OBSERVATIONS, "gh_api", return_value=response),
+            patch.object(OBSERVATIONS, "gh_api_bytes", return_value=archive.getvalue()),
+        ):
+            document = OBSERVATIONS.diagnostic_evidence_from_raw_artifact(
+                "greenbone-hive/rust-gvm-api",
+                {"runId": 7, "runAttempt": 1},
+                {"createdAt": "2026-11-14T00:00:00Z"},
+            )
+        self.assertTrue(document["complete"])
+        self.assertEqual(set(document["present"]), OBSERVATIONS.EXPECTED_DIAGNOSTICS)
+
     def test_shadow_collector_accepts_finalizer_shaped_documents_with_matching_identity(self) -> None:
         """Strict collection validation must remain aligned with the finalizer's evidence contract."""
 
@@ -1116,6 +1577,8 @@ class E2eEvidenceTests(unittest.TestCase):
         self.assertIn("name: REST Discovery Scan E2E (main)\n", e2e)
         self.assertIn("name: REST Discovery Scan E2E (devel)\n", e2e)
         self.assertIn("name: Direct OpenVASD Shadow E2E (advisory)\n", e2e)
+        self.assertIn("name: Direct OpenVASD E2E (main candidate, advisory)\n", e2e)
+        self.assertIn("name: Direct OpenVASD E2E (devel candidate, advisory)\n", e2e)
         self.assertIn("if: needs.classify-changes.outputs.e2e_required == 'true'", e2e)
         main_gate = e2e.split("  rest-discovery-scan-main-gate:", 1)[1].split(
             "  rest-discovery-scan-devel-gate:", 1
@@ -1123,6 +1586,23 @@ class E2eEvidenceTests(unittest.TestCase):
         devel_gate = e2e.split("  rest-discovery-scan-devel-gate:", 1)[1]
         self.assertNotIn("direct-openvasd-shadow", main_gate)
         self.assertNotIn("direct-openvasd-shadow", devel_gate)
+        self.assertIn("needs: [classify-changes, direct-openvasd-shadow]", e2e)
+        persistence = e2e.split("  persist-direct-openvasd-shadow-evidence:", 1)[1].split(
+            "  direct-openvasd-main-candidate-gate:", 1
+        )[0]
+        self.assertIn("name: Persist Direct OpenVASD Shadow Evidence (advisory)", persistence)
+        self.assertIn("actions: read", persistence)
+        self.assertIn("contents: write", persistence)
+        self.assertIn("cancel-in-progress: false", persistence)
+        self.assertIn("github.event_name == 'push'", persistence)
+        self.assertIn("github.event_name == 'schedule'", persistence)
+        self.assertIn("github.event_name == 'workflow_dispatch'", persistence)
+        self.assertNotIn("pull_request", persistence)
+        self.assertNotIn("merge_group", persistence)
+        self.assertNotIn("persist-direct-openvasd-shadow-evidence", main_gate)
+        self.assertNotIn("persist-direct-openvasd-shadow-evidence", devel_gate)
+        self.assertNotIn("retention-days: 30", e2e)
+        self.assertEqual(e2e.count("retention-days: 10"), 2)
         self.assertNotIn("pull_request_target:", e2e)
         self.assertIn("workflow_dispatch:", real)
         self.assertIn("schedule:", real)

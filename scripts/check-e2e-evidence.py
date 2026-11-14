@@ -15,6 +15,7 @@ from build_temporary_openvas_scanner import (
     REGISTRY_IMAGE as TEMPORARY_SCANNER_REGISTRY_IMAGE,
     SOURCE_REVISION as TEMPORARY_SCANNER_SOURCE_REVISION,
 )
+from shadow_evidence_ledger import validate_ledger
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -23,6 +24,9 @@ INVENTORY_PATH = EVIDENCE_ROOT / "contract-inventory.json"
 OWNERS_PATH = EVIDENCE_ROOT / "owners.json"
 BASELINE_PATH = EVIDENCE_ROOT / "baselines" / "osp-required.json"
 DIRECT_PINS_PATH = EVIDENCE_ROOT / "direct-openvasd-pins.json"
+PROMOTION_DECISION_PATH = EVIDENCE_ROOT / "promotion-decision.json"
+ROLLBACK_EVENTS_PATH = EVIDENCE_ROOT / "rollback-events.json"
+SHADOW_LEDGER_TEMPLATE = EVIDENCE_ROOT / "shadow-ledger"
 
 FAILURE_CLASSES = {
     "setup",
@@ -863,6 +867,12 @@ def validate_schema_documents() -> None:
         "comparison.schema.json",
         "run-evidence.schema.json",
         "shadow-observation.schema.json",
+        "diagnostic-evidence.schema.json",
+        "durable-shadow-ledger.schema.json",
+        "promotion-decision.schema.json",
+        "promotion-readiness.schema.json",
+        "real-openvasd-compatibility.schema.json",
+        "rollback-events.schema.json",
     }
     found = {path.name for path in (EVIDENCE_ROOT / "schemas").glob("*.json")}
     if found != required_schemas:
@@ -881,6 +891,94 @@ def validate_schema_documents() -> None:
             raise EvidenceError(f"schema {name} must be a closed object")
 
 
+def validate_phase3_control_documents(decision_document: Any, event_document: Any) -> None:
+    """Keep the checked-in Phase 3 controls advisory and structurally explicit."""
+
+    decision = expect_object(decision_document, "promotion decision")
+    expect_keys(
+        decision,
+        {
+            "schemaVersion",
+            "status",
+            "evidenceRange",
+            "exclusions",
+            "approver",
+            "effectiveStatusNames",
+            "incidentContact",
+            "effectiveAt",
+            "rollbackWindow",
+        },
+        "promotion decision",
+    )
+    if decision["schemaVersion"] != 1 or decision["status"] != "observing":
+        raise EvidenceError("checked-in promotion decision must remain schema 1 observing")
+    evidence_range = expect_object(
+        decision["evidenceRange"], "promotion decision.evidenceRange"
+    )
+    expect_keys(
+        evidence_range,
+        {
+            "comparisonFingerprint",
+            "ledgerHeadSha256",
+            "oldestRunId",
+            "newestRunId",
+            "oldestCreatedAt",
+            "newestCreatedAt",
+        },
+        "promotion decision.evidenceRange",
+    )
+    if any(value is not None for value in evidence_range.values()):
+        raise EvidenceError("observing decision must not claim an effective evidence range")
+    if decision["exclusions"] != []:
+        raise EvidenceError("checked-in observing decision must not contain exclusions")
+    if decision["approver"] is not None or decision["effectiveAt"] is not None:
+        raise EvidenceError("observing decision must not claim approval or an effective time")
+    statuses = expect_object(
+        decision["effectiveStatusNames"], "promotion decision.effectiveStatusNames"
+    )
+    expect_keys(
+        statuses,
+        {"existingRequired", "candidate"},
+        "promotion decision.effectiveStatusNames",
+    )
+    if set(statuses["existingRequired"]) != {
+        "REST Discovery Scan E2E (main)",
+        "REST Discovery Scan E2E (devel)",
+    }:
+        raise EvidenceError("promotion decision must preserve both OSP status names")
+    if set(statuses["candidate"]) != {
+        "Direct OpenVASD E2E (main candidate, advisory)",
+        "Direct OpenVASD E2E (devel candidate, advisory)",
+    }:
+        raise EvidenceError("promotion decision candidate status names are not stable")
+    contact = expect_object(
+        decision["incidentContact"], "promotion decision.incidentContact"
+    )
+    expect_keys(
+        contact,
+        {"ownerRole", "handle"},
+        "promotion decision.incidentContact",
+    )
+    if contact["ownerRole"] != "promotion-rollback-incident":
+        raise EvidenceError("promotion decision must name the rollback incident owner")
+    expect_string(contact["handle"], "promotion decision.incidentContact.handle")
+    window = expect_object(
+        decision["rollbackWindow"], "promotion decision.rollbackWindow"
+    )
+    expect_keys(
+        window,
+        {"minimumDays", "minimumEligibleRequiredRuns"},
+        "promotion decision.rollbackWindow",
+    )
+    if window["minimumDays"] < 14 or window["minimumEligibleRequiredRuns"] < 30:
+        raise EvidenceError("promotion decision weakens the rollback window")
+
+    events = expect_object(event_document, "rollback events")
+    expect_keys(events, {"schemaVersion", "events"}, "rollback events")
+    if events["schemaVersion"] != 1 or events["events"] != []:
+        raise EvidenceError("checked-in rollback event manifest must start empty")
+
+
 def validate_all(repository_root: Path = REPOSITORY_ROOT) -> None:
     validate_schema_documents()
     owners = validate_owners(load_json(OWNERS_PATH))
@@ -893,6 +991,10 @@ def validate_all(repository_root: Path = REPOSITORY_ROOT) -> None:
         known_contracts,
     )
     validate_baseline(load_json(BASELINE_PATH))
+    validate_phase3_control_documents(
+        load_json(PROMOTION_DECISION_PATH), load_json(ROLLBACK_EVENTS_PATH)
+    )
+    validate_ledger(SHADOW_LEDGER_TEMPLATE)
 
 
 def main() -> int:
