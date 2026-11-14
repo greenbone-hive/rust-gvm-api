@@ -22,7 +22,17 @@ fi
 # and cleanup commands remain available if a later registry outage occurs.
 case "$1" in
   up|start|create|run|restart)
-    python3 "${ROOT_DIR}/scripts/validate-direct-openvasd-pins.py"
+    VALIDATOR_ARGS=()
+    if [[ -n "${GVM_GATEWAY_E2E_REAL_OPENVASD_IMAGE:-}" || \
+          -n "${GVM_GATEWAY_E2E_TEMPORARY_SCANNER_BUILD_MANIFEST:-}" ]]; then
+      VALIDATOR_ARGS+=(
+        --temporary-scanner-build-manifest
+        "${GVM_GATEWAY_E2E_TEMPORARY_SCANNER_BUILD_MANIFEST}"
+        --real-openvasd-image
+        "${GVM_GATEWAY_E2E_REAL_OPENVASD_IMAGE}"
+      )
+    fi
+    python3 "${ROOT_DIR}/scripts/validate-direct-openvasd-pins.py" "${VALIDATOR_ARGS[@]}"
     ;;
 esac
 

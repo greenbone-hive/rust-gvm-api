@@ -138,6 +138,34 @@ backend implementation and scanner/feed mounts; gvmd, gateway, direct-HTTP
 happy path, and distinct target remain the same. Its provenance records exact
 scanner/feed/image, gateway, gvmd, target, Compose, harness, and runner inputs.
 
+Issue #695 temporarily makes only this manual/weekly workflow check out
+`greenbone/openvas-scanner` commit
+`d6e3cbe74ca6f1f4ff1a9d9fcafca59732a32b81`, verify the supported
+`.docker/prod.Dockerfile`, and build it into a digest-pinned job-local registry.
+The generated immutable repository-digest reference overrides the official
+scanner default for both `configure-openvas` and `openvasd-backend`. The shared
+preflight resolves that digest before startup, and runtime provenance rejects a
+source label, image reference, image ID, Dockerfile hash, build-input, or
+between-service mismatch. The artifact includes
+`temporary-scanner-build.json`, whose closed fields record the upstream source
+SHA, Dockerfile SHA-256, build arguments and platform, pinned registry image,
+and resulting repository digest. After that registry manifest is verified, the
+helper writes the evidence manifest, removes the local staging tag and image,
+verifies both are absent, and prunes all Docker build cache. Cleanup output is
+visible and any removal, verification, or prune failure stops the job. The
+registry service and evidence manifest are retained, so Compose must pull the
+exact recorded digest rather than reuse the locally built image while avoiding
+holding the full scanner build cache beside the complete GVM runtime stack.
+Ordinary pull-request CI, the direct emulator lane, and local real-lane runs
+without the override continue to use their existing images; the official
+scanner digest remains the Compose default.
+
+This workaround must be removed after upstream
+`greenbone/openvas-scanner` PR #2454 is merged **and** an official community
+scanner image containing that fix is published. At that point, update the
+official digest pin and remove the temporary upstream checkout, local registry,
+build helper, manifest override, and temporary provenance assertions together.
+
 Automating release policy or branch protection remains outside this phase.
 
 ## Shadow observation gate

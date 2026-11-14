@@ -13,6 +13,18 @@ criteria = "safe-to-deploy"
 delta = "0.33.0 -> 0.33.1"
 notes = "Reviewed exact 0.33.0 -> 0.33.1 source delta: metric aggregators reject non-finite values, PeriodicReader surfaces export failures and worker panics, ParentBasedSampler becomes fully configurable, and invalid parent contexts start a new trace. Focused tests cover the behavior; the crate adds no unsafe code, build script, or runtime dependency."
 
+[[audits.quinn-proto]]
+who = "rust-gvm-api security review"
+criteria = "safe-to-deploy"
+delta = "0.11.18 -> 0.11.19"
+notes = "Reviewed exact 0.11.18 -> 0.11.19 source delta. It bounds peer-provided Initial tokens before frame construction, reserves CONNECTION_CLOSE space, validates MAX_STREAM_DATA stream IDs against negotiated limits, clamps Initial/loss-probe padding to the effective minimum MTU, and cleans up an issued CID on TLS setup failure. Focused regression tests cover both RustSec fixes and MTU behavior; no unsafe, build-script, feature, or dependency change."
+
+[[audits.quinn-udp]]
+who = "rust-gvm-api security review"
+criteria = "safe-to-deploy"
+delta = "0.5.14 -> 0.5.16"
+notes = "Reviewed exact 0.5.14 -> 0.5.16 source delta. The Unix single-datagram receive loop now rebuilds msghdr state before each recvmsg call and checks success before MSG_TRUNC, preventing a truncated nonblocking datagram from spinning on stale flags. The existing unsafe recvmsg boundary is unchanged and focused tests cover truncation followed by WouldBlock or a valid datagram; no build script or runtime dependency is added."
+
 [[audits.rustls-webpki]]
 who = "rust-gvm-api security review"
 criteria = "safe-to-deploy"

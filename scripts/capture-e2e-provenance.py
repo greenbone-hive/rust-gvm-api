@@ -12,6 +12,11 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from build_temporary_openvas_scanner import (
+    SOURCE_REVISION as TEMPORARY_SCANNER_SOURCE_REVISION,
+    load_manifest as load_temporary_scanner_build_manifest,
+)
+
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 FEED_SERVICES = ("vulnerability-tests", "data-objects", "report-formats", "gpg-data")
@@ -73,7 +78,10 @@ def require_service(records: dict[str, dict[str, str]], service: str) -> dict[st
 
 
 def assert_pinned_runtime(
-    records: dict[str, dict[str, str]], pins: dict[str, Any], lane: str
+    records: dict[str, dict[str, str]],
+    pins: dict[str, Any],
+    lane: str,
+    temporary_scanner_build: dict[str, Any] | None = None,
 ) -> None:
     runtime_images = pins["runtimeImages"]
     service_pins = {
@@ -90,8 +98,13 @@ def assert_pinned_runtime(
         "e2e-target": runtime_images["e2e-target"],
     }
     if lane == "real-openvasd":
-        service_pins["openvasd-backend"] = runtime_images["real-openvasd"]
-        service_pins["configure-openvas"] = runtime_images["real-openvasd"]
+        real_openvasd_image = (
+            temporary_scanner_build["image"]["reference"]
+            if temporary_scanner_build is not None
+            else runtime_images["real-openvasd"]
+        )
+        service_pins["openvasd-backend"] = real_openvasd_image
+        service_pins["configure-openvas"] = real_openvasd_image
     else:
         service_pins["openvasd-backend"] = pins["emulator"]["image"]
 
@@ -108,6 +121,25 @@ def assert_pinned_runtime(
             raise RuntimeError(
                 "emulator OCI source revision does not match the pinned Phase 1 source commit: "
                 f"expected {pins['emulator']['sourceRevision']}, got {source_revision}"
+            )
+    if lane == "real-openvasd" and temporary_scanner_build is not None:
+        configure = records["configure-openvas"]
+        backend = records["openvasd-backend"]
+        for service, record in (
+            ("configure-openvas", configure),
+            ("openvasd-backend", backend),
+        ):
+            if record["sourceRevision"] != TEMPORARY_SCANNER_SOURCE_REVISION:
+                raise RuntimeError(
+                    f"compose service {service!r} source revision drifted: expected "
+                    f"{TEMPORARY_SCANNER_SOURCE_REVISION}, got {record['sourceRevision']}"
+                )
+        if (
+            configure["image"] != backend["image"]
+            or configure["imageDigest"] != backend["imageDigest"]
+        ):
+            raise RuntimeError(
+                "configure-openvas and openvasd-backend must use one identical temporary image"
             )
 
 
@@ -186,6 +218,8 @@ def build_document(
     compose_paths: list[Path] | None = None,
     target_service: str | None = None,
     fixture_root: Path | None = None,
+    temporary_scanner_build_path: Path | None = None,
+    temporary_scanner_build: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     gateway = dict(require_service(records, "gvm-gateway"))
     gateway["sourceRevision"] = repository_revision
@@ -227,6 +261,39 @@ def build_document(
                 {
                     "name": "gvm-openapi-emulator/examples/openvasd",
                     "revision": f"sha256:{directory_sha256(fixture_root)}",
+                },
+            ]
+        )
+    if temporary_scanner_build_path is not None and temporary_scanner_build is not None:
+        build = temporary_scanner_build["build"]
+        source = temporary_scanner_build["source"]
+        image = temporary_scanner_build["image"]
+        fixtures.extend(
+            [
+                {
+                    "name": "temporary-openvas-scanner-source",
+                    "revision": f"{source['repository']}@{source['revision']}",
+                },
+                {
+                    "name": f"{source['repository']}/{build['dockerfile']}",
+                    "revision": f"sha256:{build['dockerfileSha256']}",
+                },
+                {
+                    "name": "temporary-openvas-scanner-build-inputs",
+                    "revision": "sha256:"
+                    + hashlib.sha256(
+                        json.dumps(build, sort_keys=True, separators=(",", ":")).encode(
+                            "utf-8"
+                        )
+                    ).hexdigest(),
+                },
+                {
+                    "name": "temporary-openvas-scanner-image",
+                    "revision": image["reference"],
+                },
+                {
+                    "name": "temporary-openvas-scanner-build-manifest",
+                    "revision": f"sha256:{sha256(temporary_scanner_build_path)}",
                 },
             ]
         )
@@ -277,7 +344,23 @@ def main() -> int:
         choices=("osp", "direct-openvasd", "real-openvasd"),
         default="osp",
     )
+    temporary_manifest_environment = os.environ.get(
+        "GVM_GATEWAY_E2E_TEMPORARY_SCANNER_BUILD_MANIFEST"
+    )
+    parser.add_argument(
+        "--temporary-scanner-build-manifest",
+        type=Path,
+        default=(
+            Path(temporary_manifest_environment)
+            if temporary_manifest_environment
+            else None
+        ),
+    )
     args = parser.parse_args()
+    if args.temporary_scanner_build_manifest is not None and args.lane != "real-openvasd":
+        raise RuntimeError(
+            "a temporary scanner build manifest is valid only for the real-openvasd lane"
+        )
     runtime = compose_runtime()
     if args.lane == "osp":
         compose_script = "./scripts/compose-dev.sh"
@@ -300,9 +383,14 @@ def main() -> int:
     if target_service:
         assert_distinct_identities(inspects, scanner_service, target_service)
     records = service_records(inspects)
+    temporary_scanner_build = None
+    if args.temporary_scanner_build_manifest is not None:
+        temporary_scanner_build = load_temporary_scanner_build_manifest(
+            args.temporary_scanner_build_manifest
+        )
     if args.lane != "osp":
         pins = json.loads(PINS_PATH.read_text(encoding="utf-8"))
-        assert_pinned_runtime(records, pins, args.lane)
+        assert_pinned_runtime(records, pins, args.lane, temporary_scanner_build)
     revision = command_output(["git", "rev-parse", "HEAD"]).strip()
     document = build_document(
         records,
@@ -313,6 +401,8 @@ def main() -> int:
         compose_paths=compose_paths,
         target_service=target_service,
         fixture_root=fixture_root,
+        temporary_scanner_build_path=args.temporary_scanner_build_manifest,
+        temporary_scanner_build=temporary_scanner_build,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
