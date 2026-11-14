@@ -268,6 +268,16 @@ class EnterpriseAgentControlTests(unittest.TestCase):
         self.assertIn("--scanner-host=agent-control-scenario-proxy", compose)
         self.assertIn("127.0.0.1:8091:8081", compose)
 
+    def test_enterprise_contract_requires_explicit_dedicated_lane_selection(self) -> None:
+        """The universal include-ignored runner must not execute enterprise-only mutations."""
+
+        contract = (ROOT / "tests/e2e/tests/rest_enterprise_agent_control.rs").read_text()
+        runner = (ROOT / "scripts/run-enterprise-agent-control-contracts.sh").read_text()
+        selector = "GVM_GATEWAY_E2E_ENTERPRISE_AGENT_CONTROL"
+        self.assertIn(f'env::var("{selector}")', contract)
+        self.assertIn('as_deref() != Ok("1")', contract)
+        self.assertIn(f"export {selector}=1", runner)
+
     def test_phase3_promotion_is_a_checked_in_prerequisite(self) -> None:
         """A clean checkout must keep Phase 4 advisory until Phase 3 is promoted."""
 

@@ -21,6 +21,7 @@ python3 "${ROOT_DIR}/scripts/configure-enterprise-agent-owner.py" \
   >"${EVIDENCE_DIR}/fixture-configuration.json"
 
 export RUST_TEST_THREADS=1
+export GVM_GATEWAY_E2E_ENTERPRISE_AGENT_CONTROL=1
 for repetition in 1 2; do
   cargo test -p gvm-gateway-e2e --test rest_enterprise_agent_control \
     rest_enterprise_agent_control_lifecycle_is_repeatable_and_fail_closed -- \

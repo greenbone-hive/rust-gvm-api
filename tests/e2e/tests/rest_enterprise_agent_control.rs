@@ -18,6 +18,13 @@ const AGENT_CONTROLLER_SCANNER_ID: &str = "3b4be213-281f-49ee-b457-5a5f34f71510"
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "requires the enterprise Agent Control compose profile and successful typed preflight"]
 async fn rest_enterprise_agent_control_lifecycle_is_repeatable_and_fail_closed() -> Result<()> {
+    // The universal OSP E2E runner deliberately includes ignored tests. Keep this
+    // enterprise-only lifecycle inert unless the dedicated runner has completed
+    // typed feature preflight and explicitly selected the Agent Control profile.
+    if env::var("GVM_GATEWAY_E2E_ENTERPRISE_AGENT_CONTROL").as_deref() != Ok("1") {
+        eprintln!("enterprise Agent Control profile not selected; contract not run");
+        return Ok(());
+    }
     let harness = E2eHarness::from_env()?;
     harness.wait_until_ready().await?;
 
