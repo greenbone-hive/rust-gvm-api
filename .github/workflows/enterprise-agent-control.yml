@@ -1,0 +1,113 @@
+name: Enterprise Agent Control Emulator (advisory)
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_ref:
+        description: Exact rust-gvm-api commit to exercise (defaults to dispatched commit)
+        required: false
+        type: string
+  schedule:
+    - cron: "43 4 * * 2"
+
+concurrency:
+  group: enterprise-agent-control-${{ inputs.release_ref || github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+  GVM_GATEWAY_E2E_BASE_URL: http://127.0.0.1:8080
+  GVM_GATEWAY_E2E_USERNAME: admin
+  GVM_GATEWAY_E2E_PASSWORD: admin
+  GVM_GATEWAY_E2E_TARGET_HOST: e2e-target
+  GVM_GATEWAY_E2E_SCANNER_BACKEND_IDENTITY: openvasd-backend
+  GVM_GATEWAY_E2E_AGENT_CONTROL_PROXY_URL: http://127.0.0.1:8091
+  GVM_GATEWAY_E2E_AGENT_CONTROL_PROXY_TOKEN: issue-680-enterprise-proxy-control
+  GVM_GATEWAY_E2E_RUN_SCOPE: ${{ github.run_id }}-${{ github.run_attempt }}-enterprise
+
+jobs:
+  enterprise-emulator:
+    name: Enterprise Agent Control Emulator (advisory, non-gating)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    services:
+      exact-source-registry:
+        image: docker.io/library/registry:2@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
+        ports:
+          - 5001:5000
+    steps:
+      - name: Check out exact rust-gvm-api input
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.release_ref || github.sha }}
+          persist-credentials: false
+      # Temporary source-build workaround for upstream PR #50. The checkout is an exact commit;
+      # neither the feature branch nor a mutable tag is accepted as runtime evidence.
+      - name: Check out exact Agent Control emulator source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: greenbone/gvm-openapi-emulator
+          ref: 82c03f6cf190942764f99ac799efc539cc57b4ca
+          path: .temporary/gvm-openapi-emulator
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Set up pinned Rust
+        uses: greenbone/actions/setup-rust@d6d4c9500cb4e83f8a516ec1d40b04bcc720bd22 # v3
+        with:
+          rust-version: "1.98.1"
+          components: rustfmt
+          cache-key: cargo-e2e-enterprise-${{ runner.os }}-${{ runner.arch }}-1.98.1-${{ hashFiles('**/Cargo.lock') }}
+      - name: Fetch pinned community OpenVASD fixtures
+        run: python3 scripts/fetch-openvasd-emulator-fixtures.py
+      - name: Build exact Agent Control source and record its immutable runtime digest
+        run: |
+          python3 scripts/build-agent-control-emulator.py \
+            --source .temporary/gvm-openapi-emulator \
+            --output dist/e2e-enterprise/agent-control-build.json \
+            --github-env "${GITHUB_ENV}"
+      - name: Start additive enterprise runtime
+        id: runtime
+        run: ./scripts/compose-enterprise-agent-control.sh up -d --build
+      - name: Wait for the existing community gateway substrate
+        run: ./scripts/run-e2e-tests.sh --wait-only
+      - name: Capture exact independent enterprise provenance
+        run: |
+          python3 scripts/capture-enterprise-agent-control-provenance.py \
+            --build-manifest "${GVM_GATEWAY_E2E_AGENT_CONTROL_BUILD_MANIFEST}" \
+            --agent-control-source "${GVM_GATEWAY_E2E_AGENT_CONTROL_SOURCE}" \
+            --output dist/e2e-enterprise/provenance.json
+      - name: Run typed preflight then repeatable enterprise contracts
+        id: contracts
+        continue-on-error: true
+        run: ./scripts/run-enterprise-agent-control-contracts.sh
+      - name: Finalize separate enterprise evidence
+        id: evidence
+        if: always() && steps.runtime.outcome == 'success'
+        continue-on-error: true
+        run: |
+          python3 scripts/finalize-enterprise-agent-control-evidence.py \
+            --evidence-dir dist/e2e-enterprise \
+            --output dist/e2e-enterprise/enterprise-result.json
+      - name: Capture bounded diagnostics
+        if: always() && steps.runtime.outcome == 'success'
+        run: |
+          ./scripts/compose-enterprise-agent-control.sh ps -a > dist/e2e-enterprise/compose-ps.txt
+          ./scripts/compose-enterprise-agent-control.sh logs --no-color > dist/e2e-enterprise/compose.log
+      - name: Tear down isolated enterprise runtime
+        if: always() && steps.runtime.outcome == 'success'
+        run: ./scripts/compose-enterprise-agent-control.sh down -v --remove-orphans
+      - name: Upload advisory enterprise evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: enterprise-agent-control-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/e2e-enterprise/*
+          if-no-files-found: error
+          retention-days: 10
+      - name: Preserve contract failure after evidence upload
+        if: steps.contracts.outcome != 'success' || steps.evidence.outcome != 'success'
+        run: exit 1

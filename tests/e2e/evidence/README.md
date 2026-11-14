@@ -6,11 +6,11 @@ does not change the current required OSP job or authorize promotion.
 
 ## Inventory and ownership
 
-[`contract-inventory.json`](contract-inventory.json) covers all 44 Rust tests
+[`contract-inventory.json`](contract-inventory.json) covers all 45 Rust tests
 in the `gvm-gateway-e2e` package:
 
 - 15 local helper/fixture tests;
-- 29 ignored compose-backed live tests;
+- 30 ignored compose-backed live tests;
 - 32 scanner-independent tests; and
 - 8 contracts that currently use the OSP scanner path but are expected to
   migrate to the direct-OpenVASD lane.
@@ -21,12 +21,13 @@ explicit `migrate` disposition. The validator compares Rust test attributes
 with inventory IDs, source paths, ignored state, and kind. A new or removed
 test makes validation fail until the inventory changes with it.
 
-The inventory also contains closed owner registries for all 49 named contracts
-and all 9 named dependencies. Validation rejects an unowned reference and a
+The inventory also contains closed owner registries for all 51 named contracts
+and all 13 named dependencies/feature flags. Validation rejects an unowned reference and a
 stale registry entry, so ownership cannot drift independently from the test
 matrix. REST, typed-GMP, and scanner contracts are first-class names; dependency
 kinds distinguish components, feed/data, fixtures, and environment inputs.
-Every test also declares its feature-flag set explicitly (currently empty).
+Every test also declares its feature-flag set explicitly; the enterprise lifecycle names the
+Agent and direct-OpenVASD requirements.
 
 [`owners.json`](owners.json) assigns accountable Greenbone teams to the
 community lane, emulator parity, real-service compatibility, enterprise
@@ -72,6 +73,44 @@ Before the shared direct-OpenVASD Compose launcher starts either advisory lane,
 `scripts/validate-direct-openvasd-pins.py` resolves every digest-pinned runtime
 image in this manifest. An unavailable manifest names the exact immutable image
 and stops the launch; no mutable-tag fallback is permitted.
+
+## Advisory enterprise Agent Control lanes
+
+[`enterprise-agent-control-pins.json`](enterprise-agent-control-pins.json) and
+[`enterprise-promotion-policy.json`](enterprise-promotion-policy.json) define a separate,
+scheduled/manual layer over the promoted community direct-OpenVASD substrate. Until upstream PR
+#50 has an immutable published image, the workflow checks out only commit
+`82c03f6cf190942764f99ac799efc539cc57b4ca`, verifies the checkout and `examples/agent-folder`
+fixture, and builds into a job-local registry. Evidence records the exact Git tree and source
+archive SHA-256, Dockerfile SHA-256, resolved image digest, runtime image ID, profile, API revision,
+mounted Swagger and fixture-tree SHA-256 values, and fixture revision. The feature branch is never
+an evidence identity. The exact-source validator also has a non-Docker `--source-only` mode for
+checking the detached source, API input object, Dockerfile, and mounted fixture identities.
+
+The enterprise runner records raw typed `get_version` and `get_features` responses before REST
+route assertions and fails as `preflight-configuration` unless Agents and direct OpenVASD are both
+compiled in and enabled. It resets both stateful emulators, rejects unmatched emulator routes,
+binds the documented Agent owner setting, and runs one uniquely named lifecycle twice with
+reverse-order cleanup. The default production image excludes the preflight and scenario proxy;
+enterprise Compose explicitly selects the named `enterprise-test-tools` stage. An authenticated,
+loopback-published test proxy between gvmd and Agent Control selects authentication, unavailable,
+malformed, conflict, rate-limit, and timeout in the upstream PR #50 profile by injecting only its
+documented `X-Emulator-Scenario` header. The proxy preserves the upstream status, headers, and body;
+it does not implement scenario responses. Each exact observed REST mapping is retained within the
+narrow specification/adapter-supported fail-closed set. The scan contract fetches the public report/results, correlates task/scanner/report, and
+requires the seeded agent target and ID in the community-shaped result. Enterprise provenance and final evidence use schemas that are separate
+from community shadow/promotion evidence and always set `promotionEligible` to false.
+
+`Real Agent Control Compatibility (advisory)` is also scheduled/manual and read-only. Operators
+must provide the HTTPS origin, health path, authentication/signing header names and secret values,
+plus exact service/API/fixture revisions. Incomplete inputs fail before connectivity. The harness
+requires unauthenticated rejection, authenticated-but-unsigned rejection, signed access, health,
+the direct service's raw empty inventory plus exact `x-total-count`/`x-page`/`x-per-page` headers,
+read-only scan-agent configuration, installer instructions using the Swagger-defined `lang` query,
+named dependency-failure classifications, and response hashes. These wire details are pinned in
+the same manifest as the exact PR #50 source and revalidated from that source by the non-Docker
+validator; they are not a second Agent Control model. The probe never invents an image, credential,
+or passing result, and it does not alter the universal community gate.
 
 ## Advisory direct-OpenVASD shadow lane
 

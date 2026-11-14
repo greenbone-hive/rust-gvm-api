@@ -14,7 +14,7 @@
       "accountable": "@greenbone/gea",
       "consulted": ["@greenbone/rust-gvm"],
       "responsibilities": [
-        "Maintain gvm-openapi-emulator OpenVASD fixtures and server behavior",
+        "Maintain gvm-openapi-emulator OpenVASD and Agent Control fixtures and server behavior",
         "Review pinned OpenAPI and fixture revision changes"
       ],
       "escalation": "Use greenbone/gvm-openapi-emulator#41 and notify the gea team"
@@ -33,6 +33,7 @@
       "consulted": ["@greenbone/gea"],
       "responsibilities": [
         "Maintain feature preflight and Agent Control gateway coverage",
+        "Maintain deterministic gvmd-to-Agent-Control failure-boundary coverage",
         "Keep enterprise tests on the promoted community scanner substrate"
       ],
       "escalation": "Open or escalate a rust-gvm-api issue and notify the rust-gvm team"

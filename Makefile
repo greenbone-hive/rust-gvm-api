@@ -47,6 +47,7 @@ docs-check:
 e2e-evidence-check:
 	python3 scripts/check-e2e-evidence.py
 	python3 tests/test_e2e_evidence.py
+	python3 tests/test_enterprise_agent_control.py
 
 # License/advisory check
 deny:

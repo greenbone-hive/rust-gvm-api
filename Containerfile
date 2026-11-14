@@ -5,7 +5,7 @@ ARG RUST_VERSION=1.95.0
 FROM rust:${RUST_VERSION}-trixie AS builder
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates git pkg-config \
+    && apt-get install -y --no-install-recommends ca-certificates git pkg-config wget \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
@@ -17,6 +17,14 @@ COPY tests tests
 COPY packaging packaging
 
 RUN cargo build --locked --release -p gvm-gateway
+
+# Selected only by the advisory enterprise Compose overlay. The final/default
+# runtime stage below intentionally cannot inherit either E2E binary.
+FROM builder AS enterprise-test-tools
+
+RUN cargo build --locked --release -p gvm-gateway-e2e \
+    --bin enterprise-feature-preflight \
+    --bin agent-control-scenario-proxy
 
 FROM debian:trixie-slim AS runtime
 

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "lane": "enterprise-agent-control-emulator-advisory",
+  "advisory": true,
+  "requiredCommunityGate": "community-osp",
+  "universalCommunityGateUnchanged": true,
+  "promotionAllowed": false,
+  "promotionPrerequisites": [
+    "Phase 3 direct-OpenVASD is approved and promoted",
+    "the exact emulator source workaround is replaced by an immutable published digest after PR #50 merges",
+    "a bounded real Agent Control compatibility run passes with complete exact operator inputs",
+    "product qualification explicitly approves the enterprise contract evidence",
+    "branch protection is changed only by an authorized operator in a separate reviewed action"
+  ],
+  "prohibitedEffects": [
+    "weakening or replacing the universal community OSP gate",
+    "making private credentials or images implicit",
+    "treating emulator evidence as real-service compatibility",
+    "promoting from a scheduled or manual advisory run"
+  ]
+}
