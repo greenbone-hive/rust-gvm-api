@@ -14,18 +14,27 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+from shadow_evidence_ledger import LedgerError, observation_from_ledger
+
 
 WORKFLOW = "nightly-e2e.yml"
 WORKFLOW_PATH = ".github/workflows/nightly-e2e.yml"
 DEFAULT_REPOSITORY = "greenbone-hive/rust-gvm-api"
 JOB_NAME = "Direct OpenVASD Shadow E2E (advisory)"
 EVIDENCE_ARTIFACT = "e2e-direct-openvasd-shadow-evidence"
+RAW_EVIDENCE_ARTIFACT = "e2e-direct-openvasd-shadow-raw"
 ELIGIBLE_CONCLUSIONS = {"success", "failure", "timed_out"}
 FINALIZED_DOCUMENTS = {
     "comparison.json",
     "fault-mappings.json",
     "provenance.json",
     "run-evidence.json",
+}
+OPTIONAL_FINALIZED_DOCUMENTS = {"diagnostic-evidence.json"}
+EXPECTED_DIAGNOSTICS = {
+    "compose-ps.txt",
+    "compose.log",
+    "runner-container-runtime.txt",
 }
 
 
@@ -68,6 +77,14 @@ def artifact_documents(
             filename: bundle.read(paths[0])
             for filename, paths in candidates.items()
         }
+        for filename in OPTIONAL_FINALIZED_DOCUMENTS:
+            paths = [name for name in bundle.namelist() if Path(name).name == filename]
+            if len(paths) > 1:
+                raise ValueError(
+                    f"evidence artifact {artifact_id} contains duplicate {filename} documents"
+                )
+            if paths:
+                contents[filename] = bundle.read(paths[0])
     documents = {
         filename: json.loads(content) for filename, content in contents.items()
     }
@@ -360,19 +377,115 @@ def collect(
     }
 
 
+def retain_finalized_evidence(
+    repository: str, observation: dict[str, Any], output_dir: Path
+) -> None:
+    """Materialize the already-selected finalized documents for offline review."""
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for run in observation["runs"]:
+        documents, _provenance_sha = artifact_documents(
+            repository, run["evidenceArtifactId"]
+        )
+        if "diagnostic-evidence.json" not in documents:
+            documents["diagnostic-evidence.json"] = diagnostic_evidence_from_raw_artifact(
+                repository, run, documents["run-evidence.json"]
+            )
+        run_dir = output_dir / f"run-{run['runId']}-attempt-{run['runAttempt']}"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        for filename, document in documents.items():
+            (run_dir / filename).write_text(
+                json.dumps(document, indent=2) + "\n", encoding="utf-8"
+            )
+
+
+def diagnostic_evidence_from_raw_artifact(
+    repository: str, observed_run: dict[str, Any], run_evidence: dict[str, Any]
+) -> dict[str, Any]:
+    """Recover pre-Phase-3 diagnostic presence from the retained raw ZIP."""
+
+    response = gh_api(
+        f"repos/{repository}/actions/runs/{observed_run['runId']}/artifacts?per_page=100"
+    )
+    started_at = parse_timestamp(run_evidence["createdAt"])
+    candidates = []
+    for artifact in response.get("artifacts", []):
+        try:
+            created_at = parse_timestamp(artifact["created_at"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if (
+            artifact.get("name") == RAW_EVIDENCE_ARTIFACT
+            and not artifact.get("expired")
+            and created_at >= started_at
+            and isinstance(artifact.get("id"), int)
+        ):
+            candidates.append(artifact)
+    present: set[str] = set()
+    if len(candidates) == 1:
+        archive = gh_api_bytes(
+            f"repos/{repository}/actions/artifacts/{candidates[0]['id']}/zip"
+        )
+        try:
+            with zipfile.ZipFile(io.BytesIO(archive)) as bundle:
+                present = {
+                    Path(name).name
+                    for name in bundle.namelist()
+                    if Path(name).name in EXPECTED_DIAGNOSTICS
+                }
+        except zipfile.BadZipFile:
+            present = set()
+    expected = sorted(EXPECTED_DIAGNOSTICS)
+    retained = sorted(present)
+    return {
+        "schemaVersion": 1,
+        "runId": observed_run["runId"],
+        "runAttempt": observed_run["runAttempt"],
+        "expected": expected,
+        "present": retained,
+        "complete": retained == expected,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", default=DEFAULT_REPOSITORY)
     parser.add_argument("--required-runs", type=int, default=30)
     parser.add_argument("--required-days", type=int, default=14)
     parser.add_argument("--allow-incomplete", action="store_true")
+    parser.add_argument(
+        "--ledger-root",
+        type=Path,
+        help="collect only from a validated durable evidence-branch checkout",
+    )
+    parser.add_argument(
+        "--retain-finalized-dir",
+        type=Path,
+        help="write the selected finalized documents for offline Phase 3 evaluation",
+    )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.required_runs < 30 or args.required_days < 14:
         parser.error("the observation gate cannot be lower than 30 runs across 14 days")
-    document = collect(args.repository, args.required_runs, args.required_days)
+    if args.ledger_root is not None and args.retain_finalized_dir is not None:
+        parser.error("--retain-finalized-dir is only valid while inspecting live artifacts")
+    if args.ledger_root is not None:
+        try:
+            document = observation_from_ledger(
+                args.ledger_root,
+                required_runs=args.required_runs,
+                required_days=args.required_days,
+            )
+        except LedgerError as error:
+            parser.error(str(error))
+    else:
+        document = collect(args.repository, args.required_runs, args.required_days)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+    if args.retain_finalized_dir is not None:
+        retain_finalized_evidence(
+            args.repository, document, args.retain_finalized_dir
+        )
     if not document["gate"]["satisfied"] and not args.allow_incomplete:
         parser.error(
             f"observation gate is not met: {document['gate']['observedRuns']} runs across "

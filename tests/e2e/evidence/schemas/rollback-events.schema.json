@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://greenbone.github.io/rust-gvm-api/e2e/rollback-events.schema.json",
+  "title": "Explicitly classified Phase 3 rollback events",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "events"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "events": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "runId", "jobUrl", "occurredAt", "reproducedAt", "issueUrl", "ownerRole"],
+        "properties": {
+          "kind": {"const": "emulator-false-gate-failure"},
+          "runId": {"type": "integer", "minimum": 1},
+          "jobUrl": {"type": "string", "format": "uri"},
+          "occurredAt": {"type": "string", "format": "date-time"},
+          "reproducedAt": {"type": "string", "format": "date-time"},
+          "issueUrl": {"type": "string", "format": "uri"},
+          "ownerRole": {"const": "promotion-rollback-incident"}
+        }
+      }
+    }
+  }
+}

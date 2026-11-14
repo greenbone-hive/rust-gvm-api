@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://greenbone.github.io/rust-gvm-api/e2e/diagnostic-evidence.schema.json",
+  "title": "Bounded direct-OpenVASD diagnostic completeness evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "runId", "runAttempt", "expected", "present", "complete"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "runId": {"type": "integer", "minimum": 1},
+    "runAttempt": {"type": "integer", "minimum": 1},
+    "expected": {
+      "type": "array",
+      "minItems": 3,
+      "uniqueItems": true,
+      "items": {"enum": ["compose-ps.txt", "compose.log", "runner-container-runtime.txt"]}
+    },
+    "present": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"enum": ["compose-ps.txt", "compose.log", "runner-container-runtime.txt"]}
+    },
+    "complete": {"type": "boolean"}
+  }
+}

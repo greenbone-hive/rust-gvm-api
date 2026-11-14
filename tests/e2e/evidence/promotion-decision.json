@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "status": "observing",
+  "evidenceRange": {
+    "comparisonFingerprint": null,
+    "ledgerHeadSha256": null,
+    "oldestRunId": null,
+    "newestRunId": null,
+    "oldestCreatedAt": null,
+    "newestCreatedAt": null
+  },
+  "exclusions": [],
+  "approver": null,
+  "effectiveStatusNames": {
+    "existingRequired": [
+      "REST Discovery Scan E2E (main)",
+      "REST Discovery Scan E2E (devel)"
+    ],
+    "candidate": [
+      "Direct OpenVASD E2E (main candidate, advisory)",
+      "Direct OpenVASD E2E (devel candidate, advisory)"
+    ]
+  },
+  "incidentContact": {
+    "ownerRole": "promotion-rollback-incident",
+    "handle": "@greenbone/rust-gvm"
+  },
+  "effectiveAt": null,
+  "rollbackWindow": {
+    "minimumDays": 14,
+    "minimumEligibleRequiredRuns": 30
+  }
+}

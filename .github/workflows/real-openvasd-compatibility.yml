@@ -101,6 +101,11 @@ jobs:
       - name: Tear down real-OpenVASD runtime
         if: always()
         run: ./scripts/compose-direct-openvasd.sh down -v --remove-orphans
+      - name: Record successful real-OpenVASD compatibility result
+        run: |
+          python3 scripts/record-real-openvasd-compatibility.py \
+            --provenance dist/e2e-openvasd/real/provenance.json \
+            --output dist/e2e-openvasd/real/compatibility-result.json
       - name: Upload real-OpenVASD compatibility evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -108,4 +113,4 @@ jobs:
           name: real-openvasd-compatibility-${{ github.run_id }}-${{ github.run_attempt }}
           path: dist/e2e-openvasd/real/*
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 10

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://greenbone.github.io/rust-gvm-api/e2e/real-openvasd-compatibility.schema.json",
+  "title": "Successful real-OpenVASD compatibility result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "repository", "workflow", "job", "runId", "runAttempt", "runUrl", "headSha", "completedAt", "conclusion", "provenanceSha256", "unresolvedReleaseBlockingDrift"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "repository": {"const": "greenbone-hive/rust-gvm-api"},
+    "workflow": {"const": ".github/workflows/real-openvasd-compatibility.yml"},
+    "job": {"const": "Real OpenVASD Direct-HTTP Compatibility (advisory)"},
+    "runId": {"type": "integer", "minimum": 1},
+    "runAttempt": {"type": "integer", "minimum": 1},
+    "runUrl": {"type": "string", "format": "uri"},
+    "headSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "completedAt": {"type": "string", "format": "date-time"},
+    "conclusion": {"const": "success"},
+    "provenanceSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "unresolvedReleaseBlockingDrift": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}
