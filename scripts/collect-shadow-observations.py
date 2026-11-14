@@ -17,9 +17,16 @@ from typing import Any
 
 WORKFLOW = "nightly-e2e.yml"
 WORKFLOW_PATH = ".github/workflows/nightly-e2e.yml"
+DEFAULT_REPOSITORY = "greenbone-hive/rust-gvm-api"
 JOB_NAME = "Direct OpenVASD Shadow E2E (advisory)"
 EVIDENCE_ARTIFACT = "e2e-direct-openvasd-shadow-evidence"
 ELIGIBLE_CONCLUSIONS = {"success", "failure", "timed_out"}
+FINALIZED_DOCUMENTS = {
+    "comparison.json",
+    "fault-mappings.json",
+    "provenance.json",
+    "run-evidence.json",
+}
 
 
 def gh_api(endpoint: str) -> Any:
@@ -36,18 +43,38 @@ def gh_api_bytes(endpoint: str) -> bytes:
     return completed.stdout
 
 
-def artifact_provenance(
+def artifact_documents(
     repository: str, artifact_id: int
-) -> tuple[dict[str, Any], str]:
+) -> tuple[dict[str, dict[str, Any]], str]:
     archive = gh_api_bytes(f"repos/{repository}/actions/artifacts/{artifact_id}/zip")
     with zipfile.ZipFile(io.BytesIO(archive)) as bundle:
-        candidates = [name for name in bundle.namelist() if Path(name).name == "provenance.json"]
-        if len(candidates) != 1:
+        candidates = {
+            filename: [
+                name for name in bundle.namelist() if Path(name).name == filename
+            ]
+            for filename in FINALIZED_DOCUMENTS
+        }
+        invalid = {
+            filename: len(paths)
+            for filename, paths in candidates.items()
+            if len(paths) != 1
+        }
+        if invalid:
             raise ValueError(
-                f"evidence artifact {artifact_id} must contain exactly one provenance.json"
+                f"evidence artifact {artifact_id} must contain exactly one of every "
+                f"finalized document; invalid counts: {invalid}"
             )
-        content = bundle.read(candidates[0])
-    return json.loads(content), hashlib.sha256(content).hexdigest()
+        contents = {
+            filename: bundle.read(paths[0])
+            for filename, paths in candidates.items()
+        }
+    documents = {
+        filename: json.loads(content) for filename, content in contents.items()
+    }
+    if any(not isinstance(document, dict) for document in documents.values()):
+        raise ValueError(f"evidence artifact {artifact_id} documents must be objects")
+    provenance_content = contents["provenance.json"]
+    return documents, hashlib.sha256(provenance_content).hexdigest()
 
 
 def comparison_fingerprint(provenance: dict[str, Any]) -> str:
@@ -129,11 +156,99 @@ def gate_satisfied(
     return len(runs) >= required_runs and observation_span_days(runs) >= required_days
 
 
-def normalize_run(
-    repository: str, run: dict[str, Any]
+def validate_finalized_documents(
+    documents: dict[str, dict[str, Any]],
+    run: dict[str, Any],
+    job: dict[str, Any],
+) -> None:
+    comparison = documents["comparison.json"]
+    if (
+        comparison.get("schemaVersion") != 1
+        or comparison.get("baselineLane") != "community-osp"
+        or comparison.get("candidateLane") != "community-direct-openvasd-shadow"
+        or not isinstance(comparison.get("contracts"), list)
+        or not comparison["contracts"]
+    ):
+        raise ValueError("finalized comparison does not identify both evidence lanes")
+
+    faults = documents["fault-mappings.json"]
+    if (
+        faults.get("schemaVersion") != 1
+        or faults.get("lane") != "community-direct-openvasd-shadow"
+        or not isinstance(faults.get("scenarios"), list)
+        or not faults["scenarios"]
+    ):
+        raise ValueError("finalized fault mappings do not identify the shadow lane")
+
+    evidence = documents["run-evidence.json"]
+    expected_identity = {
+        "runId": run["id"],
+        "runAttempt": run["run_attempt"],
+        "event": run["event"],
+        "headSha": run["head_sha"],
+        "runUrl": run["html_url"],
+        "jobId": job["id"],
+        "jobUrl": job["html_url"],
+        "conclusion": job["conclusion"],
+    }
+    for field, expected_value in expected_identity.items():
+        if evidence[field] != expected_value:
+            raise ValueError(
+                f"finalized run evidence {field} does not match GitHub metadata"
+            )
+    if evidence["createdAt"] != job["started_at"]:
+        raise ValueError(
+            "finalized run evidence createdAt does not match the shadow job start"
+        )
+    if evidence["retried"] != (run["run_attempt"] > 1):
+        raise ValueError("finalized run evidence retried does not match runAttempt")
+    artifacts = evidence["artifacts"]
+    if not isinstance(artifacts, dict):
+        raise ValueError("finalized run evidence artifacts must be an object")
+    expected_artifacts = artifacts.get("expected")
+    present_artifacts = artifacts.get("present")
+    if (
+        not isinstance(expected_artifacts, list)
+        or not expected_artifacts
+        or not isinstance(present_artifacts, list)
+        or artifacts.get("complete") is not True
+        or not set(expected_artifacts).issubset(set(present_artifacts))
+    ):
+        raise ValueError("finalized run evidence must retain its complete raw artifact")
+
+
+def normalize_artifact(
+    repository: str,
+    artifact: dict[str, Any],
+    expected_workflow_id: int,
 ) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        workflow_run = artifact["workflow_run"]
+        run_id = workflow_run["id"]
+        artifact_id = artifact["id"]
+        artifact_created_at = artifact["created_at"]
+        if (
+            artifact.get("name") != EVIDENCE_ARTIFACT
+            or artifact.get("expired")
+            or not isinstance(run_id, int)
+            or not isinstance(artifact_id, int)
+        ):
+            return None, None
+        parse_timestamp(artifact_created_at)
+    except (KeyError, TypeError, ValueError):
+        return None, None
+
+    run = gh_api(f"repos/{repository}/actions/runs/{run_id}")
+    if (
+        run.get("id") != run_id
+        or run.get("workflow_id") != expected_workflow_id
+        or run.get("status") != "completed"
+        or not isinstance(run.get("run_attempt"), int)
+    ):
+        return None, None
     jobs = gh_api(
-        f"repos/{repository}/actions/runs/{run['id']}/jobs?filter=latest&per_page=100"
+        f"repos/{repository}/actions/runs/{run_id}/attempts/"
+        f"{run['run_attempt']}/jobs?per_page=100"
     )["jobs"]
     matching_jobs = [job for job in jobs if job["name"] == JOB_NAME]
     if len(matching_jobs) != 1:
@@ -141,23 +256,16 @@ def normalize_run(
     job = matching_jobs[0]
     if job.get("conclusion") not in ELIGIBLE_CONCLUSIONS:
         return None, None
-    artifacts = gh_api(
-        f"repos/{repository}/actions/runs/{run['id']}/artifacts?per_page=100"
-    )["artifacts"]
-    matching_artifacts = [
-        artifact
-        for artifact in artifacts
-        if artifact["name"] == EVIDENCE_ARTIFACT
-        and not artifact.get("expired")
-        and artifact.get("created_at")
-        and parse_timestamp(artifact["created_at"])
-        >= parse_timestamp(job["started_at"])
-    ]
-    if not matching_artifacts:
+    if (
+        not job.get("started_at")
+        or not job.get("completed_at")
+        or parse_timestamp(artifact_created_at) < parse_timestamp(job["started_at"])
+    ):
         return None, None
-    artifact_id = max(matching_artifacts, key=lambda item: item["created_at"])["id"]
     try:
-        provenance, provenance_sha = artifact_provenance(repository, artifact_id)
+        documents, provenance_sha = artifact_documents(repository, artifact_id)
+        validate_finalized_documents(documents, run, job)
+        provenance = documents["provenance.json"]
         fingerprint = comparison_fingerprint(provenance)
     except (json.JSONDecodeError, KeyError, TypeError, ValueError, zipfile.BadZipFile):
         return None, None
@@ -179,28 +287,58 @@ def normalize_run(
 def collect(
     repository: str, required_runs: int = 30, required_days: int = 14
 ) -> dict[str, Any]:
-    selected: list[dict[str, Any]] = []
-    comparison_identity: str | None = None
+    workflow = gh_api(f"repos/{repository}/actions/workflows/{WORKFLOW}")
+    expected_workflow_id = workflow.get("id")
+    if not isinstance(expected_workflow_id, int) or expected_workflow_id < 1:
+        raise RuntimeError(f"could not resolve workflow identity for {WORKFLOW}")
+
+    artifacts_by_run: dict[int, dict[str, Any]] = {}
     page = 1
-    while not gate_satisfied(selected, required_runs, required_days):
+    while True:
         response = gh_api(
-            f"repos/{repository}/actions/workflows/{WORKFLOW}/runs"
-            f"?status=completed&per_page=100&page={page}"
+            f"repos/{repository}/actions/artifacts?name={EVIDENCE_ARTIFACT}"
+            f"&per_page=100&page={page}"
         )
-        candidates = response["workflow_runs"]
+        candidates = response["artifacts"]
         if not candidates:
             break
-        for candidate in candidates:
-            normalized, fingerprint = normalize_run(repository, candidate)
-            if normalized is not None and fingerprint is not None:
-                if comparison_identity is None:
-                    comparison_identity = fingerprint
-                if fingerprint != comparison_identity:
+        for artifact in candidates:
+            try:
+                run_id = artifact["workflow_run"]["id"]
+                created_at = artifact["created_at"]
+                if (
+                    artifact.get("name") != EVIDENCE_ARTIFACT
+                    or artifact.get("expired")
+                    or not isinstance(run_id, int)
+                ):
                     continue
-                selected.append(normalized)
-                if gate_satisfied(selected, required_runs, required_days):
-                    break
+                created = parse_timestamp(created_at)
+            except (KeyError, TypeError, ValueError):
+                continue
+            current = artifacts_by_run.get(run_id)
+            if current is None or created > parse_timestamp(current["created_at"]):
+                artifacts_by_run[run_id] = artifact
         page += 1
+
+    selected: list[dict[str, Any]] = []
+    comparison_identity: str | None = None
+    candidates = sorted(
+        artifacts_by_run.values(),
+        key=lambda item: parse_timestamp(item["created_at"]),
+        reverse=True,
+    )
+    for candidate in candidates:
+        normalized, fingerprint = normalize_artifact(
+            repository, candidate, expected_workflow_id
+        )
+        if normalized is not None and fingerprint is not None:
+            if comparison_identity is None:
+                comparison_identity = fingerprint
+            if fingerprint != comparison_identity:
+                continue
+            selected.append(normalized)
+            if gate_satisfied(selected, required_runs, required_days):
+                break
 
     span_days = observation_span_days(selected)
     now = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
@@ -224,7 +362,7 @@ def collect(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--repository", default="greenbone/rust-gvm-api")
+    parser.add_argument("--repository", default=DEFAULT_REPOSITORY)
     parser.add_argument("--required-runs", type=int, default=30)
     parser.add_argument("--required-days", type=int, default=14)
     parser.add_argument("--allow-incomplete", action="store_true")

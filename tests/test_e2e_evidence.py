@@ -5,11 +5,13 @@ from __future__ import annotations
 
 import copy
 import importlib.util
+import io
 import json
 import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -901,6 +903,160 @@ class E2eEvidenceTests(unittest.TestCase):
         self.assertFalse(OBSERVATIONS.gate_satisfied(runs(30, 13)))
         self.assertFalse(OBSERVATIONS.gate_satisfied(runs(29, 14)))
         self.assertTrue(OBSERVATIONS.gate_satisfied(runs(30, 14)))
+
+    def test_incomplete_shadow_collection_stops_at_the_evidence_artifact_boundary(self) -> None:
+        """An unmet elapsed-time gate must not scan workflow history before the lane existed."""
+
+        start = OBSERVATIONS.parse_timestamp("2026-11-14T00:00:00Z")
+        artifacts = [
+            {
+                "id": 1000 + index,
+                "name": OBSERVATIONS.EVIDENCE_ARTIFACT,
+                "expired": False,
+                "created_at": (
+                    start - OBSERVATIONS.dt.timedelta(days=2 * index / 30)
+                ).isoformat(),
+                "workflow_run": {"id": 2000 + index},
+            }
+            for index in range(31)
+        ]
+        endpoints: list[str] = []
+
+        def api(endpoint: str) -> dict[str, object]:
+            endpoints.append(endpoint)
+            if endpoint.endswith(f"actions/workflows/{OBSERVATIONS.WORKFLOW}"):
+                return {"id": 42}
+            if "actions/artifacts?" in endpoint and endpoint.endswith("&page=1"):
+                return {"artifacts": artifacts}
+            if "actions/artifacts?" in endpoint and endpoint.endswith("&page=2"):
+                return {"artifacts": []}
+            raise AssertionError(f"unexpected API request: {endpoint}")
+
+        def normalize(
+            _repository: str, artifact: dict[str, object], _workflow_id: int
+        ) -> tuple[dict[str, object], str]:
+            return {
+                "createdAt": artifact["created_at"],
+                "runId": artifact["workflow_run"]["id"],
+            }, "a" * 64
+
+        with (
+            patch.object(OBSERVATIONS, "gh_api", side_effect=api),
+            patch.object(OBSERVATIONS, "normalize_artifact", side_effect=normalize) as validated,
+        ):
+            document = OBSERVATIONS.collect("greenbone/rust-gvm-api")
+
+        self.assertEqual(document["gate"]["observedRuns"], 31)
+        self.assertFalse(document["gate"]["satisfied"])
+        self.assertEqual(validated.call_count, 31)
+        self.assertFalse(any("/workflows/nightly-e2e.yml/runs" in endpoint for endpoint in endpoints))
+        self.assertEqual(sum("actions/artifacts?" in endpoint for endpoint in endpoints), 2)
+
+    def test_shadow_artifact_requires_every_finalizer_document(self) -> None:
+        """A partial always-uploaded archive must not count as successfully finalized evidence."""
+
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w") as bundle:
+            bundle.writestr("provenance.json", "{}")
+        with patch.object(OBSERVATIONS, "gh_api_bytes", return_value=archive.getvalue()):
+            with self.assertRaisesRegex(ValueError, "every finalized document"):
+                OBSERVATIONS.artifact_documents("greenbone/rust-gvm-api", 42)
+
+    def test_shadow_collector_accepts_finalizer_shaped_documents_with_matching_identity(self) -> None:
+        """Strict collection validation must remain aligned with the finalizer's evidence contract."""
+
+        outcomes = {
+            contract: "pass" for contract in self.inventory["contractOwners"]
+        }
+        comparison = FINALIZER.build_comparison(
+            self.inventory, outcomes, outcomes
+        )
+        faults = {
+            "schemaVersion": 1,
+            "lane": "community-direct-openvasd-shadow",
+            "scenarios": [
+                {
+                    "scenario": scenario,
+                    "injectedAt": "openvasd-http-boundary",
+                    "gatewayMapping": "task:Interrupted",
+                    "target": "e2e-target",
+                    "outcome": "pass",
+                }
+                for scenario in sorted(FINALIZER.EXPECTED_FAULTS)
+            ],
+        }
+        run = {
+            "id": 84,
+            "run_attempt": 1,
+            "event": "push",
+            "head_sha": "a" * 40,
+            "html_url": "https://github.com/greenbone-hive/rust-gvm-api/actions/runs/84",
+        }
+        job = {
+            "id": 126,
+            "html_url": f"{run['html_url']}/job/126",
+            "conclusion": "success",
+            "started_at": "2026-11-14T00:00:00Z",
+        }
+        run_evidence = {
+            "runId": run["id"],
+            "runAttempt": run["run_attempt"],
+            "runNumber": 7,
+            "event": run["event"],
+            "headBranch": "main",
+            "headSha": run["head_sha"],
+            "createdAt": job["started_at"],
+            "runUrl": run["html_url"],
+            "jobId": job["id"],
+            "jobUrl": job["html_url"],
+            "conclusion": job["conclusion"],
+            "timingsSeconds": {"startup": 10, "tests": 20, "total": 40},
+            "retried": False,
+            "artifacts": {
+                "expected": ["e2e-direct-openvasd-shadow-raw"],
+                "present": ["e2e-direct-openvasd-shadow-raw"],
+                "complete": True,
+            },
+            "failureClassification": None,
+            "failureOwnerRole": None,
+        }
+        OBSERVATIONS.validate_finalized_documents(
+            {
+                "comparison.json": comparison,
+                "fault-mappings.json": faults,
+                "provenance.json": {},
+                "run-evidence.json": run_evidence,
+            },
+            run,
+            job,
+        )
+
+    def test_shadow_artifact_must_originate_from_the_resolved_workflow(self) -> None:
+        """An identically named artifact from another workflow cannot enter the gate."""
+
+        artifact = {
+            "id": 42,
+            "name": OBSERVATIONS.EVIDENCE_ARTIFACT,
+            "expired": False,
+            "created_at": "2026-11-14T00:10:00Z",
+            "workflow_run": {"id": 84},
+        }
+        other_workflow_run = {
+            "id": 84,
+            "workflow_id": 999,
+            "status": "completed",
+            "run_attempt": 1,
+        }
+        with (
+            patch.object(OBSERVATIONS, "gh_api", return_value=other_workflow_run),
+            patch.object(OBSERVATIONS, "gh_api_bytes") as download,
+        ):
+            normalized, fingerprint = OBSERVATIONS.normalize_artifact(
+                "greenbone/rust-gvm-api", artifact, expected_workflow_id=123
+            )
+        self.assertIsNone(normalized)
+        self.assertIsNone(fingerprint)
+        download.assert_not_called()
 
     def test_shadow_observations_require_one_pinned_input_fingerprint(self) -> None:
         """The elapsed gate cannot combine runs whose lane topology or harness inputs differ."""

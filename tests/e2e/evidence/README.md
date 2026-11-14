@@ -176,7 +176,7 @@ After runs exist, collect the auditable window with:
 
 ```bash
 python3 scripts/collect-shadow-observations.py \
-  --repository greenbone/rust-gvm-api \
+  --repository greenbone-hive/rust-gvm-api \
   --required-runs 30 \
   --required-days 14 \
   --output shadow-observations.json
@@ -186,9 +186,20 @@ Only executed jobs with a non-expired finalized evidence artifact and valid
 direct-lane provenance qualify. The collector fingerprints the pinned
 gvmd/scanner/feed images, Compose, OpenAPI, fixtures, runner, target identity,
 and test-harness input; it counts only runs matching the newest qualifying
-fingerprint. It records exact run/job/artifact/provenance identities and fails
-until both thresholds are observed. `--allow-incomplete` writes an explicitly
-unsatisfied progress snapshot; it does not waive the gate.
+fingerprint. Collection starts from the repository's exact-name finalized
+artifact inventory rather than scanning workflow history from before the
+shadow lane existed. For each counted artifact it resolves the originating
+workflow and exact run attempt, requires all four finalizer documents, and
+cross-checks the run/job identity recorded in the archive. Missing, expired,
+partial, malformed, cross-workflow, or provenance-incomparable artifacts do
+not qualify.
+
+The output is the machine-readable Phase 2 readiness record: `observedRuns`
+and `spanDays` report the two independent observations, while `satisfied` is
+true only when both reach their unchanged minimum. To inspect progress before
+14 days have elapsed, add `--allow-incomplete`; the collector stops after the
+finite finalized-artifact inventory and writes an explicitly unsatisfied
+snapshot. It does not waive the gate.
 
 ## OSP baseline
 
