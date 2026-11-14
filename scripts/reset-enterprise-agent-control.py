@@ -6,11 +6,32 @@ from __future__ import annotations
 import argparse
 import json
 import urllib.error
+import urllib.parse
 import urllib.request
 
 
 class ResetError(RuntimeError):
     """The deterministic enterprise reset contract failed."""
+
+
+def validated_http_url(url: str) -> str:
+    """Reject local-file schemes and ambiguous credential-bearing reset URLs."""
+
+    parsed = urllib.parse.urlsplit(url)
+    try:
+        parsed.port
+    except ValueError as error:
+        raise ResetError(f"invalid reset URL: {error}") from error
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or not parsed.path.startswith("/")
+        or parsed.fragment
+    ):
+        raise ResetError("reset URL must be an HTTP(S) endpoint without credentials or a fragment")
+    return url
 
 
 def request(
@@ -24,13 +45,16 @@ def request(
     if token is not None:
         headers["X-Emulator-Reset-Token"] = token
     req = urllib.request.Request(
-        url,
+        validated_http_url(url),
         method=method or ("POST" if token is not None else "GET"),
         headers=headers,
         data=body,
     )
     try:
-        with urllib.request.urlopen(req, timeout=10) as response:
+        # validated_http_url excludes urllib's local-file and credential-bearing URL forms.
+        with urllib.request.urlopen(  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
+            req, timeout=10
+        ) as response:
             return response.status, response.read()
     except urllib.error.HTTPError as error:
         return error.code, error.read()
@@ -46,7 +70,7 @@ def reset(base_url: str, token: str, name: str) -> dict[str, object]:
 def reset_proxy(base_url: str, token: str) -> dict[str, object]:
     body = json.dumps({"scenario": "normal"}).encode()
     request_object = urllib.request.Request(
-        f"{base_url.rstrip('/')}/__control/scenario",
+        validated_http_url(f"{base_url.rstrip('/')}/__control/scenario"),
         method="PUT",
         data=body,
         headers={
@@ -56,7 +80,10 @@ def reset_proxy(base_url: str, token: str) -> dict[str, object]:
         },
     )
     try:
-        with urllib.request.urlopen(request_object, timeout=10) as response:
+        # validated_http_url excludes urllib's local-file and credential-bearing URL forms.
+        with urllib.request.urlopen(  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
+            request_object, timeout=10
+        ) as response:
             status = response.status
             document = json.loads(response.read())
     except urllib.error.HTTPError as error:

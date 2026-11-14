@@ -9,6 +9,7 @@ import json
 import subprocess
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 
@@ -19,17 +20,45 @@ class ConfigurationError(RuntimeError):
     """The enterprise fixture could not be configured deterministically."""
 
 
+def validated_origin(base_url: str) -> str:
+    """Accept only an HTTP(S) origin, never a local-file or credential-bearing URL."""
+
+    parsed = urllib.parse.urlsplit(base_url)
+    try:
+        parsed.port
+    except ValueError as error:
+        raise ConfigurationError(f"invalid gateway origin: {error}") from error
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ConfigurationError(
+            "gateway base URL must be an HTTP(S) origin without credentials, path, query, or fragment"
+        )
+    return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, "", "", ""))
+
+
 def api_request(
     base_url: str, path: str, username: str, password: str, method: str = "GET"
 ) -> tuple[int, bytes]:
+    if not path.startswith("/") or "\r" in path or "\n" in path:
+        raise ConfigurationError(f"unsafe gateway request path: {path!r}")
     authorization = base64.b64encode(f"{username}:{password}".encode()).decode()
     request = urllib.request.Request(
-        f"{base_url.rstrip('/')}{path}",
+        f"{validated_origin(base_url)}{path}",
         method=method,
         headers={"Authorization": f"Basic {authorization}", "Accept": "application/json"},
     )
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
+        # The dynamic origin and path are constrained above to HTTP(S) without credentials.
+        with urllib.request.urlopen(  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
+            request, timeout=30
+        ) as response:
             return response.status, response.read()
     except urllib.error.HTTPError as error:
         return error.code, error.read()

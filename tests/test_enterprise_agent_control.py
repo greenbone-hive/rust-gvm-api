@@ -29,6 +29,9 @@ def load(name: str, path: str):
 
 REAL = load("real_agent_control_compatibility", "scripts/run-real-agent-control-compatibility.py")
 RESET = load("reset_enterprise_agent_control", "scripts/reset-enterprise-agent-control.py")
+CONFIGURE = load(
+    "configure_enterprise_agent_owner", "scripts/configure-enterprise-agent-owner.py"
+)
 FINALIZER = load(
     "finalize_enterprise_agent_control_evidence",
     "scripts/finalize-enterprise-agent-control-evidence.py",
@@ -36,6 +39,17 @@ FINALIZER = load(
 
 
 class EnterpriseAgentControlTests(unittest.TestCase):
+    def test_dynamic_url_helpers_reject_local_file_schemes_before_network_access(self) -> None:
+        """Operator-controlled URLs must never make urllib dispatch a local-file handler."""
+
+        with self.assertRaises(CONFIGURE.ConfigurationError):
+            CONFIGURE.api_request("file:///etc", "/passwd", "admin", "admin")
+        with self.assertRaises(RESET.ResetError):
+            RESET.request("file:///etc/passwd")
+        with self.assertRaises(REAL.CompatibilityFailure) as caught:
+            REAL.request("file:///etc", "/passwd", {}, timeout=1)
+        self.assertEqual(caught.exception.classification, "incomplete-operator-input")
+
     def test_real_probe_rejects_incomplete_operator_inputs_before_network_access(self) -> None:
         """Credentials and provenance must never be guessed for the advisory real lane."""
 

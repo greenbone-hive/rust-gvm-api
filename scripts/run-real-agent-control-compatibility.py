@@ -117,13 +117,33 @@ def request(
     *,
     timeout: int,
 ) -> tuple[int, dict[str, list[str]], bytes]:
+    parsed_origin = urllib.parse.urlsplit(origin)
+    try:
+        parsed_origin.port
+    except ValueError as error:
+        raise CompatibilityFailure(
+            "incomplete-operator-input", f"invalid service origin: {error}"
+        ) from error
+    if (
+        parsed_origin.scheme != "https"
+        or not parsed_origin.hostname
+        or parsed_origin.username
+        or parsed_origin.password
+        or parsed_origin.path not in {"", "/"}
+        or parsed_origin.query
+        or parsed_origin.fragment
+    ):
+        raise CompatibilityFailure(
+            "incomplete-operator-input", "real Agent Control requests require a safe HTTPS origin"
+        )
     if not path.startswith("/") or "\r" in path or "\n" in path:
         raise CompatibilityFailure("incomplete-operator-input", f"unsafe request path: {path!r}")
     req = urllib.request.Request(
         f"{origin.rstrip('/')}{path}", headers={"Accept": "application/json", **headers}
     )
     try:
-        with urllib.request.urlopen(
+        # The origin is revalidated here so urllib cannot dispatch a local-file URL.
+        with urllib.request.urlopen(  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
             req, timeout=timeout, context=ssl.create_default_context()
         ) as response:
             return response.status, preserve_headers(response.headers), response.read()
